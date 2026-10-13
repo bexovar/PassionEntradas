@@ -83,8 +83,8 @@ export async function PATCH(
     if (!res.ok) {
       return NextResponse.json({ error: res.error }, { status: res.status });
     }
-    // Pago, cancelar o reabrir pueden haber movido el stock de una propia.
-    if (movimientoDeStock(action, res.op)) refrescarTienda();
+    // Confirmar, cancelar o reabrir pueden haber movido el stock de una propia.
+    if (antes && movimientoDeStock(action, antes, res.op)) refrescarTienda();
     if (antes) await avisarCambioAlCliente(null, antes, res.op as OpParaAviso, baseUrlDe(request));
     return NextResponse.json({ ...pickResult(res.op), ...(res.aviso ? { aviso: res.aviso } : {}) });
   }
@@ -242,12 +242,12 @@ export async function PATCH(
     );
   }
 
-  // Stock de entradas propias: se toma al confirmar el pago y se devuelve al
-  // desmarcarlo o cancelar (ver lib/stock.ts y la función stock_operacion).
+  // Stock de entradas propias: se toma cuando el pedido queda confirmado y se
+  // devuelve al cancelar (ver lib/stock.ts y la función stock_operacion).
   // Fail-soft: si falla, la operación ya quedó actualizada igual y el stock se
   // corrige desde Entradas; se avisa en la respuesta.
   let aviso: string | null = null;
-  const mov = movimientoDeStock(action, data as Operacion);
+  const mov = movimientoDeStock(action, current as Operacion, data as Operacion);
   if (mov) {
     const { data: lineas, error: errStock } = await admin.rpc("stock_operacion", {
       p_op: params.id,

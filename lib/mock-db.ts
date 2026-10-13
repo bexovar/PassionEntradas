@@ -493,6 +493,7 @@ export function mockApplyAction(
   const op = db().ops.find((o) => o.id === id);
   if (!op) return { ok: false, status: 404, error: "Operación no encontrada" };
   const cancelada = op.status === "cancelada";
+  const antes = { status: op.status, pago_confirmado_at: op.pago_confirmado_at, confirmada_at: op.confirmada_at ?? null };
 
   switch (action.action) {
     case "entrada":
@@ -559,7 +560,7 @@ export function mockApplyAction(
   }
   op.updated_at = new Date().toISOString();
   // Stock: espejo de la función stock_operacion de la base.
-  const mov = movimientoDeStock(action, op);
+  const mov = movimientoDeStock(action, antes, op);
   const aviso = mov ? mockStockOperacion(op, mov === "tomar") : null;
   return { ok: true, op, aviso };
 }
@@ -1098,6 +1099,8 @@ export function mockAceptarCotizacion(
   c.resuelta_at = ahora;
   c.resuelta_por = opts.quien;
   c.updated_at = ahora;
+  // Nace confirmado: toma su stock ya (ver lib/stock.ts).
+  mockStockOperacion(op, true);
   return { ok: true, op };
 }
 
@@ -1138,6 +1141,8 @@ export function mockClienteCancelarOp(
   op.cancelada_at = now;
   op.cancelada_por = "cliente";
   op.updated_at = now;
+  // Un pedido confirmado ya tomó su stock: cancelarlo lo devuelve.
+  mockStockOperacion(op, false);
   return { ok: true };
 }
 

@@ -6,6 +6,8 @@ import { avisarEquipo } from "@/lib/avisos-equipo";
 import { baseUrlDe } from "@/lib/base-url";
 import { notificarAviso } from "@/lib/whatsapp";
 import { isMock, MOCK_USER, mockAceptarCotizacion } from "@/lib/mock-db";
+import { refrescarTienda } from "@/lib/refrescar-tienda";
+import { avisoDeSobreventa, type LineaDescontada } from "@/lib/stock";
 
 // POST /api/consultas/[id]/aceptar — la cotización pasa a ser un pedido.
 //
@@ -46,6 +48,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       quien,
     });
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    refrescarTienda();
     return NextResponse.json({ ok: true, operacion: { id: r.op.id, code: r.op.code } });
   }
 
@@ -84,6 +87,21 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
   const op = data as { op_id: string; op_code: string } | null;
   if (!op) return NextResponse.json({ error: "No se pudo crear el pedido" }, { status: 500 });
+
+  // El pedido nace confirmado: toma ya el stock de sus entradas propias (ver
+  // lib/stock.ts). Aparte y sin trabar: el pedido ya está creado; si falla,
+  // se corrige desde Entradas.
+  try {
+    const { data: lineas, error: errStock } = await admin.rpc("stock_operacion", { p_op: op.op_id, p_tomar: true });
+    if (errStock) console.error(`[stock] no se pudo tomar stock de ${op.op_id}: ${errStock.message}`);
+    else {
+      const sobre = avisoDeSobreventa(lineas as LineaDescontada[]);
+      if (sobre) console.warn(`[stock] ${op.op_code}: ${sobre}`);
+      refrescarTienda();
+    }
+  } catch (e) {
+    console.error(`[stock] ${op.op_id}: ${(e as Error).message}`);
+  }
 
   // Idioma del pedido que nace (sus emails van en ese): el de la tienda si
   // acepta el cliente, si no el que tenía la consulta. Aparte y sin
