@@ -12,6 +12,8 @@ services:
     volumes:
       # storageState/cookies persistido entre reinicios. Es secreto: volumen propio.
       - pe_state:/data
+      # Backups diarios de la base (si BACKUP_DB_URL está en .env). También secretos.
+      - pe_backups:/backups
     healthcheck:
       test: ["CMD", "node", "dist/healthcheck.js"]
       interval: 30s
@@ -32,4 +34,6 @@ services:
 
 volumes:
   pe_state:
+    driver: local
+  pe_backups:
     driver: local

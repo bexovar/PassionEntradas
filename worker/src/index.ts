@@ -6,6 +6,7 @@ import { createSupabase } from "./db/supabase.js";
 import { TicketRepository } from "./db/repository.js";
 import { runSyncCycle } from "./sync/cycle.js";
 import { avisarTienda, pedirRecordatorios } from "./sync/revalidar.js";
+import { crearBackups } from "./backup/backup.js";
 import { BlockedError, LoginFailedError } from "./errors.js";
 import { computeBackoffMs, sleep } from "./util/time.js";
 
@@ -23,6 +24,7 @@ async function main(): Promise<void> {
     staleAfterMs: staleAfterMs(cfg),
     log,
   });
+  const backups = crearBackups({ cfg, log, signal: abort.signal });
 
   let shuttingDown = false;
   let loginFailures = 0;
@@ -88,6 +90,8 @@ async function main(): Promise<void> {
     // Recordatorios al equipo (pedidos sin confirmar, etc.): en cada vuelta,
     // aunque el sync haya fallado o el portal esté bloqueado. Fail-soft.
     await pedirRecordatorios({ cfg, log });
+    // Backup diario de la base: corre solo si toca (una vez por día). Fail-soft.
+    await backups.siToca();
     await sleep(waitMs, abort.signal);
   }
 }

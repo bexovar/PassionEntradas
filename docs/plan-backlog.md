@@ -206,3 +206,19 @@ So WhatsApp is only for "someone has to act and you're probably not looking at t
    - Customer bell + emails: 7 (migration 0045).
    - Staff bell, WhatsApp and reminders: 8 (migration 0045). It reuses 3's filters.
 3. **Release:** apply 0044 and 0045, merge #77, redeploy the worker, create and approve the `aviso_operacion` template and set `WHATSAPP_TEMPLATE_AVISO`. Later: `RESEND_API_KEY` and `EMAIL_FROM` for customer emails.
+
+## Backlog
+
+### Customer emails (pending: needs a domain)
+The code is done and live (#77, #80): Confirmado, Para pagar, Entregada and "Tu cotización está lista" go to the customer's bell, and also by email once these are set. Until then, each order card in the panel says "Sin email: falta configurar el envío".
+
+1. Sign up at resend.com → **Domains → Add domain** (the business domain, e.g. `passionentradas.com`).
+2. Add the DNS records Resend shows (TXT/MX) at the domain's DNS provider, then **Verify** in Resend.
+3. Resend → **API Keys → Create API key** (Sending access). It starts with `re_`.
+4. Vercel → Settings → Environment Variables (Production):
+   - `RESEND_API_KEY` = `re_…`
+   - `EMAIL_FROM` = `Passion Entradas <avisos@<domain>>` (on the verified domain)
+   - optional: `EMAIL_VENDEDORES` = staff emails, comma-separated (staff copies of new orders and access requests)
+5. Redeploy (Deployments → latest → Redeploy).
+
+**Check:** confirm an order; its card's "Avisos al cliente" says "Email enviado".
