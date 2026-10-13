@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avisoDeCambio, claveAvisoCliente, emailAviso, estadoAvisoCliente, idiomaDe, textoAviso } from "./notificaciones";
+import { avisoDeCambio, claveAvisoCliente, claveCotizacion, emailAviso, estadoAvisoCliente, idiomaDe, textoAviso } from "./notificaciones";
 
 const op = (extra: Record<string, unknown> = {}) =>
   ({
@@ -81,5 +81,36 @@ describe("estadoAvisoCliente (tarjeta del panel)", () => {
 
   it("un error largo se corta", () => {
     expect(estadoAvisoCliente({ tipo: "entregada", email_estado: "error", email_error: "x".repeat(400) }).email.length).toBeLessThan(170);
+  });
+});
+
+describe("cotización lista (consulta cotizada)", () => {
+  const d = { code: "BX-C1", evento: "Final Libertadores", monto: 250000, moneda: "ARS" as const, vence: "2026-10-15T18:00:00Z" };
+
+  it("campana en los dos idiomas, con precio y hasta cuándo vale", () => {
+    const es = textoAviso("cotizacion_lista", d, "es")!;
+    expect(es.titulo).toBe("Tu cotización está lista · BX-C1");
+    expect(es.cuerpo).toMatch(/Final Libertadores/);
+    expect(es.cuerpo).toMatch(/250\.000/);
+    expect(es.cuerpo).toMatch(/Aceptala o rechazala en Mis pedidos/);
+    expect(es.cuerpo).toMatch(/15 de oct/);
+    const en = textoAviso("cotizacion_lista", d, "en")!;
+    expect(en.titulo).toBe("Your quote is ready · BX-C1");
+    expect(en.cuerpo).toMatch(/Accept or decline it in My orders/);
+  });
+
+  it("email con el link a Mis pedidos", () => {
+    const m = emailAviso("cotizacion_lista", { ...d, nombre: "Ana", url: "https://x/mis-pedidos" }, "es");
+    expect(m.subject).toBe("Tu cotización está lista · BX-C1");
+    expect(m.text).toMatch(/^Hola Ana,/);
+    expect(m.text).toMatch(/https:\/\/x\/mis-pedidos/);
+  });
+
+  it("una clave por versión: re-cotizar avisa de nuevo", () => {
+    expect(claveCotizacion("c1", 1)).not.toBe(claveCotizacion("c1", 2));
+  });
+
+  it("en el panel se llama Cotización lista", () => {
+    expect(estadoAvisoCliente({ tipo: "cotizacion_lista", email_estado: "sin_configurar" }).titulo).toBe("Cotización lista");
   });
 });

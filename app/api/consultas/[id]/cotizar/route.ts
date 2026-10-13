@@ -5,6 +5,8 @@ import { ERROR_MONEDA, parseMoneda } from "@/lib/operaciones";
 import { parsePrecio } from "@/lib/precios";
 import { VENCE_HORAS_DEFAULT, venceAt } from "@/lib/cotizaciones";
 import { isMock, MOCK_USER, mockCotizar } from "@/lib/mock-db";
+import { avisarCotizacionAlCliente } from "@/lib/avisos-cliente";
+import { baseUrlDe } from "@/lib/base-url";
 
 // POST /api/consultas/[id]/cotizar — staff. Le manda al cliente una
 // cotización (costo + comisión, en pesos o dólares). NO crea la operación: el
@@ -46,6 +48,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (isMock()) {
     const r = mockCotizar(params.id, { monto: precio.total, fee: precio.comision, moneda, quien, esAdmin });
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    await avisarCotizacionAlCliente(null, r.consulta, baseUrlDe(request));
     return NextResponse.json({ ok: true, consulta: r.consulta });
   }
 
@@ -91,5 +94,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       { status: 409 }
     );
   }
+  // Que el cliente se entere y la acepte o la rechace (campana + email).
+  await avisarCotizacionAlCliente(admin, data, baseUrlDe(request));
   return NextResponse.json({ ok: true, consulta: data });
 }

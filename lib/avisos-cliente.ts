@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { estadoEmailInicial, guardarAviso, mandarEmailDeAviso } from "./avisos";
 import { isMock, mockGetTextosPago } from "./mock-db";
-import { avisoDeCambio, claveAvisoCliente, emailAviso, idiomaDe } from "./notificaciones";
+import { avisoDeCambio, claveAvisoCliente, claveCotizacion, emailAviso, idiomaDe } from "./notificaciones";
 import { textoPagoDe } from "./textos";
 import type { Moneda } from "./operaciones";
 
@@ -56,18 +56,7 @@ export async function avisarCambioAlCliente(
     });
     if (!aviso || aviso.email_estado !== "pendiente") return;
 
-    let idioma = despues.idioma;
-    if (idioma === undefined && admin && !isMock()) {
-      const { data } = await admin.from("operaciones").select("idioma").eq("id", despues.id).maybeSingle();
-      idioma = (data as { idioma?: string | null } | null)?.idioma ?? null;
-    }
-    // Sin idioma en el pedido (cargado por el staff, o anterior a esto): el
-    // que el cliente eligió en su cuenta.
-    if (!idioma && despues.cliente_id && admin && !isMock()) {
-      const { data } = await admin.auth.admin.getUserById(despues.cliente_id);
-      const lang = (data?.user?.user_metadata as Record<string, unknown> | undefined)?.lang;
-      if (lang === "en" || lang === "es") idioma = lang;
-    }
+    const idioma = await idiomaDelCliente(admin, "operaciones", despues.id, despues.idioma, despues.cliente_id);
 
     let textoPago: string | null = null;
     if (tipo === "para_pagar") {
@@ -87,5 +76,88 @@ export async function avisarCambioAlCliente(
     await mandarEmailDeAviso(admin, aviso, mensaje);
   } catch (e) {
     console.error(`[avisos] aviso al cliente de ${despues.id}: ${(e as Error).message}`);
+  }
+}
+
+/**
+ * El idioma de los emails: el del pedido o la consulta (la tienda al pedir).
+ * Sin dato (cargado por el staff, o anterior a esto), el que el cliente
+ * eligió en su cuenta. Se lee aparte: sin la columna (migración 0045), null.
+ */
+async function idiomaDelCliente(
+  admin: SupabaseClient | null,
+  tabla: "operaciones" | "consultas",
+  id: string,
+  conocido: string | null | undefined,
+  clienteId: string | null
+): Promise<string | null> {
+  let idioma = conocido ?? null;
+  if (conocido === undefined && admin && !isMock()) {
+    const { data } = await admin.from(tabla).select("idioma").eq("id", id).maybeSingle();
+    idioma = (data as { idioma?: string | null } | null)?.idioma ?? null;
+  }
+  if (!idioma && clienteId && admin && !isMock()) {
+    const { data } = await admin.auth.admin.getUserById(clienteId);
+    const lang = (data?.user?.user_metadata as Record<string, unknown> | undefined)?.lang;
+    if (lang === "en" || lang === "es") idioma = lang;
+  }
+  return idioma;
+}
+
+export type ConsultaParaAviso = {
+  id: string;
+  code: string;
+  evento: string;
+  cliente_id: string | null;
+  cliente_email: string | null;
+  comprador_alias: string | null;
+  cotizacion_monto?: number | null;
+  moneda?: Moneda | null;
+  cotizacion_version?: number | null;
+  vence_at?: string | null;
+  idioma?: string | null;
+};
+
+/**
+ * La consulta quedó cotizada: el cliente tiene que enterarse para aceptarla o
+ * rechazarla en Mis pedidos. Campana + email (si hay proveedor). Una vez por
+ * versión: re-cotizar (otro precio o plazo) avisa de nuevo. Nunca tira.
+ */
+export async function avisarCotizacionAlCliente(
+  admin: SupabaseClient | null,
+  c: ConsultaParaAviso,
+  baseUrl: string
+): Promise<void> {
+  try {
+    if (!c.cliente_id && !c.cliente_email) return;
+    const url = `${baseUrl}/mis-pedidos`;
+    const datos = {
+      code: c.code,
+      evento: c.evento,
+      monto: c.cotizacion_monto ?? null,
+      moneda: c.moneda ?? null,
+      vence: c.vence_at ?? null,
+    };
+    const aviso = await guardarAviso(admin, {
+      clave: claveCotizacion(c.id, Number(c.cotizacion_version ?? 1)),
+      audiencia: "cliente",
+      destinatario_id: c.cliente_id,
+      destinatario_email: c.cliente_email,
+      tipo: "cotizacion_lista",
+      operacion_id: null,
+      consulta_id: c.id,
+      datos,
+      url,
+      email_estado: estadoEmailInicial(c.cliente_email),
+    });
+    if (!aviso || aviso.email_estado !== "pendiente") return;
+    const idioma = await idiomaDelCliente(admin, "consultas", c.id, c.idioma, c.cliente_id);
+    await mandarEmailDeAviso(
+      admin,
+      aviso,
+      emailAviso("cotizacion_lista", { ...datos, nombre: c.comprador_alias, url }, idiomaDe(idioma))
+    );
+  } catch (e) {
+    console.error(`[avisos] cotización al cliente de ${c.id}: ${(e as Error).message}`);
   }
 }

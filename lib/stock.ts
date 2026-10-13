@@ -1,31 +1,40 @@
 // Stock de entradas propias: cuándo se descuenta y cuándo se devuelve.
 //
-// Se descuenta cuando el CLIENTE PAGA (pedido del cliente) y por la cantidad
-// real de cada línea; antes era al entregar, y siempre 1. El movimiento en sí
-// lo hace la función de la base `stock_operacion` (migración 0039), que deja
-// registrado en la operación cuánto descontó: devolver devuelve exactamente
-// eso. Acá solo se decide QUÉ hacer según la acción del panel.
+// Se descuenta cuando el pedido queda CONFIRMADO (el admin lo confirma, marca
+// cualquier paso, o nace confirmado al aceptar una cotización) y por la
+// cantidad real de cada línea. Antes era recién al pagar: entre la
+// confirmación y el pago la tienda seguía ofreciendo esas entradas. Se
+// devuelve al cancelar (el admin o el cliente). El movimiento en sí lo hace la
+// función de la base `stock_operacion` (migración 0039), que deja registrado
+// en la operación cuánto descontó: devolver devuelve exactamente eso, y tomar
+// dos veces no descuenta dos veces. Acá solo se decide QUÉ hacer según la
+// acción del panel.
 
 import type { StatusAction } from "@/lib/operaciones";
 
 export type MovimientoStock = "tomar" | "devolver" | null;
 
-export function movimientoDeStock(
-  action: StatusAction,
-  despues: { status: string; pago_confirmado_at: string | null }
-): MovimientoStock {
+type Estado = { status: string; pago_confirmado_at: string | null; confirmada_at?: string | null };
+
+export function movimientoDeStock(action: StatusAction, antes: Estado, despues: Estado): MovimientoStock {
   switch (action.action) {
-    case "pago":
-      return action.done ? "tomar" : "devolver";
+    case "confirmar":
+      return "tomar";
     case "cancelar":
       // Cancelar libera lo que se había tomado.
       return "devolver";
     case "reabrir":
-      // Reabrir una operación que ya estaba paga vuelve a tomar su stock.
-      return despues.pago_confirmado_at ? "tomar" : null;
+      // Reabrir una confirmada (o paga) vuelve a tomar su stock.
+      return despues.confirmada_at || despues.pago_confirmado_at ? "tomar" : null;
+    case "pago":
+      // Pagar toma si todavía no se había tomado (pedidos confirmados antes
+      // de este cambio). Desmarcar el pago de uno confirmado no devuelve:
+      // sigue confirmado.
+      if (action.done) return "tomar";
+      return despues.confirmada_at ? null : "devolver";
     default:
-      // Entregar ya no mueve stock (antes descontaba 1 acá).
-      return null;
+      // Marcar un paso confirma el pedido si no lo estaba: ahí se toma.
+      return action.done && !antes.confirmada_at && despues.confirmada_at ? "tomar" : null;
   }
 }
 

@@ -5,8 +5,11 @@
 // estado en el panel. Funciones puras: el envío vive en lib/avisos.ts.
 
 import { estadoPublicoDe, formatMonto, type EstadoPublico, type Moneda } from "./operaciones";
+import { fechaHora } from "./fechas";
 
-export type TipoAvisoCliente = "pedido_confirmado" | "para_pagar" | "entregada";
+// Los tres pasos del pedido, y además la cotización de una consulta: el
+// cliente tiene que enterarse de que puede aceptarla (o rechazarla).
+export type TipoAvisoCliente = "pedido_confirmado" | "para_pagar" | "entregada" | "cotizacion_lista";
 
 const AVISO_DE_ESTADO: Partial<Record<EstadoPublico, TipoAvisoCliente>> = {
   pedido_confirmado: "pedido_confirmado",
@@ -47,12 +50,23 @@ export function claveAvisoCliente(operacionId: string, tipo: TipoAvisoCliente): 
   return `cliente:${operacionId}:${tipo}`;
 }
 
+/** Una cotización por versión: si se vuelve a cotizar (otro precio, otro plazo), avisa de nuevo. */
+export function claveCotizacion(consultaId: string, version: number): string {
+  return `cliente:consulta:${consultaId}:cotizacion_lista:v${version}`;
+}
+
 export type DatosAviso = {
   code: string;
   evento: string;
   monto?: number | null;
   moneda?: Moneda | null;
+  // Hasta cuándo vale una cotización (ISO).
+  vence?: string | null;
 };
+
+const precio = (d: DatosAviso) => (d.monto != null && d.moneda ? formatMonto(d.monto, d.moneda) : null);
+const vence = (d: DatosAviso, lang: "es" | "en") =>
+  d.vence ? fechaHora(d.vence, lang === "en" ? "en-US" : "es-AR") : null;
 
 type Lang = "es" | "en";
 
@@ -70,6 +84,11 @@ const TXT = {
     entregada: {
       titulo: (d: DatosAviso) => `Pedido ${d.code} entregado`,
       cuerpo: (d: DatosAviso) => `Tus entradas de ${d.evento} ya fueron entregadas. ¡Que lo disfrutes!`,
+    },
+    cotizacion_lista: {
+      titulo: (d: DatosAviso) => `Tu cotización está lista · ${d.code}`,
+      cuerpo: (d: DatosAviso) =>
+        `Cotizamos tu consulta de ${d.evento}${precio(d) ? `: ${precio(d)}` : ""}. Aceptala o rechazala en Mis pedidos${vence(d, "es") ? ` (vale hasta el ${vence(d, "es")})` : ""}.`,
     },
     pie: "Mirá el detalle en Mis pedidos:",
     saludo: "Hola",
@@ -90,6 +109,11 @@ const TXT = {
       titulo: (d: DatosAviso) => `Order ${d.code} delivered`,
       cuerpo: (d: DatosAviso) => `Your tickets for ${d.evento} have been delivered. Enjoy!`,
     },
+    cotizacion_lista: {
+      titulo: (d: DatosAviso) => `Your quote is ready · ${d.code}`,
+      cuerpo: (d: DatosAviso) =>
+        `We quoted your request for ${d.evento}${precio(d) ? `: ${precio(d)}` : ""}. Accept or decline it in My orders${vence(d, "en") ? ` (valid until ${vence(d, "en")})` : ""}.`,
+    },
     pie: "See the details in My orders:",
     saludo: "Hi",
     firma: "— TicketMirror",
@@ -97,7 +121,12 @@ const TXT = {
   },
 } as const;
 
-const AVISO_TIPOS: Record<TipoAvisoCliente, true> = { pedido_confirmado: true, para_pagar: true, entregada: true };
+const AVISO_TIPOS: Record<TipoAvisoCliente, true> = {
+  pedido_confirmado: true,
+  para_pagar: true,
+  entregada: true,
+  cotizacion_lista: true,
+};
 
 /** Título y texto de la campana, en el idioma de quien la mira. */
 export function textoAviso(tipo: string, datos: DatosAviso, lang: Lang): { titulo: string; cuerpo: string } | null {
@@ -136,6 +165,7 @@ const NOMBRE_AVISO: Record<TipoAvisoCliente, string> = {
   pedido_confirmado: "Pedido confirmado",
   para_pagar: "Ya puede pagar",
   entregada: "Entregada",
+  cotizacion_lista: "Cotización lista",
 };
 
 export type EstadoEmailCliente = { titulo: string; email: string; tono: "ok" | "error" | "gris" };

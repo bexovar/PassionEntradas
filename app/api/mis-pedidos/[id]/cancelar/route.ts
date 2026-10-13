@@ -6,6 +6,7 @@ import { notificarVendedoresEmail } from "@/lib/email";
 import { avisarEquipo } from "@/lib/avisos-equipo";
 import { baseUrlDe } from "@/lib/base-url";
 import { notificarAviso } from "@/lib/whatsapp";
+import { refrescarTienda } from "@/lib/refrescar-tienda";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   isMock,
@@ -27,7 +28,8 @@ import {
 //     pueden cancelar un pedido que ya avanzó;
 //   - una consulta, solo si sigue pendiente.
 //
-// No mueve stock: el stock se toma recién al pagar, y pagado ya no se cancela.
+// Stock: un pedido confirmado ya tomó el suyo (lib/stock.ts); cancelarlo lo
+// devuelve.
 const CLIENTE_DEMO = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
@@ -116,6 +118,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (error) {
     const esInvariante = (error as { code?: string }).code === "P0001";
     return NextResponse.json({ error: error.message }, { status: esInvariante ? 409 : 500 });
+  }
+  if (upd) {
+    // Un pedido confirmado ya tomó su stock (lib/stock.ts): cancelarlo lo
+    // devuelve. Sin haber tomado nada no hace nada.
+    const { error: errStock } = await admin.rpc("stock_operacion", { p_op: params.id, p_tomar: false });
+    if (errStock) console.error(`[stock] no se pudo devolver stock de ${params.id}: ${errStock.message}`);
+    else refrescarTienda();
   }
   if (!upd) {
     return NextResponse.json(
