@@ -31,6 +31,7 @@ export function createLogger(cfg: Pick<Config, "LOG_LEVEL">) {
         "*.storageState",
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_DB_URL",
+        "BACKUP_DB_URL",
         "service_role",
         "apikey",
         "*.apikey",

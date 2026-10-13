@@ -48,8 +48,11 @@ src/
   sync/
     partial-guard.ts  Regla anti-borrado (pura, testeada)
     cycle.ts          Un ciclo completo de sync
+  backup/      Backup diario de la base (pg_dump)
   health.ts    Servidor /healthz interno
   index.ts     Loop single-flight + manejo de señales (SIGTERM/SIGINT)
+scripts/
+  restaurar-backup.sh        Restaura un backup (ver "Backup de la base")
 db/
   migrations/0001_init.sql   Esquema + RLS
   apply.ts                   Aplica migraciones (pg + SUPABASE_DB_URL)
@@ -155,6 +158,53 @@ docker compose logs -f worker
 
 ---
 
+## Backup de la base
+
+El plan Free de Supabase no tiene backups restaurables, así que el worker hace uno
+por día con `pg_dump` (viene en la imagen). Se prende poniendo `BACKUP_DB_URL` en
+`.env` (ver [`.env.example`](.env.example): tiene que ser el **Session pooler**).
+
+- Corre una vez por día desde las `BACKUP_HOUR` (4 AM, hora de Argentina). Con la
+  carpeta vacía (recién instalado) hace uno enseguida.
+- Cada backup son dos archivos en el volumen `pe_backups` (`/backups`):
+  - `passion-AAAA-MM-DD_HHMM.dump`: tablas, datos, funciones, RLS y permisos de
+    `public`, más el historial de migraciones.
+  - `passion-AAAA-MM-DD_HHMM.auth.dump`: los logins (`auth.users`, `auth.identities`).
+- Se guardan `BACKUP_KEEP_DAYS` días (14). Los viejos se borran solo después de un
+  backup exitoso.
+- Si falla, queda en el log (`backup de la base falló`, con el motivo) y se
+  reintenta en una hora. Nunca frena el sync.
+- **No incluye** las imágenes de Storage (los mapas). Restaurado en otro proyecto,
+  `tickets.imagen_url` sigue apuntando al proyecto viejo. Si ese ya no existe, con
+  `update tickets set imagen_url = null where source = 'portal';` el worker vuelve
+  a bajar los mapas de Passion. Los subidos a mano para entradas propias se pierden.
+
+```bash
+docker compose logs worker | grep backup                    # cómo vienen
+docker exec passion-entradas-worker ls -la /backups         # qué hay
+docker cp passion-entradas-worker:/backups ./backups-copia  # copia fuera del volumen
+```
+
+### Restaurar
+
+Lo más seguro es restaurar en un **proyecto de Supabase nuevo** y después apuntar
+la app (y este `.env`) a ese proyecto. Con el URI del Session pooler del destino
+(sin la contraseña: el script la pide):
+
+```bash
+docker exec -it passion-entradas-worker bash scripts/restaurar-backup.sh \
+  "postgresql://postgres.<ref>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+# Otro backup que no sea el último: agregá el nombre del archivo como segundo argumento.
+```
+
+Restaura primero los logins y después `public`, con los mismos permisos que tenía
+la base (apaga mientras tanto los permisos por defecto que Supabase da a `anon`
+sobre lo nuevo, y los vuelve a prender). No borra nada: en una base con datos, lo
+que ya existe da error y queda como estaba. Un error `schema "public" already
+exists` es normal.
+
+---
+
 ## Variables de entorno
 
 Ver [`.env.example`](.env.example) para la lista completa y comentada.
@@ -178,6 +228,9 @@ Ver [`.env.example`](.env.example) para la lista completa y comentada.
 | `SUPABASE_URL` | — | URL del proyecto Supabase. |
 | `SUPABASE_SERVICE_ROLE_KEY` | — | **service_role** (secreto, solo en el worker). |
 | `SUPABASE_DB_URL` | — | Connection string Postgres (solo migraciones). |
+| `BACKUP_DB_URL` | — | URI del Session pooler para el backup diario. Vacío = sin backup. |
+| `BACKUP_KEEP_DAYS` | `14` | Días de backups que se guardan. |
+| `BACKUP_HOUR` | `4` | Hora de Argentina desde la que corre el backup del día. |
 | `STATE_DIR` | `/data` | Dónde persistir `storageState`. |
 | `HEALTH_PORT` | `8080` | Puerto de `/healthz`. |
 

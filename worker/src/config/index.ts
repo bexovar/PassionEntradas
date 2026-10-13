@@ -69,6 +69,13 @@ const ConfigSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, "SUPABASE_SERVICE_ROLE_KEY es obligatorio"),
     SUPABASE_DB_URL: optionalString.pipe(z.string().optional()),
 
+    // Backup diario de la base (pg_dump). Sin BACKUP_DB_URL, apagado.
+    BACKUP_DB_URL: optionalString.pipe(z.string().optional()),
+    BACKUP_DIR: z.string().min(1).default("/backups"),
+    BACKUP_KEEP_DAYS: z.coerce.number().int().min(1).default(14),
+    // Hora de Argentina (0-23) a partir de la cual corre el backup del día.
+    BACKUP_HOUR: z.coerce.number().int().min(0).max(23).default(4),
+
     // Runtime
     STATE_DIR: z.string().min(1).default("/data"),
     HEALTH_PORT: z.coerce.number().int().positive().default(8080),
@@ -125,6 +132,9 @@ export function redactedConfigSummary(cfg: Config): Record<string, unknown> {
     TIENDA_URL: cfg.TIENDA_URL,
     SUPABASE_URL: cfg.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: "(set, redacted)",
+    BACKUP: cfg.BACKUP_DB_URL
+      ? { dir: cfg.BACKUP_DIR, keepDays: cfg.BACKUP_KEEP_DAYS, hour: cfg.BACKUP_HOUR }
+      : "(apagado)",
     LOG_LEVEL: cfg.LOG_LEVEL,
   };
 }
