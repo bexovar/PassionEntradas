@@ -1,0 +1,25 @@
+-- =============================================================================
+-- Elimina `admin_auth`: el token compartido del panel viejo de la tienda.
+--
+-- `0003_tickets_catalogo` ya declaraba que esta tabla NO se migraba al proyecto
+-- unificado (el panel usa Supabase Auth con roles en app_metadata). Pero la
+-- tabla quedó viva en producción, con el hash del token semilla adentro.
+--
+-- Por qué importa: la Edge Function `admin-tickets` sigue desplegada (ACTIVE,
+-- verify_jwt=false, CORS *) y usa esa tabla como única autenticación. El token
+-- en claro está publicado en una rama pública de este mismo repo, así que
+-- cualquiera que lo lea podía invocarla y, con service_role, listar/crear/
+-- borrar entradas del catálogo — incluido `precio_origen`, que las column
+-- grants de `0013_tickets_columnas_publicas` le ocultan a anon.
+--
+-- Dropear la tabla deja la función fail-closed: validToken() no encuentra hash
+-- y devuelve 401 (el 2026-10-13 ya se borró la fila del token y se verificó el
+-- 401 con el token publicado). Pero esto es SQL y no toca deploys, así que
+-- además hay que BORRAR la Edge Function:
+--
+--     supabase functions delete admin-tickets --project-ref vcovindqjrzpkoxandnv
+--
+-- En una base reconstruida desde cero es un no-op: la tabla nunca se crea.
+-- =============================================================================
+
+drop table if exists public.admin_auth;
