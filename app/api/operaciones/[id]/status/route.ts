@@ -12,6 +12,7 @@ import { getRol, nombreDe } from "@/lib/auth";
 import { isMock, mockApplyAction, mockListOps } from "@/lib/mock-db";
 import { avisarCambioAlCliente, COLUMNAS_AVISO, type OpParaAviso } from "@/lib/avisos-cliente";
 import { baseUrlDe } from "@/lib/base-url";
+import { actorDe, actorDemo, NOMBRE_HITO, registrarActividad, type Actor } from "@/lib/actividad";
 
 
 // PATCH /api/operaciones/[id]/status — aplica una acción sobre la operación.
@@ -43,6 +44,7 @@ export async function PATCH(
 ) {
   // Auditoría: quién ejecuta la acción (queda en <hito>_por al marcar).
   let quien: string | null = null;
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const supabase = createServerSupabase();
     const {
@@ -62,6 +64,7 @@ export async function PATCH(
     }
     // "Nombre Apellido" si cargó sus datos en Mi cuenta; si no, el email.
     quien = nombreDe(user);
+    actor = actorDe(user);
   }
 
   let body: any;
@@ -86,6 +89,7 @@ export async function PATCH(
     // Confirmar, cancelar o reabrir pueden haber movido el stock de una propia.
     if (antes && movimientoDeStock(action, antes, res.op)) refrescarTienda();
     if (antes) await avisarCambioAlCliente(null, antes, res.op as OpParaAviso, baseUrlDe(request));
+    if (antes) await registrarActividad(null, actividadDe(action, antes, res.op as Operacion, actor, null));
     return NextResponse.json({ ...pickResult(res.op), ...(res.aviso ? { aviso: res.aviso } : {}) });
   }
 
@@ -111,24 +115,33 @@ export async function PATCH(
   const cancelada = current.status === "cancelada";
   let patch: Record<string, unknown>;
 
+  // Un intento que el server rechaza también queda registrado: muestra qué
+  // vio la persona en pantalla (p.ej. una tarjeta desactualizada).
+  const rechazo = async (error: string, status = 409) => {
+    await registrarActividad(admin, {
+      actor,
+      accion: "operacion.rechazado",
+      entidad: "operacion",
+      entidad_id: params.id,
+      codigo: (current as { code?: string }).code ?? null,
+      resumen: `Intento rechazado: ${describir(action, current as Operacion)}. ${error}`,
+      detalle: { accion: action, pasos: pasosDe(current as Operacion), error },
+    });
+    return NextResponse.json({ error }, { status });
+  };
+
   switch (action.action) {
     case "entrada":
     case "pago":
     case "proveedor": {
       if (cancelada) {
-        return NextResponse.json(
-          { error: "La operación está cancelada; reabrila para editar hitos" },
-          { status: 409 }
-        );
+        return rechazo("La operación está cancelada; reabrila para editar hitos");
       }
       // Congela recién con los CUATRO hechos: haber entregado no es haber
       // terminado, y mientras falte alguno hay que poder seguir marcando
       // (se entrega antes de pagarle al proveedor todo el tiempo).
       if (operacionCompleta(current as any)) {
-        return NextResponse.json(
-          { error: "La operación está completa; desmarcá un hito para volver a editarla" },
-          { status: 409 }
-        );
+        return rechazo("La operación está completa; desmarcá un hito para volver a editarla");
       }
       // Los hitos NO tienen orden: en la práctica la secuencia varía (a veces
       // se le paga al proveedor antes de tener la entrada en mano). Antes acá
@@ -155,23 +168,17 @@ export async function PATCH(
     }
     case "confirmar": {
       if (cancelada) {
-        return NextResponse.json(
-          { error: "La operación está cancelada; reabrila para confirmarla" },
-          { status: 409 }
-        );
+        return rechazo("La operación está cancelada; reabrila para confirmarla");
       }
       if (current.confirmada_at) {
-        return NextResponse.json({ error: "El pedido ya está confirmado" }, { status: 409 });
+        return rechazo("El pedido ya está confirmado");
       }
       patch = { confirmada_at: new Date().toISOString(), confirmada_por: quien };
       break;
     }
     case "cerrar": {
       if (cancelada) {
-        return NextResponse.json(
-          { error: "La operación está cancelada; no se puede cerrar" },
-          { status: 409 }
-        );
+        return rechazo("La operación está cancelada; no se puede cerrar");
       }
       // Cerrar ya no exige hitos previos: la entrega puede estar hecha con
       // el resto pendiente de registrar, y forzarlo llevaba a marcar hitos
@@ -189,18 +196,12 @@ export async function PATCH(
     }
     case "cancelar": {
       if (cancelada) {
-        return NextResponse.json(
-          { error: "La operación ya está cancelada" },
-          { status: 409 }
-        );
+        return rechazo("La operación ya está cancelada");
       }
       // Una operación cerrada ya terminó bien: no se cancela (el trigger de
       // la base lo bloquearía igual, pero acá devolvemos un 409 claro).
       if (current.cerrada_at) {
-        return NextResponse.json(
-          { error: "La operación está cerrada; reabrí el cierre antes de cancelar" },
-          { status: 409 }
-        );
+        return rechazo("La operación está cerrada; reabrí el cierre antes de cancelar");
       }
       patch = {
         status: "cancelada",
@@ -211,10 +212,7 @@ export async function PATCH(
     }
     case "reabrir": {
       if (!cancelada) {
-        return NextResponse.json(
-          { error: "Solo se puede reabrir una operación cancelada" },
-          { status: 409 }
-        );
+        return rechazo("Solo se puede reabrir una operación cancelada");
       }
       patch = { status: "esperando_entrada", cancelada_at: null, cancelada_por: null };
       break;
@@ -236,10 +234,8 @@ export async function PATCH(
     // Es un conflicto de estado, no un error del servidor -> 409 con el
     // mensaje del trigger (que ya está escrito para humanos).
     const esInvariante = (error as { code?: string }).code === "P0001";
-    return NextResponse.json(
-      { error: error.message },
-      { status: esInvariante ? 409 : 500 }
-    );
+    if (esInvariante) return rechazo(error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   // Stock de entradas propias: se toma cuando el pedido queda confirmado y se
@@ -272,7 +268,90 @@ export async function PATCH(
     baseUrlDe(request)
   );
 
+  await registrarActividad(
+    admin,
+    actividadDe(action, current as Operacion, { ...(current as Operacion), ...(data as Operacion) }, actor, mov)
+  );
+
   return NextResponse.json({ ...pickResult(data as Operacion), ...(aviso ? { aviso } : {}) });
+}
+
+type Pasos = { confirmado: boolean; entrada: boolean; pago: boolean; proveedor: boolean; entregada: boolean; cancelada: boolean };
+
+function pasosDe(op: Partial<Operacion>): Pasos {
+  return {
+    confirmado: !!op.confirmada_at,
+    entrada: !!op.entrada_recibida_at,
+    pago: !!op.pago_confirmado_at,
+    proveedor: !!op.pago_proveedor_at,
+    entregada: !!op.cerrada_at,
+    cancelada: op.status === "cancelada",
+  };
+}
+
+// Qué se pidió, en palabras: "desmarcar «Pago recibido»", "reabrir la operación".
+function describir(action: StatusAction, antes: Partial<Operacion>): string {
+  switch (action.action) {
+    case "confirmar":
+      return "confirmar el pedido";
+    case "cancelar":
+      return "cancelar la operación";
+    case "reabrir":
+      return "reabrir la operación cancelada";
+    default: {
+      const nombre = NOMBRE_HITO[action.action];
+      if (action.action === "cerrar" && !action.done && operacionCompleta(antes as Operacion)) {
+        return `reabrir la operación completa (desmarcar «${nombre}»)`;
+      }
+      return `${action.done ? "marcar" : "desmarcar"} «${nombre}»`;
+    }
+  }
+}
+
+function actividadDe(
+  action: StatusAction,
+  antes: Partial<Operacion>,
+  despues: Partial<Operacion>,
+  actor: Actor | null,
+  stock: string | null
+) {
+  let resumen: string;
+  switch (action.action) {
+    case "confirmar":
+      resumen = "Confirmó el pedido";
+      break;
+    case "cancelar":
+      resumen = "Canceló la operación";
+      break;
+    case "reabrir":
+      resumen = "Reabrió la operación cancelada";
+      break;
+    default: {
+      const nombre = NOMBRE_HITO[action.action];
+      resumen =
+        action.action === "cerrar" && !action.done && operacionCompleta(antes as Operacion)
+          ? `Reabrió la operación completa (desmarcó «${nombre}»)`
+          : `${action.done ? "Marcó" : "Desmarcó"} «${nombre}»`;
+      // Marcar un paso en un pedido sin confirmar también lo confirma.
+      if (action.done && !antes.confirmada_at && despues.confirmada_at) resumen += " y confirmó el pedido";
+    }
+  }
+  return {
+    actor,
+    accion: action.action === "confirmar" || action.action === "cancelar" || action.action === "reabrir"
+      ? `operacion.${action.action}`
+      : "operacion.hito",
+    entidad: "operacion",
+    entidad_id: (despues.id ?? antes.id) as string,
+    codigo: (despues.code ?? antes.code ?? null) as string | null,
+    resumen,
+    detalle: {
+      accion: action,
+      antes: pasosDe(antes),
+      despues: pasosDe(despues),
+      ...(stock ? { stock } : {}),
+    },
+  };
 }
 
 function pickResult(

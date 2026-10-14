@@ -5,6 +5,7 @@ import { generarPassword, mensajeCredenciales } from "@/lib/acceso";
 import { emailConfigurado } from "@/lib/email";
 import { isMock, mockReenviarSolicitud } from "@/lib/mock-db";
 import { bloqueoEnAccesos, rolEquipoDe } from "@/lib/equipo";
+import { actorDe, actorDemo, registrarActividad, type Actor, type NuevaActividad } from "@/lib/actividad";
 
 function randomCrypto(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32;
@@ -15,6 +16,23 @@ function urlIngreso(request: Request): string {
     ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")
     : new URL(request.url).origin;
   return `${base}/ingresar`;
+}
+
+// Línea del registro de actividad. La contraseña nueva NUNCA va al registro.
+function actividadReenvio(
+  actor: Actor | null,
+  sol: { id: string; nombre: string; email: string; user_id: string | null }
+): NuevaActividad {
+  return {
+    actor,
+    accion: "acceso.reenviar",
+    entidad: "solicitud",
+    entidad_id: sol.id,
+    codigo: null,
+    resumen: `Generó una contraseña nueva para ${sol.nombre} (${sol.email}) para reenviarle el acceso`,
+    detalle: { nombre: sol.nombre, email: sol.email, usuario_id: sol.user_id },
+    origen: "panel",
+  };
 }
 
 // POST /api/acceso/[id]/reenviar — SOLO administrador. Vuelve a generar el
@@ -30,6 +48,7 @@ export async function POST(
   if (isMock()) {
     const r = mockReenviarSolicitud(id);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    await registrarActividad(null, actividadReenvio(actorDemo(), r.solicitud));
     const mensaje = mensajeCredenciales({
       nombre: r.solicitud.nombre,
       email: r.credenciales.email,
@@ -92,6 +111,8 @@ export async function POST(
       { status: 500 }
     );
   }
+
+  await registrarActividad(admin, actividadReenvio(actorDe(user), sol));
 
   const mensaje = mensajeCredenciales({
     nombre: sol.nombre,

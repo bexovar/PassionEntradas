@@ -12,7 +12,11 @@ import {
   isMock,
   mockClienteCancelarConsulta,
   mockClienteCancelarOp,
+  mockListConsultas,
+  mockListOps,
+  MOCK_USER,
 } from "@/lib/mock-db";
+import { actorDe, registrarActividad, type Actor, type NuevaActividad } from "@/lib/actividad";
 
 // POST /api/mis-pedidos/[id]/cancelar — el CLIENTE cancela su pedido o su
 // consulta desde Mis pedidos.
@@ -45,11 +49,26 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   if (isMock()) {
+    // Cómo estaba antes, para el registro de actividad.
+    const op = tipo === "pedido" ? mockListOps().find((o) => o.id === params.id) : undefined;
+    const consulta = tipo === "consulta" ? mockListConsultas().find((c) => c.id === params.id) : undefined;
+    const antes = op
+      ? { status: op.status, confirmado: !!op.confirmada_at }
+      : consulta
+        ? { estado: consulta.estado, cotizacion_monto: consulta.cotizacion_monto ?? null }
+        : {};
     const r =
       tipo === "pedido"
         ? mockClienteCancelarOp(params.id, CLIENTE_DEMO)
         : mockClienteCancelarConsulta(params.id, CLIENTE_DEMO);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    const fila = op ?? consulta;
+    if (fila) {
+      await registrarActividad(
+        null,
+        actividadCancelar({ id: CLIENTE_DEMO, email: MOCK_USER.email, nombre: null, rol: "cliente" }, tipo, fila, antes)
+      );
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -72,7 +91,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .eq("id", params.id)
       .eq("cliente_id", user.id)
       .in("estado", ["pendiente", "cotizada"])
-      .select("id, code, evento, sector")
+      .select("id, code, evento, sector, cantidad, moneda, cotizacion_monto")
       .maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) {
@@ -86,13 +105,18 @@ export async function POST(request: Request, { params }: { params: { id: string 
         ? NextResponse.json({ error: "Esta consulta ya fue resuelta" }, { status: 409 })
         : NextResponse.json({ error: "Consulta no encontrada" }, { status: 404 });
     }
+    // Cancelar no borra la cotización: si tiene monto, estaba cotizada.
+    await registrarActividad(
+      admin,
+      actividadCancelar(actorDe(user), "consulta", data, { cotizacion_monto: data.cotizacion_monto ?? null })
+    );
     await avisar(admin, { id: data.id, code: data.code, clase: "consulta" }, `Consulta ${data.code}`, data.evento, data.sector, quien, baseUrlDe(request));
     return NextResponse.json({ ok: true });
   }
 
   const { data: op } = await admin
     .from("operaciones")
-    .select("id, code, evento, sector, tipo, status, confirmada_at, entrada_recibida_at, pago_confirmado_at, cerrada_at, vendedor_alias")
+    .select("id, code, evento, sector, cantidad, monto, moneda, tipo, status, confirmada_at, entrada_recibida_at, pago_confirmado_at, cerrada_at, vendedor_alias")
     .eq("id", params.id)
     .eq("cliente_id", user.id)
     .maybeSingle();
@@ -119,12 +143,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const esInvariante = (error as { code?: string }).code === "P0001";
     return NextResponse.json({ error: error.message }, { status: esInvariante ? 409 : 500 });
   }
+  let errorStock: string | null = null;
   if (upd) {
     // Un pedido confirmado ya tomó su stock (lib/stock.ts): cancelarlo lo
     // devuelve. Sin haber tomado nada no hace nada.
     const { error: errStock } = await admin.rpc("stock_operacion", { p_op: params.id, p_tomar: false });
-    if (errStock) console.error(`[stock] no se pudo devolver stock de ${params.id}: ${errStock.message}`);
-    else refrescarTienda();
+    if (errStock) {
+      console.error(`[stock] no se pudo devolver stock de ${params.id}: ${errStock.message}`);
+      errorStock = errStock.message;
+    } else refrescarTienda();
   }
   if (!upd) {
     return NextResponse.json(
@@ -132,6 +159,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
       { status: 409 }
     );
   }
+  await registrarActividad(
+    admin,
+    actividadCancelar(actorDe(user), "pedido", op, {
+      status: op.status,
+      confirmado: !!op.confirmada_at,
+      ...(errorStock ? { stock: `No se pudo devolver el stock: ${errorStock}` } : {}),
+    })
+  );
   await avisar(
     admin,
     { id: op.id, code: op.code, clase: "op", vendedor: op.vendedor_alias },
@@ -142,6 +177,51 @@ export async function POST(request: Request, { params }: { params: { id: string 
     baseUrlDe(request)
   );
   return NextResponse.json({ ok: true });
+}
+
+// Registro de actividad de la cancelación: entidad operacion (pedido) o
+// consulta, desde la tienda.
+function actividadCancelar(
+  actor: Actor | null,
+  tipo: "pedido" | "consulta",
+  x: {
+    id: string;
+    code: string;
+    evento: string;
+    sector: string | null;
+    cantidad?: number | null;
+    monto?: number | null;
+    moneda?: string | null;
+  },
+  antes: Record<string, unknown>
+): NuevaActividad {
+  const que = `${x.evento}${x.sector ? ` — ${x.sector}` : ""}${x.cantidad && x.cantidad > 1 ? ` ×${x.cantidad}` : ""}`;
+  const montoTxt = (n: number) => `${x.moneda ?? "USD"} ${new Intl.NumberFormat("es-AR").format(n)}`;
+  const cotizada = typeof antes.cotizacion_monto === "number" ? antes.cotizacion_monto : null;
+  const extra =
+    tipo === "pedido"
+      ? `${x.monto ? ` · ${montoTxt(x.monto)}` : ""}${antes.confirmado ? " (ya estaba confirmado)" : ""}`
+      : cotizada != null
+        ? ` (estaba cotizada en ${montoTxt(cotizada)})`
+        : "";
+  return {
+    actor,
+    accion: "cliente.cancelar",
+    entidad: tipo === "pedido" ? "operacion" : "consulta",
+    entidad_id: x.id,
+    codigo: x.code,
+    resumen: `Canceló su ${tipo} desde Mis pedidos: ${que}${extra}`,
+    detalle: {
+      tipo,
+      evento: x.evento,
+      sector: x.sector,
+      cantidad: x.cantidad ?? null,
+      ...(tipo === "pedido" ? { monto: x.monto ?? null } : {}),
+      moneda: x.moneda ?? null,
+      antes,
+    },
+    origen: "tienda",
+  };
 }
 
 // Aviso a los vendedores. Best-effort: la cancelación ya quedó registrada y se

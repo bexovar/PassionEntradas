@@ -31,6 +31,7 @@ import {
   type ItemPedido,
   type TicketRef,
 } from "@/lib/pedidos";
+import { actorDe, registrarActividad, type Actor } from "@/lib/actividad";
 
 // POST /api/pedidos — el cliente hace un PEDIDO o una CONSULTA sobre una
 // entrada del catálogo. Se hacen DOS cosas por cada acción:
@@ -40,14 +41,17 @@ import {
 // El aviso por WhatsApp es best-effort: si no está configurado o falla, el
 // registro igual queda hecho (nunca se pierde un pedido por eso).
 
-type Ctx = { cliente_id: string | null; cliente_email: string | null; comprador: string };
+type Ctx = { cliente_id: string | null; cliente_email: string | null; comprador: string; actor: Actor | null };
 
 async function contexto(): Promise<Ctx | { error: string; status: number }> {
   if (isMock()) {
+    const id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
     return {
-      cliente_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      cliente_id: id,
       cliente_email: MOCK_USER.email,
       comprador: "Demo Cliente",
+      // Para el registro de actividad: pide el cliente demo, no el admin demo.
+      actor: { id, email: MOCK_USER.email, nombre: null, rol: "cliente" },
     };
   }
   const supabase = createServerSupabase();
@@ -62,7 +66,13 @@ async function contexto(): Promise<Ctx | { error: string; status: number }> {
     cliente_id: user.id,
     cliente_email: user.email ?? null,
     comprador: nombreDe(user) ?? user.email ?? "Cliente",
+    actor: actorDe(user),
   };
+}
+
+// "USD 300", "ARS 150.000": montos legibles para el registro de actividad.
+function montoTxt(n: number, moneda: string): string {
+  return `${moneda} ${new Intl.NumberFormat("es-AR").format(n)}`;
 }
 
 // --- Anti-flood --------------------------------------------------------------
@@ -207,6 +217,11 @@ export async function POST(request: Request) {
   // Para avisarle al cliente que parte de lo que pidió quedó a consultar por
   // falta de stock (no por otra razón, como no tener precio).
   let aConsultaPorStock = 0;
+  // Para el registro de actividad: qué líneas pedidas terminaron en consulta,
+  // por qué (sin stock o sin precio) y, si se partió, la parte que siguió como
+  // pedido.
+  type PasoAConsulta = { pedidas: number; motivo: "sin_stock" | "sin_precio"; enPedido: ItemPedido | null };
+  const pasoAConsulta = new Map<ItemPedido, PasoAConsulta>();
   parsed.splice(
     0,
     parsed.length,
@@ -214,7 +229,19 @@ export async function POST(request: Request) {
       const ref = p.ticket_id ? refs.get(p.ticket_id) : undefined;
       const partes = partirPorStock(p, ref);
       aConsultaPorStock += entradasMovidasPorStock(p, partes);
-      return partes.map((parte) => reconciliarItem(parte, ref, tasa));
+      const reconciliadas = partes.map((parte) => reconciliarItem(parte, ref, tasa));
+      if (p.tipo === "pedido") {
+        const enPedido = reconciliadas.find((r) => r.tipo === "pedido") ?? null;
+        reconciliadas.forEach((r, i) => {
+          if (r.tipo !== "consulta") return;
+          pasoAConsulta.set(r, {
+            pedidas: p.cantidad,
+            motivo: partes[i].tipo === "consulta" ? "sin_stock" : "sin_precio",
+            enPedido,
+          });
+        });
+      }
+      return reconciliadas;
     })
   );
 
@@ -253,6 +280,8 @@ export async function POST(request: Request) {
   // en pesos y en dólares no puede ser una sola deuda.
   const operaciones: Creada[] = [];
   const consultasCreadas: { id: string; code: string; evento: string }[] = [];
+  // La línea de cada consulta creada (por id), para el registro de actividad.
+  const lineaDeConsulta = new Map<string, ItemPedido>();
   const grupos = agruparPorMoneda(lineasPedido);
 
   if (isMock()) {
@@ -310,6 +339,7 @@ export async function POST(request: Request) {
         notas: notasDeConsulta(l, ctx),
       });
       consultasCreadas.push({ id: c.id, code: c.code, evento: c.evento });
+      lineaDeConsulta.set(c.id, l);
     }
   } else {
     const admin = createAdminSupabase();
@@ -420,6 +450,7 @@ export async function POST(request: Request) {
           .single();
         if (!error && data) {
           consultasCreadas.push(data as { id: string; code: string; evento: string });
+          lineaDeConsulta.set((data as { id: string }).id, l);
           // Igual que en la operación: aparte y sin chequear (ver arriba).
           if (idiomaElegido) {
             await admin.from("consultas").update({ idioma: idiomaElegido }).eq("id", (data as { id: string }).id);
@@ -431,6 +462,93 @@ export async function POST(request: Request) {
         }
       }
     }
+  }
+
+  // Registro de actividad: una línea por cada operación y cada consulta
+  // creadas (recién acá, con todo el envío guardado).
+  const adminActividad = isMock() ? null : createAdminSupabase();
+  const listaTxt = (ls: ItemPedido[]) =>
+    ls.slice(0, 3).map((l) => detalle(l)).join(", ") + (ls.length > 3 ? ` y ${ls.length - 3} más` : "");
+  const motivoDe = (l: ItemPedido | undefined) => (l ? pasoAConsulta.get(l)?.motivo ?? "consulta" : null);
+  for (const op of operaciones) {
+    await registrarActividad(adminActividad, {
+      actor: ctx.actor,
+      accion: "pedido.crear",
+      entidad: "operacion",
+      entidad_id: op.id,
+      codigo: op.code,
+      resumen:
+        `Hizo un pedido desde la tienda por ${montoTxt(op.monto, op.moneda)}: ${listaTxt(op.lineas)}` +
+        (aConsultaPorStock > 0
+          ? ` · ${aConsultaPorStock} ${aConsultaPorStock === 1 ? "entrada pasó" : "entradas pasaron"} a consulta por falta de stock`
+          : ""),
+      detalle: {
+        envio_id: envioId,
+        moneda: op.moneda,
+        monto: op.monto,
+        comision: comisionDe(op.lineas),
+        cantidad: op.cantidad,
+        lineas: op.lineas.map((l) => ({
+          evento: l.evento,
+          sector: l.sector,
+          fecha_evento: l.fecha_evento,
+          cantidad: l.cantidad,
+          monto: l.monto,
+          ticket_id: l.ticket_id,
+        })),
+        a_consulta_por_stock: aConsultaPorStock,
+        // Lo que del mismo envío fue a consulta (y por qué).
+        consultas: consultasCreadas.map((c) => ({
+          id: c.id,
+          code: c.code,
+          evento: c.evento,
+          cantidad: lineaDeConsulta.get(c.id)?.cantidad ?? null,
+          motivo: motivoDe(lineaDeConsulta.get(c.id)),
+        })),
+        idioma,
+      },
+      origen: "tienda",
+    });
+  }
+  for (const c of consultasCreadas) {
+    const l = lineaDeConsulta.get(c.id);
+    if (!l) continue;
+    const paso = pasoAConsulta.get(l);
+    // Si la línea se partió por stock: la operación que se llevó lo que había.
+    const enPedido = paso?.enPedido ?? null;
+    const op = enPedido ? operaciones.find((o) => o.lineas.includes(enPedido)) : undefined;
+    let resumen = `Consultó por ${detalle(l)}`;
+    if (paso?.motivo === "sin_stock") {
+      resumen =
+        `Pidió ${detalle(l)} sin stock: pasó a consulta` +
+        (op && enPedido ? ` (de ${paso.pedidas} pedidas, ${enPedido.cantidad} siguieron en el pedido ${op.code})` : "");
+    } else if (paso?.motivo === "sin_precio") {
+      resumen = `Pidió ${detalle(l)} sin precio cargado: pasó a consulta`;
+    }
+    await registrarActividad(adminActividad, {
+      actor: ctx.actor,
+      accion: "consulta.crear",
+      entidad: "consulta",
+      entidad_id: c.id,
+      codigo: c.code,
+      resumen,
+      detalle: {
+        envio_id: envioId,
+        evento: l.evento,
+        sector: l.sector,
+        fecha_evento: l.fecha_evento,
+        cantidad: l.cantidad,
+        moneda: l.moneda ?? null,
+        ticket_id: l.ticket_id,
+        motivo: paso?.motivo ?? "consulta",
+        ...(paso ? { pedidas: paso.pedidas } : {}),
+        // Aparece también en el historial de esa operación.
+        ...(op ? { operacion_id: op.id, operacion_code: op.code } : {}),
+        operaciones: operaciones.map((o) => ({ id: o.id, code: o.code })),
+        idioma,
+      },
+      origen: "tienda",
+    });
   }
 
   // 2) Un solo aviso a los vendedores (WhatsApp + email) con todas las

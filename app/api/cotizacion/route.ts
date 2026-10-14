@@ -5,6 +5,7 @@ import { getRol } from "@/lib/auth";
 import { DEFAULT_EUR_USD } from "@/lib/tickets";
 import { isMock, mockGetArsPorUsd, mockGetEurUsd, mockSetArsPorUsd, mockSetEurUsd } from "@/lib/mock-db";
 import { parseCotizacion } from "@/lib/factura";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // Cotizaciones de la tienda (tabla config):
 // - eur_usd: dólares por euro (los precios de Passion vienen en euros);
@@ -19,26 +20,29 @@ import { parseCotizacion } from "@/lib/factura";
 // además quedaría vieja.
 export const dynamic = "force-dynamic";
 
-async function requireAdmin(): Promise<NextResponse | null> {
-  if (isMock()) return null;
+async function requireAdmin(): Promise<{ denied: NextResponse | null; actor: Actor | null }> {
+  if (isMock()) return { denied: null, actor: actorDemo() };
   const supabase = createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    return { denied: NextResponse.json({ error: "No autorizado" }, { status: 401 }), actor: null };
   }
   if (getRol(user) !== "administrador") {
-    return NextResponse.json(
-      { error: "Solo el administrador maneja la cotización" },
-      { status: 403 }
-    );
+    return {
+      denied: NextResponse.json(
+        { error: "Solo el administrador maneja la cotización" },
+        { status: 403 }
+      ),
+      actor: null,
+    };
   }
-  return null;
+  return { denied: null, actor: actorDe(user) };
 }
 
 export async function GET() {
-  const denied = await requireAdmin();
+  const { denied } = await requireAdmin();
   if (denied) return denied;
 
   if (isMock()) {
@@ -62,7 +66,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const denied = await requireAdmin();
+  const { denied, actor } = await requireAdmin();
   if (denied) return denied;
 
   let body: any;
@@ -83,14 +87,19 @@ export async function PUT(request: Request) {
       );
     }
     if (!isMock()) {
-      const { error } = await createAdminSupabase()
+      const admin = createAdminSupabase();
+      const antes = await valorPrevio(admin, "ars_por_usd");
+      const { error } = await admin
         .from("config")
         .upsert({ key: "ars_por_usd", value: ars }, { onConflict: "key" });
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
+      await registrarActividad(admin, actividadCotizacion(actor, "ars_por_usd", antes, ars));
     } else {
+      const antes = mockGetArsPorUsd();
       mockSetArsPorUsd(ars);
+      await registrarActividad(null, actividadCotizacion(actor, "ars_por_usd", antes, ars));
     }
     refrescarTienda();
     return NextResponse.json({ arsPorUsd: ars });
@@ -108,14 +117,19 @@ export async function PUT(request: Request) {
   const redondeada = Math.round(eurUsd * 10000) / 10000;
 
   if (!isMock()) {
-    const { error } = await createAdminSupabase()
+    const admin = createAdminSupabase();
+    const antes = await valorPrevio(admin, "eur_usd");
+    const { error } = await admin
       .from("config")
       .upsert({ key: "eur_usd", value: redondeada }, { onConflict: "key" });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    await registrarActividad(admin, actividadCotizacion(actor, "eur_usd", antes, redondeada));
   } else {
+    const antes = mockGetEurUsd();
     mockSetEurUsd(redondeada);
+    await registrarActividad(null, actividadCotizacion(actor, "eur_usd", antes, redondeada));
   }
 
   // La tienda es ISR: sin esto el precio viejo seguiría hasta la revalidación
@@ -123,4 +137,42 @@ export async function PUT(request: Request) {
   refrescarTienda();
 
   return NextResponse.json({ eurUsd: redondeada });
+}
+
+// Lo guardado antes del cambio, solo para el registro de actividad
+// (null: sin fila, o no se pudo leer).
+async function valorPrevio(
+  admin: ReturnType<typeof createAdminSupabase>,
+  key: string
+): Promise<number | null> {
+  const { data } = await admin.from("config").select("value").eq("key", key).maybeSingle();
+  const v = Number(data?.value);
+  return data && Number.isFinite(v) && v > 0 ? v : null;
+}
+
+function actividadCotizacion(
+  actor: Actor | null,
+  key: "eur_usd" | "ars_por_usd",
+  antes: number | null,
+  despues: number
+) {
+  const fmt = (n: number) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 4 }).format(n);
+  // "la cotización del euro: USD 1,08" / "la cotización del dólar: ARS 1.465,5"
+  const [que, moneda] = key === "eur_usd" ? ["del euro", "USD"] : ["del dólar", "ARS"];
+  const resumen =
+    antes == null
+      ? `Fijó la cotización ${que} en ${moneda} ${fmt(despues)}`
+      : antes === despues
+        ? `Guardó la cotización ${que} en ${moneda} ${fmt(despues)} (sin cambios)`
+        : `Cambió la cotización ${que}: ${moneda} ${fmt(antes)} → ${moneda} ${fmt(despues)}`;
+  return {
+    actor,
+    accion: "config.cotizacion",
+    entidad: "config",
+    entidad_id: key,
+    codigo: null,
+    resumen,
+    detalle: { key, antes, despues },
+    origen: "panel" as const,
+  };
 }

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { avisarActividad } from "@/lib/actividad-cliente";
 
 // Cambio de contraseña de la propia cuenta, con la sesión activa.
 // Supabase Auth valida la sesión; no hace falta la contraseña anterior.
@@ -46,6 +47,7 @@ export default function CambiarClave({ mock }: { mock: boolean }) {
         });
         return;
       }
+      void avisarActividad("cuenta.clave");
       setClave("");
       setRepetir("");
       setMsg({ tipo: "ok", texto: "Contraseña actualizada. Ya vale para el próximo ingreso." });

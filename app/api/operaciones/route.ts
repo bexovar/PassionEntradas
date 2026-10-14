@@ -3,13 +3,21 @@ import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server
 import { esStaff, getRol } from "@/lib/auth";
 import { ERROR_MONEDA, generateCode, parseMoneda } from "@/lib/operaciones";
 import { isMock, mockCreateOp, mockListSolicitudes } from "@/lib/mock-db";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// "USD 300", "ARS 150.000": montos legibles para el registro de actividad.
+function montoTxt(n: number, moneda: string): string {
+  return `${moneda} ${new Intl.NumberFormat("es-AR").format(n)}`;
+}
 
 // POST /api/operaciones — crea una operación.
 // Solo staff (admin o moderador): una sesión sin rol del panel no carga
 // operaciones. La escritura va con service role.
 export async function POST(request: Request) {
+  // Quién la carga, para el registro de actividad.
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const supabase = createServerSupabase();
     const {
@@ -25,6 +33,7 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
+    actor = actorDe(user);
   }
 
   let body: any;
@@ -96,6 +105,34 @@ export async function POST(request: Request) {
   }
   let cliente: { id: string; email: string | null } | null = null;
 
+  // Registro de actividad, una vez creada (sin el cuerpo del request entero).
+  const actividadAlta = (id: string, code: string) => ({
+    actor,
+    accion: "operacion.crear",
+    entidad: "operacion",
+    entidad_id: id,
+    codigo: code,
+    resumen:
+      `Creó la operación «${evento}» por ${montoTxt(monto, moneda)} + comisión ${montoTxt(fee, moneda)}` +
+      ` · comprador ${comprador_alias}, vendedor ${vendedor_alias}` +
+      (cliente?.email ? ` · cuenta de ${cliente.email}` : ""),
+    detalle: {
+      evento,
+      comprador_alias,
+      vendedor_alias,
+      monto,
+      moneda,
+      fee,
+      ticket_id,
+      fecha_evento,
+      notas,
+      cuenta_debitar,
+      cliente_id: cliente?.id ?? null,
+      cliente_email: cliente?.email ?? null,
+    },
+    origen: "panel" as const,
+  });
+
   if (isMock()) {
     if (clienteIdRaw) {
       const s = mockListSolicitudes().find(
@@ -109,6 +146,7 @@ export async function POST(request: Request) {
       cliente_id: cliente?.id ?? null,
       cliente_email: cliente?.email ?? null,
     });
+    await registrarActividad(null, actividadAlta(op.id, op.code));
     return NextResponse.json(
       { id: op.id, code: op.code, cliente_id: op.cliente_id, cliente_email: op.cliente_email },
       { status: 201 }
@@ -154,6 +192,7 @@ export async function POST(request: Request) {
       .single();
 
     if (!error && data) {
+      await registrarActividad(admin, actividadAlta(data.id, data.code));
       return NextResponse.json(
         { id: data.id, code: data.code, cliente_id: cliente?.id ?? null, cliente_email: cliente?.email ?? null },
         { status: 201 }

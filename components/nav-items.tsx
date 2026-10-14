@@ -47,7 +47,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Accesos",
     // Solicitudes, Equipo y Clientes son pestañas de la misma sección (una
     // quinta entrada en la barra la partía en dos líneas).
-    rutas: ["/admin/equipo", "/admin/clientes"],
+    rutas: ["/admin/equipo", "/admin/clientes", "/admin/actividad"],
     icon: (
       <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />

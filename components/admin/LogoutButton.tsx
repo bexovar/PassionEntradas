@@ -1,9 +1,12 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { avisarActividad } from "@/lib/actividad-cliente";
 
 export default function LogoutButton() {
   async function logout() {
+    // Antes del signOut: después ya no hay sesión a quién atribuirlo.
+    await avisarActividad("sesion.salida");
     const supabase = createClient();
     await supabase.auth.signOut();
     // Navegación dura: el panel (Tailwind) sale al login (CSS de la tienda);

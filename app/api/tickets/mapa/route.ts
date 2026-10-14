@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server";
 import { getRol } from "@/lib/auth";
 import { isMock } from "@/lib/mock-db";
+import { actorDe, actorDemo, registrarActividad, type Actor, type NuevaActividad } from "@/lib/actividad";
 
 // POST /api/tickets/mapa — sube el mapa del estadio de una entrada PROPIA al
 // bucket público `mapas` (el mismo donde el worker deja los de Passion) y
@@ -27,6 +28,7 @@ function tipoReal(b: Uint8Array): { mime: string; ext: string } | null {
 }
 
 export async function POST(request: Request) {
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const {
       data: { user },
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
     if (!user || getRol(user) !== "administrador") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+    actor = actorDe(user);
   }
 
   let archivo: File | null = null;
@@ -60,6 +63,7 @@ export async function POST(request: Request) {
   // Demo: sin Supabase, la imagen viaja como data URL.
   if (isMock()) {
     const url = `data:${tipo.mime};base64,${Buffer.from(bytes).toString("base64")}`;
+    await registrarActividad(null, actividadMapa(actor, archivo, tipo.ext, null));
     return NextResponse.json({ url }, { status: 201 });
   }
 
@@ -72,5 +76,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `No se pudo subir la imagen: ${error.message}` }, { status: 500 });
   }
   const { data } = admin.storage.from("mapas").getPublicUrl(path);
+  await registrarActividad(admin, actividadMapa(actor, archivo, tipo.ext, data.publicUrl));
   return NextResponse.json({ url: data.publicUrl }, { status: 201 });
+}
+
+// "Subió un mapa de estadio (PNG, 840 KB)". Todavía no es de ninguna entrada:
+// se asigna al guardar el alta o la edición (ticket.crear / ticket.editar).
+function actividadMapa(actor: Actor | null, archivo: File, ext: string, url: string | null): NuevaActividad {
+  const peso =
+    archivo.size < 1024 * 1024
+      ? `${Math.max(1, Math.round(archivo.size / 1024))} KB`
+      : `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(archivo.size / (1024 * 1024))} MB`;
+  return {
+    actor,
+    accion: "ticket.mapa",
+    entidad: "ticket",
+    entidad_id: null,
+    codigo: null,
+    resumen: `Subió un mapa de estadio (${ext.toUpperCase()}, ${peso})`,
+    // En la demo la imagen viaja como data URL: no se guarda.
+    detalle: { url, archivo: archivo.name || null, bytes: archivo.size, tipo: ext },
+    origen: "panel",
+  };
 }

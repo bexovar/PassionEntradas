@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { avisarActividad } from "@/lib/actividad-cliente";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 
 // Destino del link de recuperación (PKCE ?code=...): con esa sesión el usuario
@@ -91,6 +92,8 @@ export default function RecuperarPage() {
       setFase("listo");
       return;
     }
+    // Registro de actividad (keepalive: sobrevive a la redirección).
+    void avisarActividad("cuenta.clave", { via: "recuperar" });
     setFase("ok");
     setTimeout(() => {
       router.replace("/entradas");

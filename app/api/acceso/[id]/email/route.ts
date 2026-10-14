@@ -4,6 +4,7 @@ import { getRol } from "@/lib/auth";
 import { mensajeCredenciales } from "@/lib/acceso";
 import { enviarEmail } from "@/lib/email";
 import { isMock, mockListSolicitudes } from "@/lib/mock-db";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 function urlIngreso(request: Request): string {
   const base = process.env.NEXT_PUBLIC_SITE_URL
@@ -22,6 +23,7 @@ export async function POST(
 ) {
   const id = params.id;
 
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const supabase = createServerSupabase();
     const {
@@ -36,6 +38,7 @@ export async function POST(
         { status: 403 }
       );
     }
+    actor = actorDe(user);
   }
 
   let body: any;
@@ -84,5 +87,16 @@ export async function POST(
       { status: r.noConfigurado ? 422 : 502 }
     );
   }
+  // Registro de actividad: a quién se le mandó el acceso (nunca la contraseña).
+  await registrarActividad(isMock() ? null : createAdminSupabase(), {
+    actor,
+    accion: "acceso.email",
+    entidad: "solicitud",
+    entidad_id: id,
+    codigo: null,
+    resumen: `Mandó por email las credenciales de ${nombre} (${email})`,
+    detalle: { nombre, email },
+    origen: "panel",
+  });
   return NextResponse.json({ ok: true });
 }

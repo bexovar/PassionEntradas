@@ -30,6 +30,7 @@ import type { Factura, FacturaDatos } from "@/lib/factura";
 import { generarPassword, type SolicitudAcceso, type SolicitudInput } from "@/lib/acceso";
 import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
+import type { Actividad } from "@/lib/actividad";
 
 export type MockFactura = Factura & { operacion_id: string };
 
@@ -74,6 +75,8 @@ type MockDB = {
   equipoCambios: (RegistroEquipo & { id: string; created_at: string })[];
   // Espejo de la tabla notificaciones.
   avisos: AvisoGuardado[];
+  // Espejo de la tabla actividad.
+  actividad: Actividad[];
 };
 
 export type MockUsuario = {
@@ -334,6 +337,7 @@ function seed(): MockDB {
     ],
     equipoCambios: [],
     avisos: [],
+    actividad: [],
     items: [],
     // Consultas del cliente demo: una para cotizar y una ya cotizada que
     // espera su respuesta (se ve en el panel y en Mis pedidos).
@@ -1207,5 +1211,18 @@ export function mockListAvisos(filtro: (a: AvisoGuardado) => boolean, limite = 3
   return db()
     .avisos.filter(filtro)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, limite);
+}
+
+// ---- actividad (espejo de la tabla actividad) -------------------------------
+export function mockRegistrarActividad(fila: Omit<Actividad, "id" | "created_at">): void {
+  const d = db();
+  d.actividad.push({ ...fila, id: String(d.actividad.length + 1), created_at: new Date().toISOString() });
+}
+
+export function mockListActividad(filtro: (a: Actividad) => boolean, limite = 200): Actividad[] {
+  return db()
+    .actividad.filter(filtro)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || Number(b.id) - Number(a.id))
     .slice(0, limite);
 }

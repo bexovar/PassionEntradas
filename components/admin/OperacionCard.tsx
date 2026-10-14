@@ -24,6 +24,7 @@ import {
 import FacturaModal from "./FacturaModal";
 import { fechaDia } from "@/lib/fechas";
 import AvisosAlCliente from "./AvisosAlCliente";
+import HistorialOperacion from "./HistorialOperacion";
 
 type Props = {
   op: Operacion;
@@ -345,6 +346,7 @@ export default function OperacionCard({
 
             {/* Lo que se le avisó al cliente y si el email salió. */}
             {(op.cliente_id || op.cliente_email) && <AvisosAlCliente opId={op.id} version={op.updated_at} />}
+            {!readOnly && <HistorialOperacion opId={op.id} version={op.updated_at} />}
 
             {/* Notas internas (solo panel; nunca van al link público) */}
             {(op.notas || (!readOnly && onUpdate)) && (
@@ -491,8 +493,8 @@ export default function OperacionCard({
             {/* Completa (los cuatro hitos): resumen con opción de reabrir.
                 Con los botones ocultos, el "quién hizo qué" vive acá. */}
             {!readOnly && cerrada && (
-              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-ink px-4 py-3 text-white">
-                <span className="min-w-0 text-sm font-semibold">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink px-4 py-3 text-white">
+                <span className="min-w-0 flex-1 basis-40 text-sm font-semibold">
                   ✓ Operación completa
                   {op.cerrada_at && (
                     <span className="ml-2 font-normal text-white/60">
@@ -514,15 +516,24 @@ export default function OperacionCard({
                     </span>
                   )}
                 </span>
-                <button
-                  onClick={() =>
+                {/* Con confirmación: un toque suelto (o el de alguien que
+                    solo quería mirarla) no puede reabrir una operación
+                    entregada. */}
+                <ConfirmarBoton
+                  onConfirm={() =>
                     onAction?.(op, { action: "cerrar", done: false }, "Operación reabierta")
                   }
                   disabled={busy}
-                  className="rounded-lg border border-white/25 px-3 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/10 disabled:opacity-60"
+                  pregunta="¿Reabrir?"
+                  si="Sí, reabrir"
+                  className="shrink-0 rounded-lg border border-white/25 px-3 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/10 disabled:opacity-60"
+                  armadoClassName="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2"
+                  preguntaClassName="text-xs font-semibold text-white"
+                  siClassName="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-ink"
+                  noClassName="rounded-lg border border-white/25 px-3 py-1.5 text-xs font-medium text-white/85"
                 >
                   Reabrir
-                </button>
+                </ConfirmarBoton>
               </div>
             )}
           </div>
@@ -560,15 +571,19 @@ export default function OperacionCard({
 
             {!readOnly &&
               (cancelada ? (
-                <button
-                  onClick={() =>
-                    onAction?.(op, { action: "reabrir" }, "Operación reabierta")
-                  }
+                <ConfirmarBoton
+                  onConfirm={() => onAction?.(op, { action: "reabrir" }, "Operación reabierta")}
                   disabled={busy}
+                  pregunta="¿Reabrir?"
+                  si="Sí, reabrir"
                   className="ml-auto rounded-lg border border-brand px-3 py-1.5 text-xs font-semibold text-brand transition-colors hover:bg-brand/5 disabled:opacity-60"
+                  armadoClassName="ml-auto flex flex-wrap items-center gap-2"
+                  preguntaClassName="text-xs font-semibold text-ink"
+                  siClassName="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white"
+                  noClassName="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-[#4A4E5E]"
                 >
                   Reabrir
-                </button>
+                </ConfirmarBoton>
               ) : (
                 !cerrada && (
                   // Confirmación en el lugar: un toque accidental en el
@@ -605,8 +620,10 @@ export default function OperacionCard({
   );
 }
 
-// Botón de hito con dos estados: pendiente (delineado, "Marcar…") y hecho
-// (relleno con ✓; al tocarlo de nuevo se desmarca, por si hubo un error).
+// Botón de hito con dos estados: pendiente (delineado) y hecho (relleno con
+// ✓). Marcar es un toque; desmarcar pide "¿Desmarcar? Sí · No" en el mismo
+// lugar, porque deshace trabajo de otro y un toque suelto (p.ej. el que cae
+// sobre los botones que aparecen al reabrir) no debe bastar.
 // Completado, muestra además QUIÉN lo marcó ("por kiru"), para saber a quién
 // preguntarle por ese paso.
 function HitoButton({
@@ -628,19 +645,10 @@ function HitoButton({
   lockedHint?: string;
   onClick: () => void;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={busy || locked}
-      aria-pressed={done}
-      title={locked ? lockedHint : done ? "Tocá para desmarcar" : undefined}
-      className="flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-xs font-semibold transition-colors disabled:opacity-60"
-      style={
-        done
-          ? { backgroundColor: color, borderColor: color, color: "#fff" }
-          : { borderColor: `${color}66`, color }
-      }
-    >
+  const clases =
+    "flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-xs font-semibold transition-colors disabled:opacity-60";
+  const contenido = (
+    <>
       <span
         className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px]"
         style={{
@@ -659,6 +667,41 @@ function HitoButton({
           </span>
         )}
       </span>
+    </>
+  );
+
+  if (done) {
+    return (
+      <ConfirmarBoton
+        onConfirm={onClick}
+        disabled={busy || locked}
+        title={locked ? lockedHint : "Tocá para desmarcar"}
+        pregunta="¿Desmarcar?"
+        si="Sí"
+        className={clases}
+        style={{ backgroundColor: color, borderColor: color, color: "#fff" }}
+        armadoClassName="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-xl border-2 px-2 py-1.5"
+        armadoStyle={{ borderColor: color, color }}
+        preguntaClassName="w-full text-center text-xs font-semibold"
+        siClassName="rounded-lg px-2.5 py-1 text-xs font-semibold text-white"
+        siStyle={{ backgroundColor: color }}
+        noClassName="rounded-lg px-2.5 py-1 text-xs font-medium text-[#4A4E5E]"
+      >
+        {contenido}
+      </ConfirmarBoton>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy || locked}
+      aria-pressed={false}
+      title={locked ? lockedHint : undefined}
+      className={clases}
+      style={{ borderColor: `${color}66`, color }}
+    >
+      {contenido}
     </button>
   );
 }

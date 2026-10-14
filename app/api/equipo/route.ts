@@ -3,8 +3,9 @@ import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server
 import { getRol, nombreDe, rolGuardado } from "@/lib/auth";
 import { generarPassword } from "@/lib/acceso";
 import { emailConfigurado, enviarEmail } from "@/lib/email";
-import { leerUsuarios, mensajeAltaEquipo, parsearAlta, rolEquipoDeUsuario } from "@/lib/equipo";
+import { leerUsuarios, mensajeAltaEquipo, parsearAlta, rolEquipoDeUsuario, type AltaEquipo } from "@/lib/equipo";
 import { isMock, MOCK_USER, mockAltaEquipo } from "@/lib/mock-db";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // Aleatoriedad de calidad para la contraseña (no Math.random).
 function randomCrypto(): number {
@@ -23,9 +24,10 @@ function urlIngreso(request: Request): string {
 //   credenciales UNA vez (y las manda por email si hay proveedor);
 // - email de un cliente que ya tiene cuenta: con `promover` le cambia el rol
 //   (sin tocar su contraseña); sin `promover` avisa, para confirmarlo.
-// Queda registrado en equipo_cambios.
+// Queda registrado en equipo_cambios y en Actividad (nunca la contraseña).
 export async function POST(request: Request) {
   let por = MOCK_USER.email;
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const supabase = createServerSupabase();
     const {
@@ -36,6 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Solo un administrador gestiona el equipo" }, { status: 403 });
     }
     por = nombreDe(user) ?? user.email ?? "admin";
+    actor = actorDe(user);
   }
 
   let body: unknown;
@@ -68,7 +71,15 @@ export async function POST(request: Request) {
   if (isMock()) {
     const r = mockAltaEquipo(alta, por);
     if (!r.ok) return NextResponse.json({ error: r.error, esCliente: r.esCliente ?? false }, { status: r.status });
-    return NextResponse.json({ id: r.id, ...(await conCredenciales(r.credenciales)) });
+    const extra = await conCredenciales(r.credenciales);
+    // El demo solo promueve clientes (sin credenciales); con credenciales es alguien nuevo.
+    await registrarActividad(
+      null,
+      r.credenciales
+        ? actividadAlta(actor, r.id, alta, extra.emailEnviado)
+        : actividadPromover(actor, r.id, alta, quienDe(alta.nombre, alta.email), "cliente")
+    );
+    return NextResponse.json({ id: r.id, ...extra });
   }
 
   const admin = createAdminSupabase();
@@ -106,6 +117,10 @@ export async function POST(request: Request) {
       rol_despues: alta.rol,
       por,
     });
+    await registrarActividad(
+      admin,
+      actividadPromover(actor, existente.id, alta, quienDe(nombreDe(existente), existente.email ?? alta.email), rolGuardado(existente))
+    );
     return NextResponse.json({
       id: existente.id,
       ...(await conCredenciales(null)),
@@ -135,9 +150,47 @@ export async function POST(request: Request) {
     rol_despues: alta.rol,
     por,
   });
+  const extra = await conCredenciales({ email: alta.email, password });
+  await registrarActividad(admin, actividadAlta(actor, created.user.id, alta, extra.emailEnviado));
   return NextResponse.json({
     id: created.user.id,
-    ...(await conCredenciales({ email: alta.email, password })),
+    ...extra,
     aviso: logErr ? "El usuario se creó pero el alta no quedó en el registro." : undefined,
   });
+}
+
+// "Juan Pérez (juan@x.com)", o solo el email si no hay nombre.
+function quienDe(nombre: string | null | undefined, email: string): string {
+  const n = (nombre ?? "").trim();
+  return n && n.toLowerCase() !== email.toLowerCase() ? `${n} (${email})` : email;
+}
+
+// Alta de alguien nuevo. Sin la contraseña temporal: solo si salió por email.
+function actividadAlta(actor: Actor | null, id: string, alta: AltaEquipo, emailEnviado: boolean) {
+  const nombre = `${alta.nombre} ${alta.apellido}`.trim();
+  return {
+    actor,
+    accion: "equipo.alta",
+    entidad: "usuario",
+    entidad_id: id,
+    codigo: null,
+    resumen: `Sumó a ${quienDe(nombre, alta.email)} al equipo como ${alta.rol}${emailEnviado ? " (credenciales por email)" : ""}`,
+    detalle: { email: alta.email, nombre: alta.nombre, apellido: alta.apellido, rol: alta.rol, nuevo: true, email_enviado: emailEnviado },
+    origen: "panel" as const,
+  };
+}
+
+// Una cuenta que ya existía (cliente, o con el acceso revocado) pasa al equipo.
+function actividadPromover(actor: Actor | null, id: string, alta: AltaEquipo, quien: string, rolAntes: string | null) {
+  const antes = rolAntes === "cliente" ? "era cliente" : "tenía el acceso revocado";
+  return {
+    actor,
+    accion: "equipo.alta",
+    entidad: "usuario",
+    entidad_id: id,
+    codigo: null,
+    resumen: `Pasó a ${quien} al equipo como ${alta.rol} (${antes})`,
+    detalle: { email: alta.email, rol_antes: rolAntes, rol_despues: alta.rol, nuevo: false },
+    origen: "panel" as const,
+  };
 }
