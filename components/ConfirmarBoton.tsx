@@ -7,7 +7,7 @@
 // Sin estilos propios: cada pantalla pasa sus clases (panel en Tailwind,
 // tienda con las suyas).
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 type Props = {
   onConfirm: () => void;
@@ -19,6 +19,10 @@ type Props = {
   disabled?: boolean;
   title?: string;
   className?: string;
+  // Colores que dependen de datos (p.ej. el color de cada hito del panel).
+  style?: CSSProperties;
+  armadoStyle?: CSSProperties;
+  siStyle?: CSSProperties;
   siClassName?: string;
   noClassName?: string;
   // Contenedor de la confirmación armada (pregunta + botones).
@@ -40,6 +44,9 @@ export default function ConfirmarBoton({
   disabled = false,
   title,
   className = "",
+  style,
+  armadoStyle,
+  siStyle,
   siClassName = "",
   noClassName = "",
   armadoClassName = "inline-flex flex-wrap items-center gap-2",
@@ -98,6 +105,7 @@ export default function ConfirmarBoton({
         disabled={disabled}
         title={title}
         className={className}
+        style={style}
       >
         {children}
       </button>
@@ -105,7 +113,7 @@ export default function ConfirmarBoton({
   }
 
   return (
-    <span ref={caja} role="group" aria-label={pregunta} className={armadoClassName}>
+    <span ref={caja} role="group" aria-label={pregunta} className={armadoClassName} style={armadoStyle}>
       <span className={preguntaClassName} aria-live="polite">
         {pregunta}
       </span>
@@ -118,6 +126,7 @@ export default function ConfirmarBoton({
           onConfirm();
         }}
         className={siClassName}
+        style={siStyle}
       >
         {si}
       </button>
