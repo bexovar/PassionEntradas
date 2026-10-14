@@ -8,6 +8,7 @@ import {
   mockUpsertMargen,
   mockDeleteMargen,
 } from "@/lib/mock-db";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // Márgenes de precio por proveedor + evento/competición (hoy: portal).
 // GET    -> reglas vigentes + competiciones existentes en el catálogo.
@@ -16,26 +17,29 @@ import {
 // DELETE -> borra una regla por competición (el margen general no se borra).
 // Solo administrador; escrituras con service role.
 
-async function requireAdmin(): Promise<NextResponse | null> {
-  if (isMock()) return null;
+async function requireAdmin(): Promise<{ denied: NextResponse | null; actor: Actor | null }> {
+  if (isMock()) return { denied: null, actor: actorDemo() };
   const supabase = createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    return { denied: NextResponse.json({ error: "No autorizado" }, { status: 401 }), actor: null };
   }
   if (getRol(user) !== "administrador") {
-    return NextResponse.json(
-      { error: "Solo el administrador maneja los márgenes" },
-      { status: 403 }
-    );
+    return {
+      denied: NextResponse.json(
+        { error: "Solo el administrador maneja los márgenes" },
+        { status: 403 }
+      ),
+      actor: null,
+    };
   }
-  return null;
+  return { denied: null, actor: actorDe(user) };
 }
 
 export async function GET() {
-  const denied = await requireAdmin();
+  const { denied } = await requireAdmin();
   if (denied) return denied;
 
   if (isMock()) {
@@ -75,7 +79,7 @@ function parsePorcentaje(v: unknown): number | null {
 }
 
 export async function PUT(request: Request) {
-  const denied = await requireAdmin();
+  const { denied, actor } = await requireAdmin();
   if (denied) return denied;
 
   let body: any;
@@ -95,14 +99,17 @@ export async function PUT(request: Request) {
   }
 
   if (isMock()) {
+    const antes = mockListMargenes().find((m) => m.competicion === competicion)?.porcentaje ?? null;
     const margen = mockUpsertMargen(competicion, porcentaje);
     refrescarTienda(); // flujo local completo
+    await registrarActividad(null, actividadMargen(actor, margen.id, competicion, antes, porcentaje, 370));
     return NextResponse.json({ margen, recalculadas: 370 });
   }
 
   const admin = createAdminSupabase();
   // Upsert manual (la unicidad es por índice de expresión, onConflict no aplica).
-  const buscar = admin.from("margenes").select("id").eq("source", "portal");
+  // El porcentaje anterior es para el registro de actividad.
+  const buscar = admin.from("margenes").select("id, porcentaje").eq("source", "portal");
   const { data: existente } = await (competicion === null
     ? buscar.is("competicion", null)
     : buscar.eq("competicion", competicion)
@@ -138,11 +145,23 @@ export async function PUT(request: Request) {
   // página raíz (quirk de Next 14 con route groups).
   refrescarTienda();
 
+  await registrarActividad(
+    admin,
+    actividadMargen(
+      actor,
+      String(margen.id),
+      competicion,
+      existente ? Number(existente.porcentaje) : null,
+      porcentaje,
+      recalculadas
+    )
+  );
+
   return NextResponse.json({ margen, recalculadas });
 }
 
 export async function DELETE(request: Request) {
-  const denied = await requireAdmin();
+  const { denied, actor } = await requireAdmin();
   if (denied) return denied;
 
   let body: any;
@@ -160,19 +179,23 @@ export async function DELETE(request: Request) {
   }
 
   if (isMock()) {
+    const previa = mockListMargenes().find((m) => m.competicion === competicion);
     if (!mockDeleteMargen(competicion)) {
       return NextResponse.json({ error: "Regla no encontrada" }, { status: 404 });
     }
     refrescarTienda(); // flujo local completo
+    await registrarActividad(null, actividadBorrarMargen(actor, previa ?? null, competicion, 370));
     return NextResponse.json({ ok: true, recalculadas: 370 });
   }
 
   const admin = createAdminSupabase();
-  const { error } = await admin
+  // .select: qué regla se borró (id y porcentaje), para el registro de actividad.
+  const { data: borradas, error } = await admin
     .from("margenes")
     .delete()
     .eq("source", "portal")
-    .eq("competicion", competicion);
+    .eq("competicion", competicion)
+    .select("id, porcentaje");
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -188,5 +211,67 @@ export async function DELETE(request: Request) {
     );
   }
   refrescarTienda();
+  // Sin filas borradas no cambió nada: no se registra.
+  const borrada = borradas?.[0];
+  if (borrada) {
+    await registrarActividad(
+      admin,
+      actividadBorrarMargen(
+        actor,
+        { id: String(borrada.id), porcentaje: Number(borrada.porcentaje) },
+        competicion,
+        recalculadas
+      )
+    );
+  }
   return NextResponse.json({ ok: true, recalculadas });
+}
+
+const pct = (n: number) => `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n)}%`;
+const recalculo = (n: unknown) => (typeof n === "number" ? ` · ${n} precios recalculados` : "");
+
+function actividadMargen(
+  actor: Actor | null,
+  id: string,
+  competicion: string | null,
+  antes: number | null,
+  despues: number,
+  recalculadas: unknown
+) {
+  const regla = competicion ? `el margen de ${competicion}` : "el margen general";
+  const resumen =
+    antes == null
+      ? `Creó ${regla}: ${pct(despues)}`
+      : antes === despues
+        ? `Guardó ${regla} en ${pct(despues)} (sin cambios)`
+        : `Cambió ${regla}: ${pct(antes)} → ${pct(despues)}`;
+  return {
+    actor,
+    accion: "config.margen",
+    entidad: "config",
+    entidad_id: id,
+    codigo: null,
+    resumen: resumen + recalculo(recalculadas),
+    detalle: { competicion, antes, despues, recalculadas: recalculadas ?? null },
+    origen: "panel" as const,
+  };
+}
+
+function actividadBorrarMargen(
+  actor: Actor | null,
+  previa: { id: string; porcentaje: number } | null,
+  competicion: string,
+  recalculadas: unknown
+) {
+  const cuanto = previa ? ` (${pct(previa.porcentaje)})` : "";
+  return {
+    actor,
+    accion: "config.margen_borrar",
+    entidad: "config",
+    entidad_id: previa?.id ?? null,
+    codigo: null,
+    resumen: `Borró el margen de ${competicion}${cuanto}: vuelve al margen general` + recalculo(recalculadas),
+    detalle: { competicion, porcentaje: previa?.porcentaje ?? null, recalculadas: recalculadas ?? null },
+    origen: "panel" as const,
+  };
 }

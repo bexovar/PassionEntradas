@@ -3,26 +3,27 @@ import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server
 import { getRol } from "@/lib/auth";
 import { parseHoras, VENCE_HORAS_DEFAULT, VENCE_HORAS_MAX, VENCE_HORAS_MIN } from "@/lib/cotizaciones";
 import { isMock, mockGetVenceHoras, mockSetVenceHoras } from "@/lib/mock-db";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // GET/PUT /api/ajustes-cotizacion — cuántas horas tiene el cliente para
 // aceptar una cotización (config.cotizacion_vence_horas, 48 por defecto).
 // Aplica a las cotizaciones que se manden DESPUÉS de cambiarlo. Solo admin.
 export const dynamic = "force-dynamic";
 
-async function soloAdmin(): Promise<NextResponse | null> {
-  if (isMock()) return null;
+async function soloAdmin(): Promise<{ no: NextResponse | null; actor: Actor | null }> {
+  if (isMock()) return { no: null, actor: actorDemo() };
   const supabase = createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user || getRol(user) !== "administrador") {
-    return NextResponse.json({ error: "Solo el administrador" }, { status: 403 });
+    return { no: NextResponse.json({ error: "Solo el administrador" }, { status: 403 }), actor: null };
   }
-  return null;
+  return { no: null, actor: actorDe(user) };
 }
 
 export async function GET() {
-  const no = await soloAdmin();
+  const { no } = await soloAdmin();
   if (no) return no;
   if (isMock()) return NextResponse.json({ horas: mockGetVenceHoras() });
   const { data } = await createAdminSupabase()
@@ -35,7 +36,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const no = await soloAdmin();
+  const { no, actor } = await soloAdmin();
   if (no) return no;
   let body: any;
   try {
@@ -51,12 +52,46 @@ export async function PUT(request: Request) {
     );
   }
   if (isMock()) {
+    const antes = mockGetVenceHoras();
     mockSetVenceHoras(horas);
+    await registrarActividad(null, actividadHoras(actor, antes, horas));
     return NextResponse.json({ horas });
   }
-  const { error } = await createAdminSupabase()
+  const admin = createAdminSupabase();
+  // El valor anterior, solo para el registro de actividad (sin fila = el
+  // default, igual que el GET; si no se pudo leer, queda sin "antes").
+  const { data: previo, error: errPrevio } = await admin
+    .from("config")
+    .select("value")
+    .eq("key", "cotizacion_vence_horas")
+    .maybeSingle();
+  const { error } = await admin
     .from("config")
     .upsert({ key: "cotizacion_vence_horas", value: horas }, { onConflict: "key" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const h = Number(previo?.value);
+  await registrarActividad(
+    admin,
+    actividadHoras(actor, errPrevio ? null : h > 0 ? h : VENCE_HORAS_DEFAULT, horas)
+  );
   return NextResponse.json({ horas });
+}
+
+function actividadHoras(actor: Actor | null, antes: number | null, horas: number) {
+  const resumen =
+    antes == null
+      ? `Fijó el vencimiento de las cotizaciones en ${horas} h`
+      : antes === horas
+        ? `Guardó el vencimiento de las cotizaciones en ${horas} h (sin cambios)`
+        : `Cambió el vencimiento de las cotizaciones: ${antes} h → ${horas} h`;
+  return {
+    actor,
+    accion: "config.ajustes_cotizacion",
+    entidad: "config",
+    entidad_id: "cotizacion_vence_horas",
+    codigo: null,
+    resumen,
+    detalle: { key: "cotizacion_vence_horas", antes, despues: horas },
+    origen: "panel" as const,
+  };
 }

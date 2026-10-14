@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server";
 import { getRol, nombreDe } from "@/lib/auth";
-import { metodoValido, parseCotizacion, type FacturaDatos, type FacturaIdioma } from "@/lib/factura";
+import {
+  metodoValido,
+  numeroFactura,
+  parseCotizacion,
+  type FacturaDatos,
+  type FacturaIdioma,
+} from "@/lib/factura";
 import {
   isMock,
   MOCK_USER,
@@ -12,6 +18,7 @@ import {
   mockListManual,
 } from "@/lib/mock-db";
 import { MOCK_TICKETS } from "@/lib/mock-tickets";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // Factura/recibo de una operación cobrada.
 // GET  -> la factura existente de la operación (404 si no se emitió).
@@ -24,9 +31,9 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function requireAdmin(): Promise<
-  { denied: NextResponse } | { denied: null; quien: string | null }
+  { denied: NextResponse } | { denied: null; quien: string | null; actor: Actor | null }
 > {
-  if (isMock()) return { denied: null, quien: MOCK_USER.email };
+  if (isMock()) return { denied: null, quien: MOCK_USER.email, actor: actorDemo() };
   const supabase = createServerSupabase();
   const {
     data: { user },
@@ -36,7 +43,7 @@ async function requireAdmin(): Promise<
       denied: NextResponse.json({ error: "No autorizado" }, { status: 401 }),
     };
   }
-  return { denied: null, quien: nombreDe(user) };
+  return { denied: null, quien: nombreDe(user), actor: actorDe(user) };
 }
 
 export async function GET(
@@ -287,8 +294,35 @@ export async function POST(
     moneda: monedaOp,
   };
 
+  // Registro de actividad, una vez guardada la factura.
+  const actividadFactura = (f: { id: string; numero: number; created_at: string }, reemitida: boolean) => ({
+    actor: auth.actor,
+    accion: "operacion.factura",
+    entidad: "operacion",
+    entidad_id: datos.operacion.id,
+    codigo: datos.operacion.code,
+    resumen:
+      `${reemitida ? "Re-emitió" : "Emitió"} la factura ${numeroFactura(f.numero, f.created_at)}` +
+      ` por ${monedaOp} ${new Intl.NumberFormat("es-AR").format(datos.total)} · ${metodo}` +
+      (datos.cotizacion ? ` · dólar del día ARS ${new Intl.NumberFormat("es-AR").format(datos.cotizacion.ars_por_usd)}` : ""),
+    detalle: {
+      factura_id: f.id,
+      numero: f.numero,
+      reemitida,
+      total: datos.total,
+      moneda: monedaOp,
+      metodo_pago: metodo,
+      idioma,
+      cotizacion: datos.cotizacion ?? null,
+      comprador: { nombre: compradorNombre, email: compradorEmail },
+    },
+    origen: "panel" as const,
+  });
+
   if (isMock()) {
+    const yaEmitida = !!mockFacturaDeOperacion(params.id);
     const f = mockGuardarFactura(params.id, datos);
+    await registrarActividad(null, actividadFactura(f, yaEmitida));
     return NextResponse.json(f, { status: 201 });
   }
 
@@ -298,10 +332,20 @@ export async function POST(
   const { data, error } = await admin
     .from("facturas")
     .upsert({ operacion_id: params.id, datos }, { onConflict: "operacion_id" })
-    .select("id, numero, datos, created_at")
+    .select("id, numero, datos, created_at, updated_at")
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(data, { status: 201 });
+  // updated_at solo sirve para saber si fue una re-emisión (el upsert
+  // conserva created_at); la respuesta sigue siendo la de siempre.
+  const { updated_at, ...factura } = data as {
+    id: string;
+    numero: number;
+    datos: FacturaDatos;
+    created_at: string;
+    updated_at: string;
+  };
+  await registrarActividad(admin, actividadFactura(factura, updated_at !== factura.created_at));
+  return NextResponse.json(factura, { status: 201 });
 }

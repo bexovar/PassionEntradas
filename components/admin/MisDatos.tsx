@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { avisarActividad } from "@/lib/actividad-cliente";
 
 type Datos = { nombre: string; apellido: string; telefono: string };
 
@@ -16,6 +17,8 @@ export default function MisDatos({ inicial, mock }: { inicial: Datos; mock: bool
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const enviando = useRef(false);
+  // Lo último guardado, para registrar solo los campos que cambiaron.
+  const guardado = useRef<Datos>(inicial);
 
   function set<K extends keyof Datos>(key: K, value: string) {
     setDatos((d) => ({ ...d, [key]: value }));
@@ -53,6 +56,12 @@ export default function MisDatos({ inicial, mock }: { inicial: Datos; mock: bool
         setMsg({ tipo: "error", texto: error.message });
         return;
       }
+      const nuevos: Datos = { nombre, apellido, telefono };
+      const campos = (Object.keys(nuevos) as (keyof Datos)[]).filter(
+        (k) => nuevos[k] !== (guardado.current[k] ?? "").trim()
+      );
+      guardado.current = nuevos;
+      if (campos.length) void avisarActividad("cuenta.datos", { campos });
       setDatos({ nombre, apellido, telefono });
       setMsg({
         tipo: "ok",

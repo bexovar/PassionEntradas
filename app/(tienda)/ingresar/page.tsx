@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getRol } from "@/lib/auth";
+import { avisarActividad } from "@/lib/actividad-cliente";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 
 // Login ÚNICO y público, con la estética de la tienda. Entran staff y clientes;
@@ -65,6 +66,8 @@ export default function IngresarPage() {
     const rol = data.user ? getRol(data.user) : null;
     const destino =
       rol === "administrador" ? "/admin" : rol === "moderador" ? "/moderador" : "/entradas";
+    // Registro de actividad, ya con la sesión puesta y antes de navegar.
+    await avisarActividad("sesion.ingreso");
     // Navegación DURA (no soft): el login vive con el CSS de la tienda y el
     // panel usa Tailwind. Un router.replace cliente cruzaba de un stylesheet a
     // otro y el panel se renderizaba sin estilos (todo enorme) hasta refrescar.

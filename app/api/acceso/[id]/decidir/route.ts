@@ -4,6 +4,7 @@ import { getRol, nombreDe } from "@/lib/auth";
 import { generarPassword, mensajeCredenciales } from "@/lib/acceso";
 import { emailConfigurado, enviarEmail } from "@/lib/email";
 import { isMock, MOCK_USER, mockDecidirSolicitud } from "@/lib/mock-db";
+import { actorDe, actorDemo, registrarActividad, type Actor, type NuevaActividad } from "@/lib/actividad";
 
 // Aleatoriedad de calidad para la contraseña (no Math.random).
 function randomCrypto(): number {
@@ -17,6 +18,34 @@ function urlIngreso(request: Request): string {
   return `${base}/ingresar`;
 }
 
+// Línea del registro de actividad. NUNCA la contraseña ni el mensaje con las
+// credenciales: solo a quién se le dio (o negó) el acceso.
+function actividadDecision(
+  actor: Actor | null,
+  sol: { id: string; nombre: string; email: string },
+  aprobada: boolean,
+  extra: { usuarioId?: string | null; emailEnviado?: boolean } = {}
+): NuevaActividad {
+  const quien = `${sol.nombre} (${sol.email})`;
+  return {
+    actor,
+    accion: aprobada ? "acceso.aprobar" : "acceso.rechazar",
+    entidad: "solicitud",
+    entidad_id: sol.id,
+    codigo: null,
+    resumen: aprobada
+      ? `Aprobó el acceso de ${quien}${extra.emailEnviado ? " y le mandó las credenciales por email" : ""}`
+      : `Rechazó la solicitud de acceso de ${quien}`,
+    detalle: {
+      nombre: sol.nombre,
+      email: sol.email,
+      ...(aprobada ? { usuario_id: extra.usuarioId ?? null } : {}),
+      ...(extra.emailEnviado !== undefined ? { email_enviado: extra.emailEnviado } : {}),
+    },
+    origen: "panel",
+  };
+}
+
 // POST /api/acceso/[id]/decidir — SOLO administrador. Aprueba o rechaza una
 // solicitud de acceso. Al aprobar crea el usuario cliente (Supabase Auth,
 // rol 'cliente' en app_metadata) y devuelve las credenciales UNA sola vez
@@ -28,6 +57,7 @@ export async function POST(
   const id = params.id;
 
   let decididaPor = MOCK_USER.email;
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const supabase = createServerSupabase();
     const {
@@ -43,6 +73,7 @@ export async function POST(
       );
     }
     decididaPor = nombreDe(user) ?? user.email ?? "admin";
+    actor = actorDe(user);
   }
 
   let body: any;
@@ -60,6 +91,10 @@ export async function POST(
   if (isMock()) {
     const r = mockDecidirSolicitud(id, accion, decididaPor);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    await registrarActividad(
+      null,
+      actividadDecision(actor, r.solicitud, r.solicitud.estado === "aprobada", { usuarioId: r.solicitud.user_id })
+    );
     if (accion === "rechazar" || !r.credenciales) {
       return NextResponse.json({ estado: "rechazada" });
     }
@@ -95,14 +130,17 @@ export async function POST(
   const decididaAt = new Date().toISOString();
 
   if (accion === "rechazar") {
-    const { error } = await admin
+    const { data: rechazadas, error } = await admin
       .from("solicitudes_acceso")
       .update({ estado: "rechazada", decidida_por: decididaPor, decidida_at: decididaAt })
       .eq("id", id)
-      .eq("estado", "pendiente");
+      .eq("estado", "pendiente")
+      // Solo para el registro: si otro admin la resolvió en el medio, no cambió nada.
+      .select("id");
     if (error) {
       return NextResponse.json({ error: "No se pudo rechazar la solicitud" }, { status: 500 });
     }
+    if (rechazadas?.length) await registrarActividad(admin, actividadDecision(actor, sol, false));
     return NextResponse.json({ estado: "rechazada" });
   }
 
@@ -166,6 +204,11 @@ export async function POST(
     });
     emailEnviado = envio.ok;
   }
+
+  await registrarActividad(
+    admin,
+    actividadDecision(actor, sol, true, { usuarioId: created.user.id, emailEnviado })
+  );
 
   return NextResponse.json({
     estado: "aprobada",

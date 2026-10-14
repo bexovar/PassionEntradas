@@ -3,6 +3,26 @@ import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server
 import { getRol, nombreDe } from "@/lib/auth";
 import { isMock, MOCK_USER, mockRevocarSolicitud } from "@/lib/mock-db";
 import { bloqueoEnAccesos, rolEquipoDe } from "@/lib/equipo";
+import { actorDe, actorDemo, registrarActividad, type Actor, type NuevaActividad } from "@/lib/actividad";
+
+// Línea del registro de actividad: a quién se le quitó o devolvió el acceso.
+function actividadRevocar(
+  actor: Actor | null,
+  sol: { id: string; nombre: string; email: string; user_id: string | null },
+  revocar: boolean
+): NuevaActividad {
+  const quien = `${sol.nombre} (${sol.email})`;
+  return {
+    actor,
+    accion: revocar ? "acceso.revocar" : "acceso.reactivar",
+    entidad: "solicitud",
+    entidad_id: sol.id,
+    codigo: null,
+    resumen: revocar ? `Revocó el acceso de ${quien}` : `Reactivó el acceso de ${quien}`,
+    detalle: { nombre: sol.nombre, email: sol.email, usuario_id: sol.user_id },
+    origen: "panel",
+  };
+}
 
 // POST /api/acceso/[id]/revocar — SOLO administrador. Revoca o reactiva el
 // acceso de un cliente aprobado. Revocar = quitarle el rol al usuario de Auth
@@ -15,6 +35,7 @@ export async function POST(
   const id = params.id;
 
   let quien = MOCK_USER.email;
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const supabase = createServerSupabase();
     const {
@@ -28,6 +49,7 @@ export async function POST(
       );
     }
     quien = nombreDe(user) ?? user.email ?? "admin";
+    actor = actorDe(user);
   }
 
   let body: any;
@@ -44,13 +66,14 @@ export async function POST(
   if (isMock()) {
     const r = mockRevocarSolicitud(id, accion, quien);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    await registrarActividad(null, actividadRevocar(actor, r.solicitud, accion === "revocar"));
     return NextResponse.json({ ok: true, revocada: accion === "revocar" });
   }
 
   const admin = createAdminSupabase();
   const { data: sol, error: solErr } = await admin
     .from("solicitudes_acceso")
-    .select("id, estado, user_id, revocada_at")
+    .select("id, nombre, email, estado, user_id, revocada_at")
     .eq("id", id)
     .single();
   if (solErr || !sol) {
@@ -108,6 +131,8 @@ export async function POST(
       { status: 500 }
     );
   }
+
+  await registrarActividad(admin, actividadRevocar(actor, sol, revocar));
 
   return NextResponse.json({ ok: true, revocada: revocar });
 }

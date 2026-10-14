@@ -51,7 +51,7 @@ function dia(iso: string): string {
 }
 
 function hora(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-AR", { timeZone: ZONA, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return new Date(iso).toLocaleTimeString("es-AR", { timeZone: ZONA, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
 }
 
 function quien(a: Actividad): string {

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { validarSolicitud } from "@/lib/acceso";
-import { isMock, mockCrearSolicitud } from "@/lib/mock-db";
+import { isMock, mockCrearSolicitud, mockListSolicitudes } from "@/lib/mock-db";
 import { notificarSolicitudAcceso } from "@/lib/whatsapp";
 import { notificarVendedoresEmail } from "@/lib/email";
 import { avisarEquipo } from "@/lib/avisos-equipo";
 import { baseUrlDe } from "@/lib/base-url";
+import { registrarActividad } from "@/lib/actividad";
 
 // POST /api/acceso/solicitar — PÚBLICO. Un visitante de la landing pide
 // acceso a la tienda. Se inserta con service role (la tabla es RLS deny-all).
@@ -66,17 +67,35 @@ export async function POST(request: Request) {
     }
   };
 
+  // Registro de actividad: alguien sin cuenta pidió acceso desde la landing.
+  // Solo cuando quedó una solicitud NUEVA (un duplicado no cambia nada).
+  const registrar = (admin: Parameters<typeof registrarActividad>[0], solicitudId: string | null) =>
+    registrarActividad(admin, {
+      actor: null,
+      accion: "acceso.solicitar",
+      entidad: "solicitud",
+      entidad_id: solicitudId,
+      resumen: `${nombre} (${email}) pidió acceso a la tienda`,
+      detalle: { nombre, email, telefono, legajo, mensaje, acepto_terminos: acepto },
+      origen: "landing",
+    });
+
   if (isMock()) {
+    const pendienteDe = (s: { estado: string; email: string }) =>
+      s.estado === "pendiente" && s.email.toLowerCase() === email.toLowerCase();
+    const yaPendiente = mockListSolicitudes().some(pendienteDe);
     const r = mockCrearSolicitud(parsed.value);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    if (!yaPendiente) await registrar(null, mockListSolicitudes().find(pendienteDe)?.id ?? null);
     await avisar();
     return NextResponse.json({ ok: true }, { status: 201 });
   }
 
   const admin = createAdminSupabase();
-  const { error } = await admin
+  const { data: creada, error } = await admin
     .from("solicitudes_acceso")
-    .insert({ nombre, email, telefono, legajo, mensaje, acepto_terminos: acepto });
+    .insert({ nombre, email, telefono, legajo, mensaje, acepto_terminos: acepto })
+    .select("id");
 
   if (error) {
     // 23505 = unique_violation: ya hay una solicitud PENDIENTE con ese email.
@@ -92,6 +111,7 @@ export async function POST(request: Request) {
     );
   }
 
+  await registrar(admin, creada?.[0]?.id ?? null);
   await avisar();
   return NextResponse.json({ ok: true }, { status: 201 });
 }

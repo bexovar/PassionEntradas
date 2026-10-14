@@ -5,10 +5,11 @@
 // contacto por WhatsApp, cambio de contraseña y cerrar sesión. Estética de la
 // tienda; bilingüe EN/ES.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { avisarActividad } from "@/lib/actividad-cliente";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { waLink } from "@/lib/tickets";
 
@@ -57,11 +58,14 @@ export function CuentaCliente({ mock, perfil }: { mock: boolean; perfil: PerfilI
   const lp = TX[lang].lp;
 
   async function cambiarIdioma(l: Lang) {
+    const antes = lang;
     setLang(l);
     localStorage.setItem("tm_lang", l);
     if (!mock) {
       const supabase = createClient();
-      await supabase.auth.updateUser({ data: { lang: l } });
+      const { error } = await supabase.auth.updateUser({ data: { lang: l } });
+      // Tocar el idioma que ya estaba no es un cambio.
+      if (!error && l !== antes) void avisarActividad("cuenta.idioma", { idioma: l });
     }
   }
 
@@ -71,6 +75,8 @@ export function CuentaCliente({ mock, perfil }: { mock: boolean; perfil: PerfilI
   const [legajo, setLegajo] = useState(perfil.legajo);
   const [perfilEstado, setPerfilEstado] = useState<Estado>("idle");
   const [perfilError, setPerfilError] = useState<string | null>(null);
+  // Lo último guardado, para registrar solo los campos que cambiaron.
+  const perfilGuardado = useRef({ nombre: perfil.nombre, telefono: perfil.telefono, legajo: perfil.legajo });
 
   async function guardarPerfil(e: React.FormEvent) {
     e.preventDefault();
@@ -91,6 +97,12 @@ export function CuentaCliente({ mock, perfil }: { mock: boolean; perfil: PerfilI
         setPerfilEstado("idle");
         return;
       }
+      const nuevos = { nombre, telefono, legajo };
+      const campos = (Object.keys(nuevos) as (keyof typeof nuevos)[]).filter(
+        (k) => nuevos[k] !== perfilGuardado.current[k]
+      );
+      perfilGuardado.current = nuevos;
+      if (campos.length) void avisarActividad("cuenta.datos", { campos });
       setPerfilEstado("ok");
       router.refresh();
     } catch {
@@ -130,6 +142,7 @@ export function CuentaCliente({ mock, perfil }: { mock: boolean; perfil: PerfilI
         setClaveEstado("idle");
         return;
       }
+      void avisarActividad("cuenta.clave");
       setClave("");
       setRepetir("");
       setClaveEstado("ok");
@@ -141,6 +154,9 @@ export function CuentaCliente({ mock, perfil }: { mock: boolean; perfil: PerfilI
   }
 
   async function logout() {
+    // Antes del signOut: después ya no hay sesión a quién atribuirlo. En demo
+    // no hay cuenta de cliente (quedaría a nombre del admin demo).
+    if (!mock) await avisarActividad("sesion.salida");
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.assign("/ingresar");

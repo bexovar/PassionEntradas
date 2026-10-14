@@ -6,7 +6,8 @@ import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server
 import { getRol } from "@/lib/auth";
 import { isMock, mockCreateManual } from "@/lib/mock-db";
 import { parsePrecio } from "@/lib/precios";
-import { ERROR_MONEDA, parseMoneda } from "@/lib/operaciones";
+import { ERROR_MONEDA, formatFecha, parseMoneda } from "@/lib/operaciones";
+import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // POST /api/tickets — publica una entrada manual en el catálogo.
 // Un evento puede traer VARIOS sectores (cada uno con su precio y stock):
@@ -88,7 +89,26 @@ function parseSectores(t: any): SectorInput[] | { error: string } {
   return sectores;
 }
 
+// "Cargó la entrada Boca vs River (15 ago 2026) · Platea: USD 300, stock 4".
+// Con varios sectores se listan hasta 3; más, solo cuántos y el stock total.
+function resumenAlta(evento: string, fecha: string, sectores: SectorInput[]): string {
+  const monto = (n: number, moneda: string) =>
+    `${moneda} ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n)}`;
+  const nombre = `${evento} (${formatFecha(fecha)})`;
+  if (sectores.length === 1) {
+    const s = sectores[0];
+    return `Cargó la entrada ${nombre} · ${s.categoria}: ${monto(s.precio, s.moneda)}, stock ${s.stock}`;
+  }
+  if (sectores.length <= 3) {
+    const lista = sectores.map((s) => `${s.categoria} (${monto(s.precio, s.moneda)}, stock ${s.stock})`);
+    return `Cargó la entrada ${nombre} con ${sectores.length} sectores: ${lista.join(", ")}`;
+  }
+  const total = sectores.reduce((acc, s) => acc + s.stock, 0);
+  return `Cargó la entrada ${nombre} con ${sectores.length} sectores (stock total ${total})`;
+}
+
 export async function POST(request: Request) {
+  let actor: Actor | null = isMock() ? actorDemo() : null;
   if (!isMock()) {
     const supabase = createServerSupabase();
     const {
@@ -98,6 +118,7 @@ export async function POST(request: Request) {
     if (!user || getRol(user) !== "administrador") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+    actor = actorDe(user);
   }
 
   let body: any;
@@ -182,10 +203,11 @@ export async function POST(request: Request) {
   }));
 
   let creadas: unknown[];
+  let admin: ReturnType<typeof createAdminSupabase> | null = null;
   if (isMock()) {
     creadas = rows.map((r) => mockCreateManual({ ...r, updated_at: r.scraped_at } as any));
   } else {
-    const admin = createAdminSupabase();
+    admin = createAdminSupabase();
     const { data, error } = await admin.from("tickets").insert(rows).select("*");
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
@@ -197,6 +219,34 @@ export async function POST(request: Request) {
   // revalidación de fondo en aparecer. También en mock, para poder probar
   // el flujo completo en local.
   refrescarTienda();
+
+  await registrarActividad(admin, {
+    actor,
+    accion: "ticket.crear",
+    entidad: "ticket",
+    // Varios sectores = varias filas: la línea apunta a la primera y el
+    // detalle lleva todas.
+    entidad_id: rows[0]?.id ?? null,
+    codigo: null,
+    resumen: resumenAlta(evento, fecha, sectores),
+    detalle: {
+      evento,
+      competicion,
+      ciudad,
+      fecha,
+      proveedor,
+      mapa: !!imagen_url,
+      sectores: rows.map((r) => ({
+        id: r.id,
+        categoria: r.categoria,
+        moneda: r.moneda_final,
+        precio: r.precio_final,
+        costo: r.precio_costo,
+        stock: r.stock,
+      })),
+    },
+    origen: "panel",
+  });
 
   // `row` se mantiene por compatibilidad con el formato de un solo sector.
   return NextResponse.json({ ok: true, rows: creadas, row: creadas[0] }, { status: 201 });
