@@ -128,10 +128,12 @@ export async function POST(
   const legajoTipeado = String(body.comprador_legajo ?? "").trim().slice(0, 40) || null;
   const metodo = String(body.metodo_pago ?? "").trim().slice(0, 80);
   const idioma: FacturaIdioma = body.idioma === "es" ? "es" : "en";
-  // Dólar del día: lo carga el admin a mano en cada emisión de una factura en
-  // DÓLARES (deja asentado su valor en pesos ese día). Una factura en pesos no
-  // lo necesita. La fecha es la de emisión, en hora argentina.
-  const arsPorUsd = parseCotizacion(body.cotizacion);
+  // Dólar del día: OPCIONAL en una factura en DÓLARES. Si el admin lo carga,
+  // la factura deja asentado el total en pesos de ese día; vacío, sale solo
+  // en dólares. Una factura en pesos no lo usa. La fecha es la de emisión, en
+  // hora argentina.
+  const cotizacionVacia = body.cotizacion == null || String(body.cotizacion).trim() === "";
+  const arsPorUsd = cotizacionVacia ? null : parseCotizacion(body.cotizacion);
 
   if (!metodo) {
     return NextResponse.json(
@@ -210,9 +212,11 @@ export async function POST(
       { status: 400 }
     );
   }
-  if (monedaOp === "USD" && arsPorUsd == null) {
+  // Escrito pero ilegible: mejor rechazar que emitir sin el dato que se quiso
+  // poner (o con un typo).
+  if (monedaOp === "USD" && !cotizacionVacia && arsPorUsd == null) {
     return NextResponse.json(
-      { error: "Cargá el dólar del día (pesos por dólar), por ejemplo 1465,50" },
+      { error: "El dólar del día no es válido (pesos por dólar, por ejemplo 1465,50). Dejalo vacío para no mostrar pesos." },
       { status: 400 }
     );
   }

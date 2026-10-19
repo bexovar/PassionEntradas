@@ -43,8 +43,9 @@ export default function FacturaModal({
   const metodos = METODOS_PAGO[op.moneda ?? "USD"];
   const [metodo, setMetodo] = useState(metodos[0]);
   const [idioma, setIdioma] = useState<"en" | "es">("en");
-  // Dólar del día, tipeado por el admin. Al re-emitir se precarga el que ya
-  // tenía la factura; si cambió, se corrige acá.
+  // Dólar del día, tipeado por el admin y opcional: vacío, la factura sale
+  // solo en dólares. Al re-emitir se precarga el que ya tenía la factura; si
+  // cambió, se corrige acá (o se borra para sacar los pesos).
   const [cotizacion, setCotizacion] = useState("");
   // El dólar del día solo tiene sentido en una factura en dólares.
   const esUsd = (op.moneda ?? "USD") === "USD";
@@ -105,8 +106,8 @@ export default function FacturaModal({
       onToast("error", "El nombre del comprador es obligatorio");
       return;
     }
-    if (esUsd && parseCotizacion(cotizacion) == null) {
-      onToast("error", "Cargá el dólar del día (pesos por dólar), por ejemplo 1465,50");
+    if (esUsd && cotizacion.trim() && parseCotizacion(cotizacion) == null) {
+      onToast("error", "El dólar del día no es válido (por ejemplo 1465,50). Dejalo vacío para no mostrar pesos.");
       return;
     }
     enviando.current = true;
@@ -350,7 +351,7 @@ export default function FacturaModal({
               {esUsd && (
               <div>
                 <label htmlFor="f-cotizacion" className={labelCls}>
-                  Dólar del día (pesos por dólar) *
+                  Dólar del día (pesos por dólar) · opcional
                 </label>
                 <input
                   id="f-cotizacion"
@@ -361,7 +362,7 @@ export default function FacturaModal({
                   placeholder="1465,50"
                 />
                 <p className="mt-1 text-[11px] text-muted">
-                  Queda fijo en la factura con la fecha de hoy. Se muestra el total en pesos al lado del total en dólares.
+                  Si lo cargás, queda fijo con la fecha de hoy y la factura muestra el total en pesos debajo del de dólares. Vacío, sale solo en dólares.
                 </p>
               </div>
               )}
