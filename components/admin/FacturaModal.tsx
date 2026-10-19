@@ -61,6 +61,10 @@ export default function FacturaModal({
       .then((r: { factura: Factura | null; cuenta: CuentaFactura | null } | null) => {
         if (!vivo || !r) return;
         setCuenta(r.cuenta);
+        // Cuenta sin nombre cargado: el nombre se tipea, y arranca del de la
+        // operación (el mismo respaldo que usa el servidor).
+        const sinNombre = r.cuenta != null && !r.cuenta.nombre;
+        if (sinNombre) setNombre(op.comprador_alias ?? "");
         const f = r.factura;
         if (!f) return;
         setExistente(f);
@@ -69,10 +73,8 @@ export default function FacturaModal({
         // la había.
         const a: FacturarA = op.cliente_id ? d.comprador.facturar_a ?? "cuenta" : "otro";
         setFacturarA(a);
-        if (a === "otro") {
-          setNombre(d.comprador.nombre);
-          setLegajo(d.comprador.legajo ?? "");
-        }
+        if (a === "otro" || sinNombre) setNombre(d.comprador.nombre);
+        if (a === "otro") setLegajo(d.comprador.legajo ?? "");
         setContacto(d.comprador.contacto ?? "");
         // Una factura vieja puede tener un método de otra moneda (la de Boca
         // salió con "Bank transfer (USD)"): al re-emitir arranca del primero
@@ -86,7 +88,16 @@ export default function FacturaModal({
     return () => {
       vivo = false;
     };
-  }, [op.id, op.cliente_id, op.moneda]);
+  }, [op.id, op.cliente_id, op.moneda, op.comprador_alias]);
+
+  // "Otro" es alguien que no es la cuenta: el email de la cuenta no va como su
+  // contacto. Si el admin ya escribió otro contacto, se respeta.
+  function elegirFacturarA(v: FacturarA) {
+    setFacturarA(v);
+    const emailCuenta = (op.cliente_email ?? "").trim().toLowerCase();
+    if (v === "otro" && emailCuenta && contacto.trim().toLowerCase() === emailCuenta) setContacto("");
+    if (v === "cuenta" && !contacto.trim()) setContacto(op.cliente_email ?? "");
+  }
 
   async function emitir() {
     if (enviando.current) return;
@@ -231,7 +242,7 @@ export default function FacturaModal({
                           name="f-facturar-a"
                           value={v}
                           checked={facturarA === v}
-                          onChange={() => setFacturarA(v)}
+                          onChange={() => elegirFacturarA(v)}
                           className="sr-only"
                         />
                         {texto}
