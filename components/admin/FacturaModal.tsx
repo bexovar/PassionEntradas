@@ -13,6 +13,11 @@ import {
   type FacturarA,
 } from "@/lib/factura";
 
+function sinEmail(s: string | null | undefined): string {
+  const v = (s ?? "").trim();
+  return v.includes("@") ? "" : v;
+}
+
 // Emite (o re-emite) la factura de una operación cobrada. Lo que la
 // operación no tiene (a quién se factura, contacto, método de pago, dólar del
 // día) se completa acá; el resto sale del snapshot que arma la API.
@@ -34,6 +39,9 @@ export default function FacturaModal({
   const [cuenta, setCuenta] = useState<CuentaFactura | null>(null);
   // Con cuenta, "otro" arranca vacío: es justamente alguien que no es ella.
   const [nombre, setNombre] = useState(op.cliente_id ? "" : op.comprador_alias ?? "");
+  // Nombre tipeado para una cuenta que no tiene nombre cargado. Aparte del de
+  // "otro" para que ir y volver entre las dos opciones no los mezcle.
+  const [nombreCuenta, setNombreCuenta] = useState("");
   const [legajo, setLegajo] = useState("");
   const [contacto, setContacto] = useState(op.cliente_email ?? "");
   // La cantidad es la de la operación: no se tipea acá, así el unitario de la
@@ -63,9 +71,10 @@ export default function FacturaModal({
         if (!vivo || !r) return;
         setCuenta(r.cuenta);
         // Cuenta sin nombre cargado: el nombre se tipea, y arranca del de la
-        // operación (el mismo respaldo que usa el servidor).
+        // operación (el mismo respaldo que usa el servidor) salvo que sea un
+        // email: el alias de un pedido sin nombre es el email de la cuenta.
         const sinNombre = r.cuenta != null && !r.cuenta.nombre;
-        if (sinNombre) setNombre(op.comprador_alias ?? "");
+        if (sinNombre) setNombreCuenta(sinEmail(op.comprador_alias));
         const f = r.factura;
         if (!f) return;
         setExistente(f);
@@ -74,7 +83,8 @@ export default function FacturaModal({
         // la había.
         const a: FacturarA = op.cliente_id ? d.comprador.facturar_a ?? "cuenta" : "otro";
         setFacturarA(a);
-        if (a === "otro" || sinNombre) setNombre(d.comprador.nombre);
+        if (a === "otro") setNombre(d.comprador.nombre);
+        else if (sinNombre) setNombreCuenta(sinEmail(d.comprador.nombre));
         if (a === "otro") setLegajo(d.comprador.legajo ?? "");
         setContacto(d.comprador.contacto ?? "");
         // Una factura vieja puede tener un método de otra moneda (la de Boca
@@ -102,7 +112,7 @@ export default function FacturaModal({
 
   async function emitir() {
     if (enviando.current) return;
-    if (pideNombre && !nombre.trim()) {
+    if (pideNombre && !nombreElegido.trim()) {
       onToast("error", "El nombre del comprador es obligatorio");
       return;
     }
@@ -118,7 +128,7 @@ export default function FacturaModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           facturar_a: facturarA,
-          comprador_nombre: nombre,
+          comprador_nombre: nombreElegido,
           comprador_legajo: legajo,
           comprador_contacto: contacto,
           metodo_pago: metodo,
@@ -156,6 +166,7 @@ export default function FacturaModal({
 
   // El nombre se tipea cuando no es la cuenta, o cuando la cuenta no lo tiene.
   const pideNombre = facturarA === "otro" || (cuenta != null && !cuenta.nombre);
+  const nombreElegido = facturarA === "otro" ? nombre : nombreCuenta;
 
   const inputCls =
     "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/15";
@@ -278,8 +289,8 @@ export default function FacturaModal({
                   <input
                     id="f-nombre"
                     className={inputCls}
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
+                    value={nombreElegido}
+                    onChange={(e) => (facturarA === "otro" ? setNombre : setNombreCuenta)(e.target.value)}
                     placeholder={facturarA === "otro" ? "Nombre y apellido, o empresa" : "Nombre y apellido"}
                   />
                 </div>

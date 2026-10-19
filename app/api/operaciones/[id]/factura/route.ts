@@ -53,6 +53,9 @@ async function requireAdmin(): Promise<
 // Nombre completo, email y legajo/CUIT de la cuenta que pidió (o a la que se
 // le cargó) la operación. Si la cuenta ya no existe queda el email guardado en
 // la operación y el resto vacío.
+// Los clientes aprobados antes de que se guardara el perfil en la cuenta no
+// tienen nombre ni legajo en user_metadata: salen de su solicitud de acceso,
+// igual que en Mi cuenta. Así la factura no termina con el email como nombre.
 async function cuentaDelCliente(op: {
   cliente_id?: string | null;
   cliente_email?: string | null;
@@ -62,18 +65,41 @@ async function cuentaDelCliente(op: {
   if (isMock()) {
     // En demo no hay Supabase Auth: el perfil del cliente sale del mock, para
     // que la cadena de trazabilidad se vea igual que en producción.
-    return { nombre: op.comprador_alias ?? "", email: op.cliente_email ?? null, legajo: MOCK_USER.legajo };
+    // Un alias que es un email es una cuenta sin nombre, como en producción.
+    return { nombre: aliasComoNombre(op.comprador_alias), email: op.cliente_email ?? null, legajo: MOCK_USER.legajo };
   }
-  const { data: u } = await createAdminSupabase().auth.admin.getUserById(op.cliente_id);
+  const admin = createAdminSupabase();
+  const { data: u } = await admin.auth.admin.getUserById(op.cliente_id);
   const meta = (u?.user?.user_metadata ?? {}) as Record<string, unknown>;
   const de = (k: string) => (typeof meta[k] === "string" ? (meta[k] as string).trim() : "");
+  // Los clientes cargan "nombre y apellido" en un solo campo; las cuentas
+  // del equipo los tienen separados. Se arma el completo en los dos casos.
+  let nombre = [de("nombre"), de("apellido")].filter(Boolean).join(" ");
+  let legajo = de("legajo");
+  if (!nombre || !legajo) {
+    const { data: sol } = await admin
+      .from("solicitudes_acceso")
+      .select("nombre, legajo")
+      .eq("user_id", op.cliente_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const s = (sol ?? {}) as { nombre?: string | null; legajo?: string | null };
+    nombre = nombre || (s.nombre ?? "").trim();
+    legajo = legajo || (s.legajo ?? "").trim();
+  }
   return {
-    // Los clientes cargan "nombre y apellido" en un solo campo; las cuentas
-    // del equipo los tienen separados. Se arma el completo en los dos casos.
-    nombre: [de("nombre"), de("apellido")].filter(Boolean).join(" "),
+    nombre,
     email: u?.user?.email ?? op.cliente_email ?? null,
-    legajo: de("legajo") || null,
+    legajo: legajo || null,
   };
+}
+
+// El alias de un pedido de la tienda es el nombre de la cuenta o, si no tenía,
+// su email: como nombre de factura solo sirve el primero.
+function aliasComoNombre(alias: string | null | undefined): string {
+  const a = (alias ?? "").trim();
+  return a.includes("@") ? "" : a;
 }
 
 export async function GET(
@@ -240,7 +266,7 @@ export async function POST(
   if (facturarA === "cuenta") {
     const cuenta = await cuentaDelCliente(op);
     // El nombre de la cuenta manda; si está vacío se respeta lo tipeado.
-    compradorNombre = cuenta?.nombre || nombre || (op.comprador_alias ?? "").trim();
+    compradorNombre = cuenta?.nombre || nombre || aliasComoNombre(op.comprador_alias);
     compradorEmail = cuenta?.email ?? null;
     compradorLegajo = cuenta?.legajo ?? null;
   }

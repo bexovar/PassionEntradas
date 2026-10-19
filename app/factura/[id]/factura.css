@@ -236,8 +236,10 @@
 @page { size: A4; margin: 10mm; }
 @media print {
   /* El fondo de la app (beige con puntos) asomaba debajo de la hoja con
-     "Gráficos de fondo" activado. */
-  html:has(.fac-body), body:has(.fac-body) { background: #fff; }
+     "Gráficos de fondo" activado. Sin :has() a propósito: Firefox ESR y los
+     Safari viejos lo descartan entero. Este CSS solo carga en la factura (se
+     abre en otra pestaña), así que no alcanza a otras páginas. */
+  html, body { background: #fff; }
   .fac-body { background: #fff; padding: 0; min-height: 0; }
   .fac-sheet {
     box-shadow: none; border-width: 1px; max-width: none;
