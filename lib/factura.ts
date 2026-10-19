@@ -4,17 +4,28 @@
 
 export type FacturaIdioma = "en" | "es";
 
+export type FacturarA = "cuenta" | "otro";
+
+// Lo que la cuenta del cliente aporta a la factura. El modal lo muestra antes
+// de emitir para que el admin vea exactamente a quién le va a facturar.
+export type CuentaFactura = { nombre: string; email: string | null; legajo: string | null };
+
 export type FacturaDatos = {
   idioma: FacturaIdioma;
   // Datos del comprador. Cuando la operación salió de un pedido de la tienda,
   // `email` y `legajo` se copian de la CUENTA que lo pidió, no de lo que tipeó
   // el admin: así el mismo legajo que cargó al pedir acceso llega hasta la
   // factura. En operaciones cargadas a mano quedan en null.
+  // `facturar_a` dice de dónde salieron: "cuenta" = nombre, email y legajo de
+  // la cuenta del cliente; "otro" = nombre o razón social y CUIT tipeados por
+  // el admin (otra persona o una empresa, o una operación sin cuenta).
+  // Opcional: las facturas viejas no lo tienen (eran "cuenta" si había cuenta).
   comprador: {
     nombre: string;
     contacto: string | null;
     email?: string | null;
     legajo?: string | null;
+    facturar_a?: FacturarA;
   };
   // Quién manejó la venta (auditoría de la operación) — "Handled by Kiru".
   agente: string | null;

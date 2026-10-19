@@ -188,7 +188,9 @@
 }
 .fac-print:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
 
-@media (max-width: 560px) {
+/* Solo en pantalla: al imprimir desde el celular el navegador mide el ancho
+   del teléfono y esta regla apilaba todo, y la factura salía en dos hojas. */
+@media screen and (max-width: 560px) {
   .fac-head { flex-direction: column; }
   .fac-head-right { text-align: left; }
   .fac-parties { grid-template-columns: 1fr; }
@@ -197,12 +199,6 @@
   .fac-t-stub { border-left: none; border-top: 2px dashed var(--ink); text-align: left; }
   .fac-barcode { margin-top: 12px; }
   .fac-pay { grid-template-columns: 1fr; gap: 10px; }
-}
-
-@media print {
-  .fac-body { background: #fff; padding: 0; }
-  .fac-sheet { box-shadow: none; border-width: 1px; max-width: none; }
-  .fac-print-row { display: none; }
 }
 
 /* Factura de varias entradas: tabla en vez del ticket con talón. El talón
@@ -231,3 +227,44 @@
 /* Dólar del día y total en pesos: debajo del total en USD, más chicos, para
    que quede claro que el importe de la factura es el de dólares. */
 .fac-totals .fx-row td { font-size: 12px; color: var(--mute); padding-top: 4px; }
+
+/* "Descargar PDF" = imprimir: una sola hoja A4, siempre con el diseño de
+   escritorio y con los colores (sello PAGADO, pie, código de barras) que
+   los navegadores tiran por defecto al imprimir. Va al final del archivo: a
+   igual especificidad gana la última regla, y antes la de .fac-lineas td de
+   más abajo pisaba la versión compacta. */
+@page { size: A4; margin: 10mm; }
+@media print {
+  /* El fondo de la app (beige con puntos) asomaba debajo de la hoja con
+     "Gráficos de fondo" activado. Sin :has() a propósito: Firefox ESR y los
+     Safari viejos lo descartan entero. Este CSS solo carga en la factura (se
+     abre en otra pestaña), así que no alcanza a otras páginas. */
+  html, body { background: #fff; }
+  .fac-body { background: #fff; padding: 0; min-height: 0; }
+  .fac-sheet {
+    box-shadow: none; border-width: 1px; max-width: none;
+    break-inside: avoid; page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fac-print-row { display: none; }
+  .fac-head { padding: 16px 22px 14px; }
+  .fac-doc-num { margin: 2px 0 6px; }
+  .fac-party { padding: 12px 22px 12px; }
+  .fac-item-wrap { padding: 14px 22px 2px; }
+  .fac-t-body { padding: 14px 16px 12px; }
+  .fac-t-title { font-size: 22px; margin: 5px 0 6px; }
+  .fac-t-meta { margin-top: 8px; padding-top: 8px; }
+  .fac-t-stub { padding: 12px 14px 10px; }
+  .fac-stub-qty { margin-bottom: 6px; }
+  .fac-barcode { height: 26px; }
+  .fac-totals { padding: 10px 22px 2px; }
+  .fac-totals td { padding: 5px 0; }
+  .fac-totals .total-row td { padding-top: 9px; font-size: 18px; }
+  .fac-usd-note { padding: 0 22px 8px; }
+  .fac-pay { margin: 0 22px; padding: 10px 0 12px; }
+  .fac-foot { padding: 10px 22px; }
+  .fac-lineas td { padding: 6px 0; }
+  /* Si un pedido largo no entra en una hoja, que corte entre líneas y no
+     a mitad de una. */
+  .fac-lineas tr { break-inside: avoid; page-break-inside: avoid; }
+}
