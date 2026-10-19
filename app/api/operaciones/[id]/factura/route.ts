@@ -5,8 +5,10 @@ import {
   metodoValido,
   numeroFactura,
   parseCotizacion,
+  type CuentaFactura,
   type FacturaDatos,
   type FacturaIdioma,
+  type FacturarA,
 } from "@/lib/factura";
 import {
   isMock,
@@ -21,7 +23,9 @@ import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // Factura/recibo de una operación cobrada.
-// GET  -> la factura existente de la operación (404 si no se emitió).
+// GET  -> { factura, cuenta }: la factura existente (null si no se emitió) y
+//         los datos de la cuenta del cliente que irían en ella (null si la
+//         operación no tiene cuenta), para que el modal los muestre antes.
 // POST -> emite (o re-emite) la factura: snapshot inmutable con numero
 //         correlativo. Re-emitir actualiza los datos pero conserva numero,
 //         id (o sea el link) y fecha de emisión original.
@@ -46,6 +50,32 @@ async function requireAdmin(): Promise<
   return { denied: null, quien: nombreDe(user), actor: actorDe(user) };
 }
 
+// Nombre completo, email y legajo/CUIT de la cuenta que pidió (o a la que se
+// le cargó) la operación. Si la cuenta ya no existe queda el email guardado en
+// la operación y el resto vacío.
+async function cuentaDelCliente(op: {
+  cliente_id?: string | null;
+  cliente_email?: string | null;
+  comprador_alias?: string | null;
+}): Promise<CuentaFactura | null> {
+  if (!op.cliente_id) return null;
+  if (isMock()) {
+    // En demo no hay Supabase Auth: el perfil del cliente sale del mock, para
+    // que la cadena de trazabilidad se vea igual que en producción.
+    return { nombre: op.comprador_alias ?? "", email: op.cliente_email ?? null, legajo: MOCK_USER.legajo };
+  }
+  const { data: u } = await createAdminSupabase().auth.admin.getUserById(op.cliente_id);
+  const meta = (u?.user?.user_metadata ?? {}) as Record<string, unknown>;
+  const de = (k: string) => (typeof meta[k] === "string" ? (meta[k] as string).trim() : "");
+  return {
+    // Los clientes cargan "nombre y apellido" en un solo campo; las cuentas
+    // del equipo los tienen separados. Se arma el completo en los dos casos.
+    nombre: [de("nombre"), de("apellido")].filter(Boolean).join(" "),
+    email: u?.user?.email ?? op.cliente_email ?? null,
+    legajo: de("legajo") || null,
+  };
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
@@ -57,21 +87,22 @@ export async function GET(
   }
 
   if (isMock()) {
-    const f = mockFacturaDeOperacion(params.id);
-    if (!f) return NextResponse.json({ error: "Sin factura" }, { status: 404 });
-    return NextResponse.json(f);
+    const op = mockListOps().find((o) => o.id === params.id);
+    return NextResponse.json({
+      factura: mockFacturaDeOperacion(params.id) ?? null,
+      cuenta: op ? await cuentaDelCliente(op) : null,
+    });
   }
 
-  const { data, error } = await createAdminSupabase()
-    .from("facturas")
-    .select("id, numero, datos, created_at")
-    .eq("operacion_id", params.id)
-    .maybeSingle();
+  const admin = createAdminSupabase();
+  const [{ data, error }, { data: op }] = await Promise.all([
+    admin.from("facturas").select("id, numero, datos, created_at").eq("operacion_id", params.id).maybeSingle(),
+    admin.from("operaciones").select("cliente_id, cliente_email, comprador_alias").eq("id", params.id).maybeSingle(),
+  ]);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  if (!data) return NextResponse.json({ error: "Sin factura" }, { status: 404 });
-  return NextResponse.json(data);
+  return NextResponse.json({ factura: data ?? null, cuenta: op ? await cuentaDelCliente(op) : null });
 }
 
 export async function POST(
@@ -93,7 +124,8 @@ export async function POST(
 
   const nombre = String(body.comprador_nombre ?? "").trim().slice(0, 120);
   const contacto = String(body.comprador_contacto ?? "").trim().slice(0, 160) || null;
-  const cantidad = Math.trunc(Number(body.cantidad));
+  // CUIT / Tax ID tipeado: solo cuenta cuando se factura a "otro".
+  const legajoTipeado = String(body.comprador_legajo ?? "").trim().slice(0, 40) || null;
   const metodo = String(body.metodo_pago ?? "").trim().slice(0, 80);
   const idioma: FacturaIdioma = body.idioma === "es" ? "es" : "en";
   // Dólar del día: lo carga el admin a mano en cada emisión de una factura en
@@ -101,15 +133,6 @@ export async function POST(
   // lo necesita. La fecha es la de emisión, en hora argentina.
   const arsPorUsd = parseCotizacion(body.cotizacion);
 
-  if (!nombre) {
-    return NextResponse.json(
-      { error: "El nombre del comprador es obligatorio" },
-      { status: 400 }
-    );
-  }
-  if (!Number.isFinite(cantidad) || cantidad < 1 || cantidad > 100) {
-    return NextResponse.json({ error: "Cantidad inválida" }, { status: 400 });
-  }
   if (!metodo) {
     return NextResponse.json(
       { error: "El método de pago es obligatorio" },
@@ -132,7 +155,9 @@ export async function POST(
     fecha_evento: string | null;
     ticket_id: string | null;
     moneda?: "ARS" | "USD" | null;
-    // Quién la pidió desde la tienda (null en las cargadas a mano).
+    cantidad?: number | null;
+    comprador_alias?: string | null;
+    // Cuenta del cliente (null en las cargadas a mano sin cliente de la lista).
     cliente_id?: string | null;
     cliente_email?: string | null;
   };
@@ -152,7 +177,7 @@ export async function POST(
     const admin = createAdminSupabase();
     const { data, error } = await admin
       .from("operaciones")
-      .select("id, code, evento, monto, fee, moneda, status, pago_confirmado_at, fecha_evento, ticket_id, cliente_id, cliente_email")
+      .select("id, code, evento, monto, fee, moneda, cantidad, comprador_alias, status, pago_confirmado_at, fecha_evento, ticket_id, cliente_id, cliente_email")
       .eq("id", params.id)
       .maybeSingle();
     if (error) {
@@ -199,24 +224,27 @@ export async function POST(
     );
   }
 
-  // Trazabilidad: si la operación nació de un pedido de la tienda, el email y
-  // el legajo se toman de la CUENTA del cliente, no de lo que tipeó el admin.
-  // Lo tipeado queda como respaldo para las operaciones cargadas a mano.
-  let compradorEmail: string | null = op.cliente_email ?? null;
-  let compradorLegajo: string | null = null;
+  // A quién se le factura. Con cuenta, por defecto a ella: nombre completo,
+  // email y legajo salen de la CUENTA, no de lo que tipeó el admin (el mismo
+  // legajo que cargó al pedir acceso llega hasta la factura). "otro" es otra
+  // persona o una empresa: nombre o razón social y CUIT tipeados, sin el email
+  // de la cuenta. Sin cuenta, siempre es lo tipeado.
+  const facturarA: FacturarA = op.cliente_id && body.facturar_a !== "otro" ? "cuenta" : "otro";
   let compradorNombre = nombre;
-  if (isMock()) {
-    // En demo no hay Supabase Auth: el perfil del cliente sale del mock, para
-    // que la cadena de trazabilidad se vea igual que en producción.
-    if (op.cliente_id) compradorLegajo = MOCK_USER.legajo;
-  } else if (op.cliente_id) {
-    const { data: u } = await createAdminSupabase().auth.admin.getUserById(op.cliente_id);
-    const meta = (u?.user?.user_metadata ?? {}) as Record<string, unknown>;
-    const de = (k: string) => (typeof meta[k] === "string" ? (meta[k] as string).trim() : "");
-    compradorEmail = u?.user?.email ?? compradorEmail;
-    compradorLegajo = de("legajo") || null;
+  let compradorEmail: string | null = null;
+  let compradorLegajo: string | null = legajoTipeado;
+  if (facturarA === "cuenta") {
+    const cuenta = await cuentaDelCliente(op);
     // El nombre de la cuenta manda; si está vacío se respeta lo tipeado.
-    compradorNombre = de("nombre") || nombre;
+    compradorNombre = cuenta?.nombre || nombre || (op.comprador_alias ?? "").trim();
+    compradorEmail = cuenta?.email ?? null;
+    compradorLegajo = cuenta?.legajo ?? null;
+  }
+  if (!compradorNombre) {
+    return NextResponse.json(
+      { error: "El nombre del comprador es obligatorio" },
+      { status: 400 }
+    );
   }
 
   // Líneas de la operación. Si no tiene (operación vieja, anterior al modelo
@@ -248,17 +276,21 @@ export async function POST(
     }));
   }
   if (lineas.length === 0) {
+    // La cantidad es la de la operación (se carga al crearla), no un dato
+    // que se tipea al facturar: así el unitario siempre cierra con el total.
+    const cantOp = Math.max(1, Math.trunc(Number(op.cantidad) || 1));
     lineas = [
       {
         evento: op.evento,
         sector: ticket?.categoria ?? null,
         fecha: op.fecha_evento,
-        cantidad,
-        precio_unitario: Math.round((op.monto / cantidad) * 100) / 100,
+        cantidad: cantOp,
+        precio_unitario: Math.round((op.monto / cantOp) * 100) / 100,
         subtotal: op.monto,
       },
     ];
   }
+  const cantidad = lineas.reduce((s, l) => s + l.cantidad, 0);
 
   const datos: FacturaDatos = {
     idioma,
@@ -267,6 +299,7 @@ export async function POST(
       contacto,
       email: compradorEmail,
       legajo: compradorLegajo,
+      facturar_a: facturarA,
     },
     agente: auth.quien,
     operacion: { id: op.id, code: op.code },
@@ -314,7 +347,8 @@ export async function POST(
       metodo_pago: metodo,
       idioma,
       cotizacion: datos.cotizacion ?? null,
-      comprador: { nombre: compradorNombre, email: compradorEmail },
+      comprador: { nombre: compradorNombre, email: compradorEmail, legajo: compradorLegajo, facturar_a: facturarA },
+      cantidad,
     },
     origen: "panel" as const,
   });

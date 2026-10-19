@@ -119,7 +119,12 @@ export default async function FacturaPage({ params }: { params: { id: string } }
             {d.comprador.legajo && (
               <p className="fac-dato">{t.legajo}: {d.comprador.legajo}</p>
             )}
-            {d.comprador.contacto && <p className="fac-dato">{d.comprador.contacto}</p>}
+            {/* El contacto arranca con el email del cliente: si quedó igual
+                no se repite la misma línea dos veces. */}
+            {d.comprador.contacto &&
+              d.comprador.contacto.trim().toLowerCase() !== (d.comprador.email ?? "").trim().toLowerCase() && (
+                <p className="fac-dato">{d.comprador.contacto}</p>
+              )}
           </div>
           <div className="fac-party">
             <p className="fac-label">{t.issued}</p>

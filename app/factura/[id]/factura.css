@@ -188,7 +188,9 @@
 }
 .fac-print:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
 
-@media (max-width: 560px) {
+/* Solo en pantalla: al imprimir desde el celular el navegador mide el ancho
+   del teléfono y esta regla apilaba todo, y la factura salía en dos hojas. */
+@media screen and (max-width: 560px) {
   .fac-head { flex-direction: column; }
   .fac-head-right { text-align: left; }
   .fac-parties { grid-template-columns: 1fr; }
@@ -199,10 +201,35 @@
   .fac-pay { grid-template-columns: 1fr; gap: 10px; }
 }
 
+/* "Descargar PDF" = imprimir: una sola hoja A4, siempre con el diseño de
+   escritorio y con los colores (sello PAGADO, pie, código de barras) que
+   los navegadores tiran por defecto al imprimir. */
+@page { size: A4; margin: 10mm; }
 @media print {
-  .fac-body { background: #fff; padding: 0; }
-  .fac-sheet { box-shadow: none; border-width: 1px; max-width: none; }
+  .fac-body { background: #fff; padding: 0; min-height: 0; }
+  .fac-sheet {
+    box-shadow: none; border-width: 1px; max-width: none;
+    break-inside: avoid; page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
   .fac-print-row { display: none; }
+  .fac-head { padding: 16px 22px 14px; }
+  .fac-doc-num { margin: 2px 0 6px; }
+  .fac-party { padding: 12px 22px 12px; }
+  .fac-item-wrap { padding: 14px 22px 2px; }
+  .fac-t-body { padding: 14px 16px 12px; }
+  .fac-t-title { font-size: 22px; margin: 5px 0 6px; }
+  .fac-t-meta { margin-top: 8px; padding-top: 8px; }
+  .fac-t-stub { padding: 12px 14px 10px; }
+  .fac-stub-qty { margin-bottom: 6px; }
+  .fac-barcode { height: 26px; }
+  .fac-totals { padding: 10px 22px 2px; }
+  .fac-totals td { padding: 5px 0; }
+  .fac-totals .total-row td { padding-top: 9px; font-size: 18px; }
+  .fac-usd-note { padding: 0 22px 8px; }
+  .fac-pay { margin: 0 22px; padding: 10px 0 12px; }
+  .fac-foot { padding: 10px 22px; }
+  .fac-lineas td { padding: 6px 0; }
 }
 
 /* Factura de varias entradas: tabla en vez del ticket con talón. El talón

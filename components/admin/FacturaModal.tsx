@@ -3,11 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Operacion } from "@/lib/operaciones";
-import { METODOS_PAGO, metodoValido, numeroFactura, parseCotizacion, type Factura } from "@/lib/factura";
+import {
+  METODOS_PAGO,
+  metodoValido,
+  numeroFactura,
+  parseCotizacion,
+  type CuentaFactura,
+  type Factura,
+  type FacturarA,
+} from "@/lib/factura";
 
-// Emite (o re-emite) la factura de una operación cobrada. Los 4 datos que
-// la operación no tiene (nombre real, contacto, cantidad, método de pago)
-// se completan acá; el resto sale del snapshot que arma la API.
+// Emite (o re-emite) la factura de una operación cobrada. Lo que la
+// operación no tiene (a quién se factura, contacto, método de pago, dólar del
+// día) se completa acá; el resto sale del snapshot que arma la API.
 export default function FacturaModal({
   op,
   baseUrl,
@@ -19,14 +27,18 @@ export default function FacturaModal({
   onClose: () => void;
   onToast: (kind: "success" | "error", msg: string) => void;
 }) {
-  const [nombre, setNombre] = useState(op.comprador_alias ?? "");
-  // Si el pedido vino de la tienda ya sabemos a quién facturarle: se precarga
-  // su email. El email y el legajo definitivos los toma el servidor de la
-  // cuenta al emitir, así que lo tipeado acá no puede contradecirlos.
+  // Con cuenta, por defecto se le factura a ella (nombre, email y CUIT los
+  // pone el servidor desde la cuenta). "Otro" es otra persona o una empresa:
+  // nombre o razón social y CUIT tipeados. Sin cuenta, siempre es lo tipeado.
+  const [facturarA, setFacturarA] = useState<FacturarA>(op.cliente_id ? "cuenta" : "otro");
+  const [cuenta, setCuenta] = useState<CuentaFactura | null>(null);
+  // Con cuenta, "otro" arranca vacío: es justamente alguien que no es ella.
+  const [nombre, setNombre] = useState(op.cliente_id ? "" : op.comprador_alias ?? "");
+  const [legajo, setLegajo] = useState("");
   const [contacto, setContacto] = useState(op.cliente_email ?? "");
-  // Cantidad del pedido (topeada por el stock en la tienda). Arranca de la
-  // operación; si ya hay factura emitida, gana su snapshot (efecto de más abajo).
-  const [cantidad, setCantidad] = useState(String(op.cantidad || 1));
+  // La cantidad es la de la operación: no se tipea acá, así el unitario de la
+  // factura siempre cierra con el total.
+  const cantidad = Math.max(1, op.cantidad || 1);
   // Solo los métodos de la moneda de la operación (ver METODOS_PAGO).
   const metodos = METODOS_PAGO[op.moneda ?? "USD"];
   const [metodo, setMetodo] = useState(metodos[0]);
@@ -46,13 +58,22 @@ export default function FacturaModal({
     let vivo = true;
     fetch(`/api/operaciones/${op.id}/factura`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((f) => {
-        if (!vivo || !f) return;
-        setExistente(f as Factura);
-        const d = (f as Factura).datos;
-        setNombre(d.comprador.nombre);
+      .then((r: { factura: Factura | null; cuenta: CuentaFactura | null } | null) => {
+        if (!vivo || !r) return;
+        setCuenta(r.cuenta);
+        const f = r.factura;
+        if (!f) return;
+        setExistente(f);
+        const d = f.datos;
+        // Las facturas viejas no guardaban la elección: eran a la cuenta si
+        // la había.
+        const a: FacturarA = op.cliente_id ? d.comprador.facturar_a ?? "cuenta" : "otro";
+        setFacturarA(a);
+        if (a === "otro") {
+          setNombre(d.comprador.nombre);
+          setLegajo(d.comprador.legajo ?? "");
+        }
         setContacto(d.comprador.contacto ?? "");
-        setCantidad(String(d.cantidad));
         // Una factura vieja puede tener un método de otra moneda (la de Boca
         // salió con "Bank transfer (USD)"): al re-emitir arranca del primero
         // de la moneda correcta en vez de arrastrar el error.
@@ -65,17 +86,12 @@ export default function FacturaModal({
     return () => {
       vivo = false;
     };
-  }, [op.id]);
+  }, [op.id, op.cliente_id, op.moneda]);
 
   async function emitir() {
     if (enviando.current) return;
-    if (!nombre.trim()) {
+    if (pideNombre && !nombre.trim()) {
       onToast("error", "El nombre del comprador es obligatorio");
-      return;
-    }
-    const cant = Math.trunc(Number(cantidad));
-    if (!Number.isFinite(cant) || cant < 1) {
-      onToast("error", "Cantidad inválida");
       return;
     }
     if (esUsd && parseCotizacion(cotizacion) == null) {
@@ -89,9 +105,10 @@ export default function FacturaModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          facturar_a: facturarA,
           comprador_nombre: nombre,
+          comprador_legajo: legajo,
           comprador_contacto: contacto,
-          cantidad: cant,
           metodo_pago: metodo,
           idioma,
           cotizacion,
@@ -124,6 +141,9 @@ export default function FacturaModal({
       onToast("error", "No se pudo copiar");
     }
   }
+
+  // El nombre se tipea cuando no es la cuenta, o cuando la cuenta no lo tiene.
+  const pideNombre = facturarA === "otro" || (cuenta != null && !cuenta.nombre);
 
   const inputCls =
     "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/15";
@@ -190,25 +210,83 @@ export default function FacturaModal({
                 </div>
               )}
 
+              {op.cliente_id && (
+                <fieldset>
+                  <legend className={labelCls}>Facturar a</legend>
+                  <div className="grid grid-cols-2 gap-1 rounded-lg bg-canvas p-1">
+                    {(
+                      [
+                        ["cuenta", "Cuenta del cliente"],
+                        ["otro", "Otro nombre o empresa"],
+                      ] as const
+                    ).map(([v, texto]) => (
+                      <label
+                        key={v}
+                        className={`cursor-pointer rounded-md px-2 py-1.5 text-center text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40 ${
+                          facturarA === v ? "bg-white text-body shadow-sm" : "text-muted hover:text-body"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="f-facturar-a"
+                          value={v}
+                          checked={facturarA === v}
+                          onChange={() => setFacturarA(v)}
+                          className="sr-only"
+                        />
+                        {texto}
+                      </label>
+                    ))}
+                  </div>
+                  {facturarA === "cuenta" && (
+                    <div className="mt-2 rounded-lg border border-line px-3 py-2 text-xs">
+                      {cuenta ? (
+                        <>
+                          <p className="font-semibold text-body">{cuenta.nombre || "Sin nombre en la cuenta"}</p>
+                          {cuenta.email && <p className="text-muted">{cuenta.email}</p>}
+                          <p className="text-muted">
+                            {cuenta.legajo ? `Legajo/CUIT: ${cuenta.legajo}` : "Sin legajo/CUIT en la cuenta"}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-muted">
+                          Nombre, email y legajo/CUIT salen de la cuenta de {op.cliente_email ?? "el cliente"}.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </fieldset>
+              )}
+
+              {pideNombre && (
+                <div>
+                  <label htmlFor="f-nombre" className={labelCls}>
+                    {facturarA === "otro" ? "Nombre o razón social *" : "Nombre del comprador *"}
+                  </label>
+                  <input
+                    id="f-nombre"
+                    className={inputCls}
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    placeholder={facturarA === "otro" ? "Nombre y apellido, o empresa" : "Nombre y apellido"}
+                  />
+                </div>
+              )}
+              {facturarA === "otro" && (
+                <div>
+                  <label htmlFor="f-legajo" className={labelCls}>
+                    CUIT / Tax ID
+                  </label>
+                  <input
+                    id="f-legajo"
+                    className={`${inputCls} font-mono`}
+                    value={legajo}
+                    onChange={(e) => setLegajo(e.target.value)}
+                    placeholder="30-71234567-9"
+                  />
+                </div>
+              )}
               <div>
-                <label htmlFor="f-nombre" className={labelCls}>
-                  Nombre del comprador *
-                </label>
-                <input
-                  id="f-nombre"
-                  className={inputCls}
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Nombre y apellido"
-                />
-              </div>
-              <div>
-                {op.cliente_email && (
-                  <p className="-mt-1 rounded-lg bg-canvas px-3 py-2 text-xs text-muted">
-                    Pedido de <span className="font-medium">{op.cliente_email}</span>. El
-                    email y el legajo de la factura se toman de su cuenta.
-                  </p>
-                )}
                 <label htmlFor="f-contacto" className={labelCls}>
                   Contacto (tel / email)
                 </label>
@@ -222,18 +300,10 @@ export default function FacturaModal({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="f-cantidad" className={labelCls}>
-                    Cantidad *
-                  </label>
-                  <input
-                    id="f-cantidad"
-                    type="number"
-                    min={1}
-                    step={1}
-                    className={`${inputCls} font-mono`}
-                    value={cantidad}
-                    onChange={(e) => setCantidad(e.target.value)}
-                  />
+                  <p className={labelCls}>Cantidad</p>
+                  <p className="rounded-lg bg-canvas px-3 py-2 font-mono text-sm" title="Sale de la operación">
+                    {cantidad} {cantidad === 1 ? "entrada" : "entradas"}
+                  </p>
                 </div>
                 <div>
                   <label htmlFor="f-idioma" className={labelCls}>

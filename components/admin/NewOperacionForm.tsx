@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatMonto, type Moneda, type Operacion } from "@/lib/operaciones";
 import { parseTitle } from "@/lib/tickets";
-import { parsePrecio } from "@/lib/precios";
+import { parsePrecio, totalPrecio } from "@/lib/precios";
 
 type Props = {
   onCreated: (op: Operacion) => void;
@@ -156,12 +156,32 @@ const empty = {
   evento: "",
   comprador_alias: "",
   vendedor_alias: VENDEDOR_POR_DEFECTO,
+  cantidad: "1",
   costo: "",
   moneda: "USD",
   fee: "",
   fecha_evento: "",
   notas: "",
 };
+
+// Costo y comisión se cargan POR ENTRADA (como vienen del catálogo); la
+// operación guarda el total: (costo + comisión) × cantidad, y la comisión
+// total. Null si la cantidad no es un entero de 1 a 100.
+function precioDeOperacion(form: typeof empty) {
+  const cantidad = Number(form.cantidad);
+  if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 100) {
+    return { ok: false as const, error: "La cantidad tiene que ser de 1 a 100 entradas" };
+  }
+  const unit = parsePrecio(form.costo, form.fee);
+  if (!unit.ok) return unit;
+  return {
+    ok: true as const,
+    cantidad,
+    unitario: unit.total,
+    total: totalPrecio(unit.total * cantidad, 0),
+    comision: totalPrecio(unit.comision * cantidad, 0),
+  };
+}
 
 // Formulario "Nueva operación".
 export default function NewOperacionForm({ onCreated, onError, prefill }: Props) {
@@ -287,7 +307,7 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
     }
     // Costo + comisión: al cliente se le cobra la suma, y eso es lo único
     // que va a ver en la factura.
-    const precio = parsePrecio(form.costo, form.fee);
+    const precio = precioDeOperacion(form);
     if (!precio.ok) {
       onError(precio.error);
       return;
@@ -303,6 +323,7 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
           comprador_alias: form.comprador_alias || null,
           cliente_id: escribiendoComprador ? null : clienteId,
           vendedor_alias: form.vendedor_alias || null,
+          cantidad: precio.cantidad,
           monto: precio.total,
           fee: precio.comision,
           moneda: form.moneda,
@@ -328,7 +349,7 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
         cuenta_debitar: null,
         monto: precio.total,
         moneda: form.moneda as Moneda,
-        cantidad: 1,
+        cantidad: precio.cantidad,
         fee: precio.comision,
         status: "esperando_entrada",
         entrada_recibida_at: null,
@@ -512,8 +533,8 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
 
           {/* Cada campo en su celda, ninguno compartiendo ancho con otro: el
               select de moneda metido al lado del importe se encimaba con la
-              comisión y dejaba el costo en 26px. En celular van apilados. */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              comisión y dejaba el costo en 26px. En celular, de a dos. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <label htmlFor="moneda" className={labelCls}>
                 Moneda
@@ -530,8 +551,24 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
               </select>
             </div>
             <div>
+              <label htmlFor="cantidad" className={labelCls}>
+                Cantidad
+              </label>
+              <input
+                id="cantidad"
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                inputMode="numeric"
+                className={`${inputCls} font-mono`}
+                value={form.cantidad}
+                onChange={(e) => set("cantidad", e.target.value)}
+              />
+            </div>
+            <div>
               <label htmlFor="monto" className={labelCls}>
-                Precio de costo
+                Costo por entrada
               </label>
               <input
                 id="monto"
@@ -547,7 +584,7 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
             </div>
             <div>
               <label htmlFor="fee" className={labelCls}>
-                Comisión
+                Comisión por entrada
               </label>
               <input
                 id="fee"
@@ -563,12 +600,23 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
             </div>
             {/* Lo que se le cobra al cliente. Se muestra armado para no tener
                 que sumarlo de cabeza: es el total que va a la factura. */}
-            <div className="flex items-center justify-between rounded-xl bg-canvas px-3 py-2 sm:col-span-3">
+            <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl bg-canvas px-3 py-2 sm:col-span-4">
               <span className={`${labelCls} mb-0`}>Total al cliente</span>
-              <span className="font-display text-sm font-bold tabular-nums">
+              <span className="text-right font-display text-sm font-bold tabular-nums">
                 {(() => {
-                  const r = parsePrecio(form.costo, form.fee);
-                  return r.ok ? formatMonto(r.total, form.moneda as Moneda) : "—";
+                  const r = precioDeOperacion(form);
+                  if (!r.ok) return "—";
+                  const moneda = form.moneda as Moneda;
+                  return (
+                    <>
+                      {r.cantidad > 1 && (
+                        <span className="mr-1.5 font-body text-xs font-normal text-muted">
+                          {r.cantidad} × {formatMonto(r.unitario, moneda)} =
+                        </span>
+                      )}
+                      {formatMonto(r.total, moneda)}
+                    </>
+                  );
                 })()}
               </span>
             </div>

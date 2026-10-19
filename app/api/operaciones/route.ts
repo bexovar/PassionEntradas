@@ -50,11 +50,16 @@ export async function POST(request: Request) {
   const vendedor_alias = body.vendedor_alias
     ? String(body.vendedor_alias).trim()
     : null;
-  const monto = Math.trunc(Number(body.monto));
+  // A centavos (la columna es numeric(14,2)). Truncar tiraba los centavos:
+  // 2 entradas de US$ 234,25 quedaban en US$ 468 en vez de 468,50.
+  const monto = Math.round(Number(body.monto) * 100) / 100;
   // Moneda de la operación: pesos o dólares; se guarda, no se convierte.
   const moneda = parseMoneda(body.moneda);
   if (!moneda) return NextResponse.json({ error: ERROR_MONEDA }, { status: 400 });
-  const fee = Math.trunc(Number(body.fee));
+  const fee = Math.round(Number(body.fee) * 100) / 100;
+  // Cantidad de entradas: monto y fee ya vienen multiplicados por ella. Sin el
+  // campo (clientes viejos del form) es 1, como antes.
+  const cantidad = body.cantidad == null ? 1 : Number(body.cantidad);
   const ticket_id = body.ticket_id ? String(body.ticket_id) : null;
   const fecha_evento = body.fecha_evento ? String(body.fecha_evento) : null;
   const notas = body.notas ? String(body.notas).trim().slice(0, 2000) : null;
@@ -95,6 +100,9 @@ export async function POST(request: Request) {
   if (!Number.isFinite(fee) || fee < 0) {
     return NextResponse.json({ error: "Comisión inválida" }, { status: 400 });
   }
+  if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 100) {
+    return NextResponse.json({ error: "La cantidad tiene que ser de 1 a 100 entradas" }, { status: 400 });
+  }
 
   // Comprador elegido de la lista de clientes: la operación queda vinculada a
   // su cuenta y la ve en Mis pedidos. Se valida acá que sea un cliente
@@ -113,7 +121,7 @@ export async function POST(request: Request) {
     entidad_id: id,
     codigo: code,
     resumen:
-      `Creó la operación «${evento}» por ${montoTxt(monto, moneda)} + comisión ${montoTxt(fee, moneda)}` +
+      `Creó la operación «${evento}»${cantidad > 1 ? ` ×${cantidad}` : ""} por ${montoTxt(monto, moneda)} + comisión ${montoTxt(fee, moneda)}` +
       ` · comprador ${comprador_alias}, vendedor ${vendedor_alias}` +
       (cliente?.email ? ` · cuenta de ${cliente.email}` : ""),
     detalle: {
@@ -123,6 +131,7 @@ export async function POST(request: Request) {
       monto,
       moneda,
       fee,
+      cantidad,
       ticket_id,
       fecha_evento,
       notas,
@@ -142,7 +151,7 @@ export async function POST(request: Request) {
       cliente = { id: clienteIdRaw, email: s.email ?? null };
     }
     const op = mockCreateOp({
-      evento, comprador_alias, vendedor_alias, monto, moneda, fee, ticket_id, fecha_evento, notas, cuenta_debitar,
+      evento, comprador_alias, vendedor_alias, monto, moneda, fee, cantidad, ticket_id, fecha_evento, notas, cuenta_debitar,
       cliente_id: cliente?.id ?? null,
       cliente_email: cliente?.email ?? null,
     });
@@ -181,6 +190,7 @@ export async function POST(request: Request) {
         monto,
         moneda,
         fee,
+        cantidad,
         ticket_id,
         fecha_evento,
         notas,
