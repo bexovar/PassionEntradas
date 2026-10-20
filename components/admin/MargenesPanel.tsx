@@ -202,8 +202,15 @@ export default function MargenesPanel() {
   const btnCls =
     "rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-deep disabled:opacity-50";
 
+  // Márgenes o cotizaciones sin guardar: el refresco automático espera.
+  const conCambios =
+    Object.keys(drafts).length > 0 || nuevaCat !== "" || nuevoPct !== "" || eurUsdDraft !== null || arsDraft !== null;
+
   return (
-    <section className="card-shadow overflow-hidden rounded-2xl">
+    <section
+      className="card-shadow overflow-hidden rounded-2xl"
+      data-editando={conCambios ? "" : undefined}
+    >
       <div className="surface-ink punch-b px-5 py-4 text-white">
         <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-white/50">
           Entradas de Passion

@@ -202,6 +202,15 @@ export default function TicketsPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [passionOn, setPassionOn] = useState(portalActivo);
+  // Lo que trae un refresco de la página (otro admin tocó el interruptor o
+  // el catálogo sumó competiciones) se refleja; mientras se cambia acá, no.
+  useEffect(() => {
+    if (!passionBusy) setPassionOn(portalActivo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portalActivo]);
+  useEffect(() => {
+    setComps((prev) => Array.from(new Set([...prev, ...competiciones])).sort());
+  }, [competiciones]);
   const [passionBusy, setPassionBusy] = useState(false);
   const { toasts, push } = useToast();
 

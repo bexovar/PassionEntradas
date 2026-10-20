@@ -79,9 +79,18 @@ export async function middleware(request: NextRequest) {
   // Next recargaba la página entera, borrando lo que se estaba cargando.
   // Ver lib/claims.ts. Cada página y API sigue validando con getUser() (desde
   // pdx1, al lado de Supabase) antes de mostrar o tocar datos.
-  const claims = await supabase.auth.getClaims();
-  let user: UsuarioDeClaims | User | null = usuarioDeClaims(claims.data?.claims);
-  let error = claims.error;
+  // getClaims solo devuelve como {error} los errores de Auth; una cookie
+  // rota (JSON o JWT mal formado) puede tirar otra cosa. Eso no tiene que
+  // tumbar el middleware: se trata como token no verificable y decide Auth.
+  let user: UsuarioDeClaims | User | null = null;
+  let error: Parameters<typeof sesionCaida>[0] | Error = null;
+  try {
+    const claims = await supabase.auth.getClaims();
+    user = usuarioDeClaims(claims.data?.claims);
+    error = claims.error;
+  } catch (e) {
+    error = e instanceof Error ? e : new Error(String(e));
+  }
   // Contra Auth cuando las claims no alcanzan: un token que no se pudo
   // verificar por algo que no es "no hay sesión" ni la red (firma inválida,
   // clave desconocida) decide el servidor, como antes.
@@ -122,8 +131,14 @@ export async function middleware(request: NextRequest) {
       await supabase.auth.signOut({ scope: "local" });
       return redirectTo("/ingresar");
     }
-    // Sin red no se sabe nada nuevo: vale lo que dicen las claims.
-    if (r.error?.name !== "AuthRetryableFetchError") {
+    if (r.error?.name === "AuthRetryableFetchError") {
+      // Auth no contesta (caído, 5xx, red). Sin confirmar no se saca a nadie
+      // de donde está: se deja pasar, como antes de las claims. Con el
+      // redirect de las claims se armaba un loop en una caída de Auth: la
+      // página no podía validar y mandaba a /ingresar, y desde /ingresar las
+      // claims (admin) mandaban de vuelta a /admin, para siempre.
+      decision = { accion: "seguir" };
+    } else {
       user = r.data.user;
       decision = decidirRuteo(path, user ? getRol(user as User) : null, !!user);
     }

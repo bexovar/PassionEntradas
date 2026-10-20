@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { getRol, puedeVerTienda } from "@/lib/auth";
-import { usuarioVerificado } from "@/lib/usuario-verificado";
+import { sesionVerificada } from "@/lib/usuario-verificado";
 import { versionMisPedidos } from "@/lib/mis-pedidos-version";
 import {
   isMock,
@@ -37,7 +37,10 @@ export async function GET() {
     });
   }
 
-  const user = await usuarioVerificado();
+  const { user, authCaido } = await sesionVerificada();
+  // Auth no contestó: 503 para que Mis pedidos reintente (un 401 la daría por
+  // deslogueada y dejaría de actualizarse).
+  if (authCaido) return NextResponse.json({ error: "Auth no disponible" }, { status: 503 });
   if (!user || !puedeVerTienda(getRol(user))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }

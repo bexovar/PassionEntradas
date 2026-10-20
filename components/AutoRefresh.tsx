@@ -20,7 +20,10 @@ import { useRouter } from "next/navigation";
 // JSON de pocos bytes por intervalo.
 function estaEditando(): boolean {
   const el = document.activeElement as HTMLElement | null;
-  if (el) {
+  // El foco cuenta solo dentro de un formulario o de algo marcado como en
+  // edición: el buscador y los selectores de orden o período del panel no son
+  // "cargar algo", y con el foco ahí la lista dejaba de actualizarse.
+  if (el && el.closest("form, [data-editando]")) {
     const tag = el.tagName;
     if (tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return true;
     if (tag === "INPUT") {
@@ -44,8 +47,12 @@ export default function AutoRefresh({
   const router = useRouter();
   // Última versión vista. null = todavía no tenemos línea de base.
   const lastVersion = useRef<string | null>(null);
+  const pendienteRef = useRef(false);
   // La sesión se cayó: se deja de preguntar y se avisa.
   const [sesionCaida, setSesionCaida] = useState(false);
+  // Hay datos nuevos esperando a que terminen de cargar algo (ver
+  // estaEditando): se avisa para que no parezca que la lista se trabó.
+  const [pendiente, setPendiente] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -56,6 +63,16 @@ export default function AutoRefresh({
 
       if (!versionUrl) {
         if (!estaEditando()) router.refresh();
+        return;
+      }
+      // Ya se sabe que hay algo nuevo: refrescar apenas se termine de editar,
+      // sin volver a preguntar.
+      if (pendienteRef.current) {
+        if (!estaEditando()) {
+          pendienteRef.current = false;
+          setPendiente(false);
+          router.refresh();
+        }
         return;
       }
 
@@ -88,11 +105,15 @@ export default function AutoRefresh({
           lastVersion.current = v;
           return;
         }
-        // Cambió, pero alguien está cargando algo: la versión vieja queda como
-        // línea de base y se refresca en el primer tick sin edición.
-        if (v !== lastVersion.current && !estaEditando()) {
+        if (v !== lastVersion.current) {
           lastVersion.current = v;
-          router.refresh();
+          // Alguien está cargando algo: se refresca en el primer tick sin edición.
+          if (estaEditando()) {
+            pendienteRef.current = true;
+            setPendiente(true);
+          } else {
+            router.refresh();
+          }
         }
       } catch {
         // Sin red / error transitorio: no refrescar, probamos al próximo tick.
@@ -117,7 +138,30 @@ export default function AutoRefresh({
     };
   }, [router, intervalMs, versionUrl]);
 
-  if (!sesionCaida) return null;
+  if (!sesionCaida) {
+    if (!pendiente) return null;
+    return (
+      <div
+        role="status"
+        style={{
+          position: "fixed",
+          right: 16,
+          bottom: 80,
+          zIndex: 9998,
+          maxWidth: 300,
+          padding: "8px 12px",
+          borderRadius: 10,
+          background: "#1f2937",
+          color: "#fff",
+          boxShadow: "0 8px 24px rgba(0,0,0,.2)",
+          fontSize: 12.5,
+          lineHeight: 1.35,
+        }}
+      >
+        Hay novedades. La página se actualiza cuando termines lo que estás cargando.
+      </div>
+    );
+  }
 
   // Estilos en línea a propósito: este componente se monta tanto en el panel
   // (Tailwind) como en la tienda (CSS propio), y el cartel tiene que verse

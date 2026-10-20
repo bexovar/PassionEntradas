@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/server";
+import { sesionVerificada } from "@/lib/usuario-verificado";
 import { esStaff, getRol } from "@/lib/auth";
 import { isMock, mockListConsultas, mockListOps } from "@/lib/mock-db";
 
@@ -20,10 +21,10 @@ export async function GET() {
     return NextResponse.json({ v: `${ops.length}:${max}|${cs.length}:${maxC}` });
   }
 
-  const supabase = createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, authCaido } = await sesionVerificada();
+  // Auth no contestó: 503 para que el panel reintente (un 401 lo daría por
+  // deslogueado y dejaría de actualizarse).
+  if (authCaido) return NextResponse.json({ error: "Auth no disponible" }, { status: 503 });
   // Solo staff: este endpoint delata cuántas operaciones hay y cuándo se tocó
   // la última. Un cliente logueado no tiene por qué verlo (y no lo usa: "Mis
   // pedidos" refresca sin consultar versión).

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/server";
+import { sesionVerificada } from "@/lib/usuario-verificado";
 import { getRol } from "@/lib/auth";
 import { isMock, mockGetPortalActivo, mockListManual, mockSyncRuns } from "@/lib/mock-db";
 
@@ -19,9 +20,10 @@ export async function GET() {
     return NextResponse.json({ v: `${manual.length}:${max}|${sync}|${mockGetPortalActivo() ? 1 : 0}` });
   }
 
-  const {
-    data: { user },
-  } = await createServerSupabase().auth.getUser();
+  const { user, authCaido } = await sesionVerificada();
+  // Auth no contestó: 503 para que la pantalla reintente (un 401 la daría por
+  // deslogueada y dejaría de actualizarse).
+  if (authCaido) return NextResponse.json({ error: "Auth no disponible" }, { status: 503 });
   if (!user || getRol(user) !== "administrador") {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
