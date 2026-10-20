@@ -352,7 +352,8 @@ export default function OperacionCard({
             {(op.notas || (!readOnly && onUpdate)) && (
               <div className="mt-3 rounded-xl bg-canvas px-3 py-2.5 text-xs">
                 {editingNotas ? (
-                  <div className="space-y-2">
+                  // Nota a medio escribir: el refresco automático espera.
+                  <div className="space-y-2" data-editando="">
                     <textarea
                       rows={3}
                       maxLength={2000}

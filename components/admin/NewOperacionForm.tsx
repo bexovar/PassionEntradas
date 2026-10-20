@@ -388,11 +388,22 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
   const fieldCls =
     "rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/15";
   const inputCls = `w-full ${fieldCls}`;
+  // Con algo cargado y sin guardar, el refresco automático de la página espera
+  // (ver components/AutoRefresh.tsx): un refresco fallido recarga la página
+  // entera y se perdía lo escrito.
+  const conDatos =
+    (Object.keys(empty) as (keyof typeof empty)[]).some((k) => form[k] !== empty[k]) ||
+    clienteId !== null ||
+    ticketId !== null;
   const labelCls =
     "mb-1 block text-xs font-medium uppercase tracking-wide text-[#6A6E7E]";
 
   return (
-    <form onSubmit={onSubmit} className="card-shadow overflow-hidden rounded-2xl">
+    <form
+      onSubmit={onSubmit}
+      className="card-shadow overflow-hidden rounded-2xl"
+      data-editando={conDatos ? "" : undefined}
+    >
       {/* Cabecera oscura estilo talón, con troquel real hacia el cuerpo */}
       <div className="surface-ink punch-b px-5 py-4 text-white">
         <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-white/50">

@@ -181,6 +181,8 @@ export default function FacturaModal({
       onClick={onClose}
       role="dialog"
       aria-label="Factura de la operación"
+      // Abierto, el refresco automático de la página espera (ver AutoRefresh).
+      data-editando=""
     >
       <div
         // max-h + scroll interno: con la operación completa (bloque de

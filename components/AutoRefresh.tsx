@@ -6,10 +6,34 @@ import { useRouter } from "next/navigation";
 // Refresca los datos del Server Component en intervalo, sin recargar la página.
 // Así "esta página se actualiza sola" sin que las partes tengan que preguntar.
 //
+// Nunca mientras alguien está cargando algo. router.refresh() conserva lo
+// escrito, salvo cuando el pedido de fondo falla (timeout, sesión vencida) o
+// hubo un deploy en el medio: ahí Next recarga la página ENTERA y se pierde lo
+// que estaba a medio cargar (pasó con "Nueva operación"). Por eso se saltea el
+// refresco si hay un campo con foco o algún elemento marcado con
+// data-editando (formularios con datos sin guardar, modales abiertos); se
+// vuelve a intentar en el tick siguiente.
+//
 // Con `versionUrl`, en vez de refrescar siempre, cada tick consulta un endpoint
 // mínimo que devuelve { v } y solo dispara router.refresh() cuando la versión
 // cambió. Eso reduce el tráfico de fondo de re-renderizar toda la página a un
 // JSON de pocos bytes por intervalo.
+function estaEditando(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (el) {
+    const tag = el.tagName;
+    if (tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return true;
+    if (tag === "INPUT") {
+      const tipo = (el as HTMLInputElement).type;
+      // Un botón o un tilde con foco no es "estar escribiendo".
+      if (!["button", "submit", "reset", "checkbox", "radio", "range", "color", "file", "image"].includes(tipo)) {
+        return true;
+      }
+    }
+  }
+  return document.querySelector("[data-editando]") != null;
+}
+
 export default function AutoRefresh({
   intervalMs = 12000,
   versionUrl,
@@ -31,7 +55,7 @@ export default function AutoRefresh({
       if (document.visibilityState !== "visible") return;
 
       if (!versionUrl) {
-        router.refresh();
+        if (!estaEditando()) router.refresh();
         return;
       }
 
@@ -64,7 +88,9 @@ export default function AutoRefresh({
           lastVersion.current = v;
           return;
         }
-        if (v !== lastVersion.current) {
+        // Cambió, pero alguien está cargando algo: la versión vieja queda como
+        // línea de base y se refresca en el primer tick sin edición.
+        if (v !== lastVersion.current && !estaEditando()) {
           lastVersion.current = v;
           router.refresh();
         }

@@ -68,6 +68,10 @@ export default function ConsultaCard({
   // acordarse de cambiarla.
   const [moneda, setMoneda] = useState<Moneda>(c.moneda ?? "USD");
 
+  // Cotización a medio escribir: el refresco automático espera (ver
+  // components/AutoRefresh.tsx).
+  const cotizando = editando || (!cotizada && (costo !== "" || comision !== ""));
+
   const cliente = c.comprador_alias ?? c.cliente_email ?? null;
   // Vista previa del total mientras escribe: es lo que se le va a cobrar.
   const previo = parsePrecio(costo, comision);
@@ -93,6 +97,7 @@ export default function ConsultaCard({
 
   return (
     <article
+      data-editando={cotizando ? "" : undefined}
       className={`card-shadow overflow-hidden rounded-2xl bg-white ${prioridad ? "ring-2" : "ring-1"}`}
       style={{ ["--tw-ring-color" as string]: prioridad ? "#D14D68" : `${chip.color}40` }}
     >
