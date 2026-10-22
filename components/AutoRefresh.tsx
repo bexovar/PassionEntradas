@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { esCampoDeTexto, hayQueEsperar } from "@/lib/editando";
 
 // Refresca los datos del Server Component en intervalo, sin recargar la página.
 // Así "esta página se actualiza sola" sin que las partes tengan que preguntar.
@@ -10,31 +11,26 @@ import { useRouter } from "next/navigation";
 // escrito, salvo cuando el pedido de fondo falla (timeout, sesión vencida) o
 // hubo un deploy en el medio: ahí Next recarga la página ENTERA y se pierde lo
 // que estaba a medio cargar (pasó con "Nueva operación"). Por eso se saltea el
-// refresco si hay un campo con foco o algún elemento marcado con
+// refresco mientras alguien escribe o hay algún elemento marcado con
 // data-editando (formularios con datos sin guardar, modales abiertos); se
-// vuelve a intentar en el tick siguiente.
+// vuelve a intentar en el tick siguiente. Las reglas, en lib/editando.ts.
 //
 // Con `versionUrl`, en vez de refrescar siempre, cada tick consulta un endpoint
 // mínimo que devuelve { v } y solo dispara router.refresh() cuando la versión
 // cambió. Eso reduce el tráfico de fondo de re-renderizar toda la página a un
 // JSON de pocos bytes por intervalo.
+
+// Última vez que se escribió en cualquier campo de la página.
+let ultimaTecla = 0;
+
 function estaEditando(): boolean {
   const el = document.activeElement as HTMLElement | null;
-  // El foco cuenta solo dentro de un formulario o de algo marcado como en
-  // edición: el buscador y los selectores de orden o período del panel no son
-  // "cargar algo", y con el foco ahí la lista dejaba de actualizarse.
-  if (el && el.closest("form, [data-editando]")) {
-    const tag = el.tagName;
-    if (tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return true;
-    if (tag === "INPUT") {
-      const tipo = (el as HTMLInputElement).type;
-      // Un botón o un tilde con foco no es "estar escribiendo".
-      if (!["button", "submit", "reset", "checkbox", "radio", "range", "color", "file", "image"].includes(tipo)) {
-        return true;
-      }
-    }
-  }
-  return document.querySelector("[data-editando]") != null;
+  return hayQueEsperar({
+    focoEnCampo: el != null && esCampoDeTexto(el.tagName, el.getAttribute("type"), el.isContentEditable),
+    focoEnEdicion: el?.closest("form, [data-editando]") != null,
+    msDesdeUltimaTecla: Date.now() - ultimaTecla,
+    hayEdicionMarcada: document.querySelector("[data-editando]") != null,
+  });
 }
 
 export default function AutoRefresh({
@@ -131,10 +127,18 @@ export default function AutoRefresh({
     const onVisible = () => void tick();
     document.addEventListener("visibilitychange", onVisible);
 
+    // "input" llega de todo campo (texto, fechas, selects); en captura, para
+    // que ningún stopPropagation lo esconda.
+    const onInput = () => {
+      ultimaTecla = Date.now();
+    };
+    document.addEventListener("input", onInput, true);
+
     return () => {
       vivo = false;
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("input", onInput, true);
     };
   }, [router, intervalMs, versionUrl]);
 
