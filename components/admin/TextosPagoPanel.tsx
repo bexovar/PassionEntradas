@@ -90,8 +90,16 @@ export default function TextosPagoPanel() {
     }
   }
 
+  // Textos o plazo sin guardar: el refresco automático de la página espera.
+  const conCambios =
+    Object.keys(drafts).some((k) => drafts[k] !== (textos[k] ?? "")) ||
+    (horas !== null && horasDraft !== String(horas));
+
   return (
-    <section className="card-shadow mt-6 overflow-hidden rounded-2xl">
+    <section
+      className="card-shadow mt-6 overflow-hidden rounded-2xl"
+      data-editando={conCambios ? "" : undefined}
+    >
       <div className="surface-ink punch-b px-5 py-4 text-white">
         <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-white/50">
           Pedidos de la tienda

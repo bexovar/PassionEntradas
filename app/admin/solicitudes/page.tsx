@@ -53,7 +53,7 @@ export default async function SolicitudesPage() {
         <AccesosTabs activa="solicitudes" />
         <SolicitudesAcceso initial={solicitudes} />
       </div>
-      <AutoRefresh intervalMs={20000} />
+      <AutoRefresh intervalMs={20000} versionUrl="/api/acceso/version" />
       <BottomNav />
     </main>
   );

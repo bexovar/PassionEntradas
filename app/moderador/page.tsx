@@ -114,7 +114,7 @@ export default async function ModeradorPage({
             : undefined
         }
       />
-      <AutoRefresh intervalMs={20000} />
+      <AutoRefresh intervalMs={20000} versionUrl="/api/operaciones/version" />
       {esAdmin && <BottomNav />}
     </main>
   );

@@ -205,6 +205,18 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  // ¿La persona tocó algo? Lo que precarga "Crear operación" desde el catálogo
+  // no cuenta: si la página se recarga, la URL lo vuelve a precargar igual.
+  const [tocado, setTocado] = useState(false);
+
+  function vaciar() {
+    setForm(empty);
+    setTicketId(null);
+    setVinculo(null);
+    setClienteId(null);
+    setTocado(false);
+  }
+
   // Llegando desde "Crear operación" de una entrada del catálogo, se traen
   // sus datos igual que si se hubiera elegido del buscador. Antes solo venía
   // el nombre del evento y había que cargar fecha, costo y comisión a mano,
@@ -373,6 +385,7 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
       setForm(empty);
       setTicketId(null);
       setClienteId(null);
+      setTocado(false);
     } catch {
       onError("Error de red al crear la operación");
     } finally {
@@ -388,11 +401,26 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
   const fieldCls =
     "rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/15";
   const inputCls = `w-full ${fieldCls}`;
+  // Con algo cargado y sin guardar, el refresco automático de la página espera
+  // (ver components/AutoRefresh.tsx): un refresco fallido recarga la página
+  // entera y se perdía lo escrito.
+  const conDatos =
+    tocado &&
+    ((Object.keys(empty) as (keyof typeof empty)[]).some((k) => form[k] !== empty[k]) ||
+      clienteId !== null ||
+      ticketId !== null);
   const labelCls =
     "mb-1 block text-xs font-medium uppercase tracking-wide text-[#6A6E7E]";
 
   return (
-    <form onSubmit={onSubmit} className="card-shadow overflow-hidden rounded-2xl">
+    <form
+      onSubmit={onSubmit}
+      className="card-shadow overflow-hidden rounded-2xl"
+      data-editando={conDatos ? "" : undefined}
+      // Cualquier campo que cambie la persona marca el form como tocado (elegir
+      // del buscador de eventos requiere escribir antes).
+      onChange={() => setTocado(true)}
+    >
       {/* Cabecera oscura estilo talón, con troquel real hacia el cuerpo */}
       <div className="surface-ink punch-b px-5 py-4 text-white">
         <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-white/50">
@@ -638,14 +666,25 @@ export default function NewOperacionForm({ onCreated, onError, prefill }: Props)
           </div>
         </div>
 
-        <div className="px-5 pb-5">
+        <div className="flex gap-2 px-5 pb-5">
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-deep disabled:opacity-60"
+            className="flex-1 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-deep disabled:opacity-60"
           >
             {loading ? "Creando…" : "Crear operación"}
           </button>
+          {/* Descartar lo cargado: además libera el refresco automático de la
+              página, que espera mientras el form tiene datos. */}
+          {conDatos && !loading && (
+            <button
+              type="button"
+              onClick={vaciar}
+              className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-medium text-[#4A4E5E] transition-colors hover:bg-canvas"
+            >
+              Vaciar
+            </button>
+          )}
         </div>
       </div>
     </form>

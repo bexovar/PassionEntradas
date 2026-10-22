@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { formatMonto, type Moneda } from "@/lib/operaciones";
 import type { Metrics } from "@/lib/metrics";
@@ -127,6 +127,21 @@ export default function MetricsBoard({
       if (id === pedido.current) setCargando(false);
     }
   }
+
+  // Cuando la página se refresca (llegó una operación o cambió un pago),
+  // `inicial` trae las métricas nuevas. Sin esto el tablero se quedaba con
+  // las del primer render. Con un período elegido se vuelve a pedir ese rango.
+  const primera = useRef(true);
+  useEffect(() => {
+    if (primera.current) {
+      primera.current = false;
+      return;
+    }
+    if (preset === "todo") setMetrics(inicial);
+    else if (desde || hasta) void aplicarRango(desde, hasta);
+    // Solo cuando llegan datos nuevos del servidor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inicial]);
 
   function elegirPreset(p: Preset) {
     setPreset(p);

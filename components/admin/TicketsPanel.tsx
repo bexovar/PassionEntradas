@@ -189,10 +189,28 @@ export default function TicketsPanel({
   // Edición de una entrada existente: el mismo form pasa a modo "Guardar
   // cambios" (una entrada = un sector; el id y el link no cambian).
   const [editando, setEditando] = useState<TicketFull | null>(null);
+  // Carga o edición sin guardar: el refresco automático de la página espera
+  // (ver components/AutoRefresh.tsx).
+  const vacio = sectorVacio();
+  const conDatos =
+    editando !== null ||
+    mapa !== undefined ||
+    (Object.keys(empty) as (keyof typeof empty)[]).some((k) => form[k] !== empty[k]) ||
+    sectores.length !== 1 ||
+    (Object.keys(vacio) as (keyof SectorForm)[]).some((k) => sectores[0]?.[k] !== vacio[k]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [passionOn, setPassionOn] = useState(portalActivo);
+  // Lo que trae un refresco de la página (otro admin tocó el interruptor o
+  // el catálogo sumó competiciones) se refleja; mientras se cambia acá, no.
+  useEffect(() => {
+    if (!passionBusy) setPassionOn(portalActivo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portalActivo]);
+  useEffect(() => {
+    setComps((prev) => Array.from(new Set([...prev, ...competiciones])).sort());
+  }, [competiciones]);
   const [passionBusy, setPassionBusy] = useState(false);
   const { toasts, push } = useToast();
 
@@ -529,6 +547,7 @@ export default function TicketsPanel({
         <form
           onSubmit={onSubmit}
           className="card-shadow min-w-0 overflow-hidden rounded-2xl md:sticky md:top-6 md:self-start"
+          data-editando={conDatos ? "" : undefined}
         >
           <div className="surface-ink punch-b px-5 py-4 text-white">
             <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-white/50">

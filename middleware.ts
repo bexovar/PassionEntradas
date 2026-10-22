@@ -1,9 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { getRol } from "@/lib/auth";
 import { decidirRuteo } from "@/lib/ruteo";
 import { sesionCaida } from "@/lib/sesion";
-import { HDR_USUARIO, firmarUsuario } from "@/lib/usuario-firmado";
+import { usuarioDeClaims, type UsuarioDeClaims } from "@/lib/claims";
 
 // Refresca la sesión de Supabase Auth y RUTEA los módulos:
 // - /admin: solo administrador (los moderadores van a /moderador), salvo
@@ -69,14 +70,43 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // getUser() valida el token contra el servidor de Auth (no confía en la
-  // cookie): es lo que recomienda Supabase para el middleware. Además de rutear,
-  // así una cookie adulterada rebota ya en el borde. Cada página/API igual
-  // reafirma con getUser()+rol (defensa en profundidad).
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  // Quién es: las claims del token, verificadas LOCALMENTE con la clave
+  // pública del proyecto (getClaims, ES256). Antes era getUser(), que le
+  // pregunta al servidor de Auth: el middleware corre en el borde de Vercel
+  // más cercano a quien navega (San Pablo), lejos de Supabase (Oregon), y ese
+  // viaje en CADA cambio de página tardaba 0,3 s la mediana y más de 15 s en
+  // el 5 % peor. Con más de ~25 s el refresco de fondo del panel fallaba y
+  // Next recargaba la página entera, borrando lo que se estaba cargando.
+  // Ver lib/claims.ts. Cada página y API sigue validando con getUser() (desde
+  // pdx1, al lado de Supabase) antes de mostrar o tocar datos.
+  // getClaims solo devuelve como {error} los errores de Auth; una cookie
+  // rota (JSON o JWT mal formado) puede tirar otra cosa. Eso no tiene que
+  // tumbar el middleware: se trata como token no verificable y decide Auth.
+  let user: UsuarioDeClaims | User | null = null;
+  let error: Parameters<typeof sesionCaida>[0] | Error = null;
+  try {
+    const claims = await supabase.auth.getClaims();
+    user = usuarioDeClaims(claims.data?.claims);
+    error = claims.error;
+  } catch (e) {
+    error = e instanceof Error ? e : new Error(String(e));
+  }
+  // Contra Auth cuando las claims no alcanzan: un token que no se pudo
+  // verificar por algo que no es "no hay sesión" ni la red (firma inválida,
+  // clave desconocida) decide el servidor, como antes.
+  let verificado = false;
+  if (
+    !user &&
+    error &&
+    error.name !== "AuthSessionMissingError" &&
+    error.name !== "AuthRetryableFetchError" &&
+    !sesionCaida(error)
+  ) {
+    const r = await supabase.auth.getUser();
+    user = r.data.user;
+    error = r.error;
+    verificado = true;
+  }
 
   // La cookie apunta a una sesión que Auth ya no tiene (usuario borrado,
   // sesión revocada, clave rotada). Hay que sacarle la cookie al navegador acá
@@ -88,7 +118,31 @@ export async function middleware(request: NextRequest) {
     return redirectTo("/ingresar");
   }
 
-  const decision = decidirRuteo(path, user ? getRol(user) : null, !!user);
+  let decision = decidirRuteo(path, user ? getRol(user as User) : null, !!user);
+
+  // Las claims son las del momento en que se emitió el token (hasta 1 h): un
+  // cambio de rol o un "desactivar" de Equipo todavía no está ahí. Para dejar
+  // pasar alcanza (la página revalida); para SACAR a alguien de donde está
+  // (redirect, cerrar sesión) se confirma con Auth primero. Es raro: el staff
+  // entrando a la landing o a un login, un rol que cambió.
+  if (user && !verificado && decision.accion !== "seguir") {
+    const r = await supabase.auth.getUser();
+    if (sesionCaida(r.error)) {
+      await supabase.auth.signOut({ scope: "local" });
+      return redirectTo("/ingresar");
+    }
+    if (r.error?.name === "AuthRetryableFetchError") {
+      // Auth no contesta (caído, 5xx, red). Sin confirmar no se saca a nadie
+      // de donde está: se deja pasar, como antes de las claims. Con el
+      // redirect de las claims se armaba un loop en una caída de Auth: la
+      // página no podía validar y mandaba a /ingresar, y desde /ingresar las
+      // claims (admin) mandaban de vuelta a /admin, para siempre.
+      decision = { accion: "seguir" };
+    } else {
+      user = r.data.user;
+      decision = decidirRuteo(path, user ? getRol(user as User) : null, !!user);
+    }
+  }
 
   if (decision.accion === "cerrar-sesion") {
     // Sesión que no es de nadie: se cierra para que el login no la recicle en
@@ -100,20 +154,7 @@ export async function middleware(request: NextRequest) {
     return redirectTo(decision.a);
   }
 
-  // Le pasa a la página el usuario YA verificado acá, firmado (HMAC, 60 s),
-  // para que no vuelva a preguntarle a Auth: un viaje menos por navegación.
-  // Se borra siempre lo que haya mandado el navegador en ese header; y aunque
-  // alguien lo forje, sin la clave del server la firma no valida
-  // (lib/usuario-verificado.ts cae a getUser()).
-  const headers = new Headers(request.headers);
-  headers.delete(HDR_USUARIO);
-  if (user) {
-    const firmado = await firmarUsuario(user);
-    if (firmado) headers.set(HDR_USUARIO, firmado);
-  }
-  const final = NextResponse.next({ request: { headers } });
-  response.cookies.getAll().forEach((cookie) => final.cookies.set(cookie));
-  return final;
+  return response;
 }
 
 export const config = {

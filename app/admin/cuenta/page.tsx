@@ -5,6 +5,7 @@ import CambiarClave from "@/components/admin/CambiarClave";
 import MisDatos from "@/components/admin/MisDatos";
 import { isMock, MOCK_USER } from "@/lib/mock-db";
 import { usuarioVerificado } from "@/lib/usuario-verificado";
+import { esStaff, getRol } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export default async function CuentaPage() {
   } else {
     const user = await usuarioVerificado();
     if (!user) redirect("/ingresar");
+    // El rol de ahora, no el del token que vio el middleware (ver lib/claims.ts).
+    if (!esStaff(getRol(user))) redirect("/ingresar");
     email = user.email;
     const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
     datos = {

@@ -333,6 +333,9 @@ export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcces
               <div
                 key={id}
                 className="rounded-xl border-2 border-emerald-300 bg-emerald-50/60 p-3.5"
+                // Contraseña que se ve una sola vez: el refresco automático
+                // espera hasta que se cierre este bloque.
+                data-editando=""
               >
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
                   Acceso generado — {r.creds.email}

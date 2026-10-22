@@ -117,7 +117,7 @@ export default async function AdminEntradasPage() {
         <MargenesPanel />
         <TextosPagoPanel />
       </div>
-      <AutoRefresh intervalMs={30000} />
+      <AutoRefresh intervalMs={30000} versionUrl="/api/tickets/version" />
       <BottomNav />
     </main>
   );
