@@ -222,3 +222,35 @@ The code is done and live (#77, #80): Confirmado, Para pagar, Entregada and "Tu 
 5. Redeploy (Deployments → latest → Redeploy).
 
 **Check:** confirm an order; its card's "Avisos al cliente" says "Email enviado".
+
+### Ask for payment at confirmation, "Ya pagué" alerts the seller (pending: Nacho's answers)
+Today the customer sees how to pay only after "Entrada del proveedor" is checked, and has no way to say they paid.
+
+**Plan.**
+- **Para pagar on confirmation.** The customer sees the payment info as soon as the operation is confirmed (manual operations count as confirmed). The four internal checks stay; only "Pago recibido" (→ Pagado) and "Entrada entregada" (→ Entregada) change what the customer sees. "Pedido confirmado" and "Ya podés pagar" become one notice.
+- **Payment info.** The account set in **Cotizaciones y pagos** for the operation's currency. With nothing set for that currency, the customer gets the WhatsApp button to ask which account to pay to (as today, with the order code in the message).
+- **"Ya pagué" button** in Mis pedidos and on the tracking link (`/op/…`). It records when and who, and the customer sees "Avisaste el pago — lo estamos verificando". It is a claim: Pagado only comes with "Pago recibido".
+- **Staff notice "El cliente avisó que pagó"** in the bell and by WhatsApp (reusing `aviso_operacion`), routed to the operation's vendedor when it names one team member (Nacho needs his phone and the WhatsApp switch on in Equipo), else to all admins. The card gets an "Avisó el pago" badge and goes to the top. One reminder if it isn't verified after a few hours.
+- **Touches:** a migration (payment-reported time, note, receipt), the customer state logic, Mis pedidos, the tracking page, the panel card, a new API route, notices, reminders, the activity log and tests.
+
+**Open questions (sent to Nacho).**
+1. All operations, or a per-operation "Cobrar al confirmar" switch?
+2. Until when can the customer cancel? Proposal: until they report the payment.
+3. What comes with "Ya pagué": only the notice, plus a note, or plus a receipt photo?
+4. Operations already confirmed but not yet at Para pagar: switch on deploy, or only new ones?
+5. Should Nacho get the notices for his operations, and how does he appear as vendedor?
+6. Reminder if a reported payment isn't verified: yes/no, after how many hours?
+7. With no account set, is the WhatsApp message (order code and amount) enough?
+
+### Entradas form labels not linked to their fields
+In the own-ticket form (`components/admin/TicketsPanel.tsx`), the labels (Evento, Categoría, Lugar, Fecha, Sector, Stock, Precio de costo, Comisión…) have no `htmlFor`, so tapping a label doesn't focus its field and screen readers can't name the fields. Fix: an `id` per input and `htmlFor` on its label (per sector row, e.g. `stock-0`).
+
+### Reload once after a deploy (`ChunkLoadError`)
+A panel left open across a deploy asks for the old build's page files, which no longer exist: the next navigation fails with `ChunkLoadError` (seen on Entradas after #87) until the page is reloaded. Options:
+- Vercel **Skew Protection** keeps the previous build's files for a while (project setting, paid plans only).
+- Or in the app: on `ChunkLoadError`, reload the page once (guarded so it can't loop).
+
+### WhatsApp `aviso_operacion` template (check)
+The release steps of #77 say to create and approve the `aviso_operacion` template in Meta and set `WHATSAPP_TEMPLATE_AVISO` in Vercel. Not confirmed from the repo. Without it, the notices that use it (customer accepted or cancelled, reminders) go out as plain text, which Meta only delivers to someone who wrote to the business number in the last 24 h; the rest fail quietly (the bell still shows them, with the reason).
+
+**Check:** Vercel → Environment Variables has `WHATSAPP_TEMPLATE_AVISO`, and the template shows as approved in Meta Business → WhatsApp Manager → Message templates.
