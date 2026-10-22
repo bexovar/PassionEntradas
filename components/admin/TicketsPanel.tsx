@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { compararAZ } from "@/lib/orden";
 import Link from "next/link";
-import type { SyncRun, TicketFull } from "@/lib/tickets";
+import { eventoPasado, type SyncRun, type TicketFull } from "@/lib/tickets";
 import { ToastViewport, useToast } from "./Toast";
 import { parsePrecio } from "@/lib/precios";
 import { formatMonto, type Moneda } from "@/lib/operaciones";
@@ -159,6 +159,9 @@ const sectorVacio = (): SectorForm => ({
   stock: "1",
 });
 const MAX_SECTORES = 20;
+// Una entrada con fecha pasada no se ve en la tienda ni en la lista: sin este
+// aviso, al publicarla parecía que no se había guardado.
+const AVISO_PASADA = 'La fecha ya pasó: no se ve en la tienda y queda en "Ver pasadas".';
 
 // Panel de catálogo: carga de entradas propias (source=manual) junto a las
 // sincronizadas del portal, y salud de las últimas corridas del worker.
@@ -201,6 +204,9 @@ export default function TicketsPanel({
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  // Las de eventos que ya pasaron no se venden más (la tienda ya no las
+  // muestra): fuera de la lista, salvo que se pidan con "Ver pasadas".
+  const [verPasadas, setVerPasadas] = useState(false);
   const [passionOn, setPassionOn] = useState(portalActivo);
   // Lo que trae un refresco de la página (otro admin tocó el interruptor o
   // el catálogo sumó competiciones) se refleja; mientras se cambia acá, no.
@@ -217,9 +223,14 @@ export default function TicketsPanel({
   // Paginado como en el panel: renderizar miles de filas juntas era el
   // cuello confirmado por el stress test (p50 3,5s con 2500 entradas).
   const PAGE_SIZE = 20;
-  const totalPages = Math.max(1, Math.ceil(tickets.length / PAGE_SIZE));
+  const pasadas = tickets.filter((t) => eventoPasado(t.fecha));
+  const vigentes = tickets.filter((t) => !eventoPasado(t.fecha));
+  // Si se borró la última pasada, se vuelve solo a las vigentes.
+  const mostrandoPasadas = verPasadas && pasadas.length > 0;
+  const lista = mostrandoPasadas ? pasadas : vigentes;
+  const totalPages = Math.max(1, Math.ceil(lista.length / PAGE_SIZE));
   const pagina = Math.min(page, totalPages);
-  const enPagina = tickets.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
+  const enPagina = lista.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
   // Mismo guard que en NewOperacionForm: dos taps en el mismo tick
   // dispararían dos POST antes de que el disabled llegue a pintarse.
   const enviando = useRef(false);
@@ -371,8 +382,9 @@ export default function TicketsPanel({
         setTickets((prev) =>
           prev.map((t) => (t.id === editando.id ? (data.row as TicketFull) : t))
         );
+        const pasada = eventoPasado(form.fecha);
         cancelarEdicion();
-        push("success", "Entrada actualizada en la tienda");
+        push("success", pasada ? `Entrada actualizada. ${AVISO_PASADA}` : "Entrada actualizada en la tienda");
         return;
       }
 
@@ -391,14 +403,17 @@ export default function TicketsPanel({
       if (nuevaComp && !comps.includes(nuevaComp)) {
         setComps((prev) => [...prev, nuevaComp].sort());
       }
+      const pasada = eventoPasado(form.fecha);
       setForm(empty);
       setMapa(undefined);
       setSectores([sectorVacio()]);
       push(
         "success",
-        sectores.length > 1
-          ? `Entrada publicada con ${sectores.length} sectores`
-          : "Entrada publicada en la tienda"
+        pasada
+          ? `Entrada guardada. ${AVISO_PASADA}`
+          : sectores.length > 1
+            ? `Entrada publicada con ${sectores.length} sectores`
+            : "Entrada publicada en la tienda"
       );
     } catch {
       push("error", "Error de red al publicar");
@@ -485,7 +500,12 @@ export default function TicketsPanel({
             accent={passionOn ? "#6C5BF2" : "#9AA0B2"}
             sub={passionOn ? `${portalComprables} comprables` : "Ocultas de la tienda"}
           />
-          <Stat label="Propias" value={String(tickets.length)} accent="#0D9377" />
+          <Stat
+            label="Propias"
+            value={String(vigentes.length)}
+            accent="#0D9377"
+            sub={pasadas.length > 0 ? `+ ${pasadas.length} ${pasadas.length === 1 ? "pasada" : "pasadas"}` : undefined}
+          />
           <Stat
             label="Última sync"
             value={
@@ -793,13 +813,29 @@ export default function TicketsPanel({
 
         {/* Lista de entradas propias */}
         <div className="space-y-3">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-muted">
-            Entradas propias publicadas
-          </h2>
-          {tickets.length === 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xs font-medium uppercase tracking-widest text-muted">
+              {mostrandoPasadas ? "Entradas propias de eventos pasados" : "Entradas propias publicadas"}
+            </h2>
+            {pasadas.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setVerPasadas(!mostrandoPasadas);
+                  setPage(1);
+                }}
+                aria-pressed={mostrandoPasadas}
+                className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-semibold text-[#4A4E5E] transition-colors hover:bg-canvas"
+              >
+                {mostrandoPasadas ? "← Volver a las vigentes" : `Ver pasadas (${pasadas.length})`}
+              </button>
+            )}
+          </div>
+          {lista.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[#C5C9D6] bg-white/50 px-4 py-10 text-center text-sm text-muted">
-              Todavía no cargaste entradas propias. Se publican junto a las del
-              portal y la sincronización no las toca.
+              {tickets.length === 0
+                ? "Todavía no cargaste entradas propias. Se publican junto a las del portal y la sincronización no las toca."
+                : "No hay entradas propias de eventos por venir. Las de eventos que ya pasaron están en \"Ver pasadas\"."}
             </div>
           ) : (
             // La tarjeta mostraba el evento truncado a tres letras y el resto
@@ -813,12 +849,22 @@ export default function TicketsPanel({
               const costo = t.precio_costo != null ? Number(t.precio_costo) : null;
               const comision = venta != null && costo != null ? venta - costo : null;
               return (
-                <div key={t.id} className="card-shadow rounded-2xl bg-white px-4 py-3">
+                <div
+                  key={t.id}
+                  className={`card-shadow rounded-2xl px-4 py-3 ${mostrandoPasadas ? "bg-white/70" : "bg-white"}`}
+                >
                   <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
                     <div className="min-w-[12rem] flex-1">
                       {/* Sin truncate: el nombre del evento es el dato para
                           reconocerla, si no entra que envuelva. */}
-                      <p className="font-display font-semibold leading-snug">{t.evento}</p>
+                      <p className="font-display font-semibold leading-snug">
+                        {t.evento}
+                        {mostrandoPasadas && (
+                          <span className="ml-2 inline-block rounded-full bg-canvas px-2 py-0.5 align-middle font-mono text-[10px] font-bold uppercase tracking-wide text-muted">
+                            Ya pasó
+                          </span>
+                        )}
+                      </p>
                       {t.competicion && (
                         <p className="text-xs text-muted">{t.competicion}</p>
                       )}
@@ -888,7 +934,7 @@ export default function TicketsPanel({
                 ← Anteriores
               </button>
               <span className="text-xs font-medium tabular-nums text-muted">
-                Página {pagina} de {totalPages} · {tickets.length} entradas
+                Página {pagina} de {totalPages} · {lista.length} entradas
               </span>
               <button
                 onClick={() => setPage(Math.min(totalPages, pagina + 1))}

@@ -204,11 +204,16 @@ export function hoyArgentina(): string {
   });
 }
 
-// Eventos ya pasados: afuera de la tienda. Los sin fecha y los del día (hora
-// argentina) se muestran. La fecha guardada es el día del evento en UTC.
+// Evento ya pasado: su día es anterior a hoy (hora argentina). Los sin fecha
+// y los del día no. La fecha guardada es el día del evento en UTC.
+export function eventoPasado(fecha: string | null, hoy: string = hoyArgentina()): boolean {
+  return !!fecha && fecha.slice(0, 10) < hoy;
+}
+
+// Eventos ya pasados: afuera de la tienda.
 export function sinEventosPasados<T extends { fecha: string | null }>(rows: T[]): T[] {
   const hoy = hoyArgentina();
-  return rows.filter((t) => !t.fecha || t.fecha.slice(0, 10) >= hoy);
+  return rows.filter((t) => !eventoPasado(t.fecha, hoy));
 }
 
 // ---- fechas / texto -----------------------------------------------------------
