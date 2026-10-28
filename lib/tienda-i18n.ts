@@ -219,18 +219,18 @@ const en = {
   // landing pública (/): capta clientes y toma la solicitud de acceso.
   lp: {
     navIngresar: "Log in",
-    heroEyebrow: "Access by request",
-    heroTitle1: "The events everyone",
-    heroTitle2: "wants to be at",
+    heroEyebrow: "For travel agencies and agents",
+    heroTitle1: "The tickets your clients",
+    heroTitle2: "will ask you for",
     heroP:
-      "Request access to explore the events — World Cup 2026, Euro 2028, Formula 1 and the most wanted matches. Access is by approval.",
+      "World Cup 2026, Euro 2028, Formula 1 and the most sought-after matches, ready to add to your clients' trips. The catalogue is available to registered travel agencies and agents.",
     ctaSolicitar: "Request access",
     ctaIngresar: "I already have access",
     irEntradas: "Enter →",
     bullets: [
-      "Curated events from around the world",
-      "A real person on WhatsApp — never a bot",
-      "Members-only access, by approval",
+      "International events in a single catalogue",
+      "Sales support on WhatsApp from a real team member",
+      "Sign-up for agencies and agents, with account verification",
     ],
     comoEyebrow: "Simple",
     comoH2: "How it works",
@@ -638,18 +638,18 @@ const es: typeof en = {
 
   lp: {
     navIngresar: "Ingresar",
-    heroEyebrow: "Acceso por solicitud",
-    heroTitle1: "Los eventos donde",
-    heroTitle2: "todos quieren estar",
+    heroEyebrow: "Para agencias y agentes de viaje",
+    heroTitle1: "Las entradas que tus clientes",
+    heroTitle2: "te van a pedir",
     heroP:
-      "Pedí acceso para explorar los eventos — Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados. El acceso es por aprobación.",
+      "Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados, para sumar a los viajes de tus clientes. El catálogo está disponible para agencias y agentes de viaje registrados.",
     ctaSolicitar: "Solicitar acceso",
     ctaIngresar: "Ya tengo acceso",
     irEntradas: "Entrar →",
     bullets: [
-      "Eventos seleccionados de todo el mundo",
-      "Una persona real por WhatsApp, nunca un bot",
-      "Acceso exclusivo para miembros, por aprobación",
+      "Eventos internacionales en un solo catálogo",
+      "Atención comercial por WhatsApp, con una persona del equipo",
+      "Alta para agencias y agentes, con verificación de datos",
     ],
     comoEyebrow: "Simple",
     comoH2: "Cómo funciona",
