@@ -930,6 +930,15 @@
 }
 .lp-ok p { margin: 0 auto 18px; color: var(--mute); font-size: 14.5px; max-width: 420px; line-height: 1.55; }
 
+/* WhatsApp flotante de la home: se esconde mientras taparía el acceso. */
+.wa-widget { transition: opacity .15s, transform .15s, visibility .15s; }
+/* visibility (y no solo opacity): oculto tampoco se alcanza con Tab. */
+.wa-widget--oculto { opacity: 0; transform: translateY(8px); visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .wa-widget { transition: none; } }
+
+/* El WhatsApp flotante no tapa los links legales al final de la home. */
+.lp-foot { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+
 /* Honeypot: fuera de la vista para personas, presente en el DOM para bots. */
 .lp-hp {
   position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;

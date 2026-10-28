@@ -229,9 +229,10 @@ const en = {
     irEntradas: "Enter →",
     bullets: [
       "Curated events from around the world",
-      "A real person on WhatsApp — never a bot",
       "Members-only access, by approval",
     ],
+    // WhatsApp flotante de la home: abre el chat con este mensaje ya escrito.
+    waMsg: "Hi! I'm looking at TicketMirror and I have a question.",
     comoEyebrow: "Simple",
     comoH2: "How it works",
     pasos: [
@@ -648,9 +649,9 @@ const es: typeof en = {
     irEntradas: "Entrar →",
     bullets: [
       "Eventos seleccionados de todo el mundo",
-      "Una persona real por WhatsApp, nunca un bot",
       "Acceso exclusivo para miembros, por aprobación",
     ],
+    waMsg: "Hola! Estoy viendo TicketMirror y tengo una consulta.",
     comoEyebrow: "Simple",
     comoH2: "Cómo funciona",
     pasos: [

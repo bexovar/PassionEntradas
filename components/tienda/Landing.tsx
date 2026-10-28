@@ -5,12 +5,13 @@
 // tienda de entradas dejó de ser pública; desde acá se solicita el usuario.
 // Bilingüe EN/ES (default español), mismo toggle/localStorage que la tienda.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { PAISES, PAIS_DEFAULT, dialDe, nombrePais } from "@/lib/paises";
 import { LegalLinks } from "@/components/tienda/LegalLinks";
+import { waLink } from "@/lib/tickets";
 
 // La landing es estática, pero si el visitante ya tiene sesión mostramos
 // accesos de logueado (Mi cuenta / Ver entradas) en vez de "Ingresar". Se
@@ -64,6 +65,39 @@ function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => voi
   );
 }
 
+// El WhatsApp flotante nunca tapa el acceso: mientras se superpone con algo
+// marcado data-sin-wa (los botones de acceso, el formulario) se esconde, y
+// vuelve apenas se libera. Pasa sobre todo en el celular, donde el formulario
+// ocupa todo el ancho; en desktop casi nunca se cruzan.
+function useSinTaparAcceso(ref: React.RefObject<HTMLElement>) {
+  useEffect(() => {
+    const flotante = ref.current;
+    if (!flotante) return;
+    let raf = 0;
+    function revisar() {
+      raf = 0;
+      if (!flotante) return;
+      const b = flotante.getBoundingClientRect();
+      const tapa = Array.from(document.querySelectorAll("[data-sin-wa]")).some((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top;
+      });
+      flotante.classList.toggle("wa-widget--oculto", tapa);
+    }
+    const programar = () => {
+      if (!raf) raf = requestAnimationFrame(revisar);
+    };
+    revisar();
+    window.addEventListener("scroll", programar, { passive: true });
+    window.addEventListener("resize", programar);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", programar);
+      window.removeEventListener("resize", programar);
+    };
+  }, [ref]);
+}
+
 type Estado = "idle" | "sending" | "ok" | "error";
 
 export function Landing() {
@@ -71,6 +105,8 @@ export function Landing() {
   const t = TX[lang];
   const lp = t.lp;
   const logueado = useLogueado();
+  const waRef = useRef<HTMLDivElement>(null);
+  useSinTaparAcceso(waRef);
 
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
@@ -171,7 +207,7 @@ export function Landing() {
                 <li key={b}>{b}</li>
               ))}
             </ul>
-            <div className="cta-row">
+            <div className="cta-row" data-sin-wa>
               {logueado ? (
                 <Link className="btn-primary lp-hero-cta" href="/entradas">
                   {lp.irEntradas}
@@ -190,7 +226,7 @@ export function Landing() {
           </div>
 
           {/* El formulario es el protagonista. */}
-          <div className="lp-hero-form" id="solicitar">
+          <div className="lp-hero-form" id="solicitar" data-sin-wa>
             {estado === "ok" ? (
               <div className="lp-ok" role="status">
                 <span className="lp-ok-ic" aria-hidden>
@@ -350,11 +386,26 @@ export function Landing() {
         </div>
       </section>
 
-      <footer className="foot foot--legal">
+      <footer className="foot foot--legal lp-foot">
         <span>TicketMirror</span>
         <span>{lp.footTagline}</span>
         <LegalLinks lang={lang} />
       </footer>
+
+      {/* WhatsApp flotante, en toda la home: abre la conversación directo con
+          el mensaje ya escrito. A diferencia del de la tienda, sin panel en el
+          medio: el que todavía no es cliente solo quiere preguntar. */}
+      <div className="wa-widget" ref={waRef}>
+        <a
+          className="wa-float"
+          href={waLink(lp.waMsg)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t.ctaWhatsapp}
+        >
+          WhatsApp
+        </a>
+      </div>
     </>
   );
 }
