@@ -219,14 +219,20 @@ const en = {
   // landing pública (/): capta clientes y toma la solicitud de acceso.
   lp: {
     navIngresar: "Log in",
-    heroEyebrow: "Access by request",
+    heroEyebrow: "Agency access",
     heroTitle1: "The events everyone",
     heroTitle2: "wants to be at",
     heroP:
       "Request access to explore the events — World Cup 2026, Euro 2028, Formula 1 and the most wanted matches. Access is by approval.",
-    ctaSolicitar: "Request access",
-    ctaIngresar: "I already have access",
     irEntradas: "Enter →",
+    // bloque de acceso del hero: login + nuevo usuario
+    logueadoH: "You're signed in",
+    nuevoH: "New user?",
+    cartelPre: "This site is only for travel agencies and agents. Fill in the ",
+    cartelLink: "form",
+    cartelPost: " and we'll send you your access.",
+    nuevoBtn: "New user",
+    cerrar: "Close",
     bullets: [
       "Curated events from around the world",
       "A real person on WhatsApp — never a bot",
@@ -418,6 +424,7 @@ const en = {
     entering: "Signing in…",
     badCreds: "Wrong email or password.",
     forgot: "Forgot my password",
+    remember: "Remember me",
     requestAccess: "Request access",
     resetTitle: "Reset password",
     resetSub: "We'll send you a link to create a new one.",
@@ -638,14 +645,19 @@ const es: typeof en = {
 
   lp: {
     navIngresar: "Ingresar",
-    heroEyebrow: "Acceso por solicitud",
+    heroEyebrow: "Acceso agencias",
     heroTitle1: "Los eventos donde",
     heroTitle2: "todos quieren estar",
     heroP:
       "Pedí acceso para explorar los eventos — Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados. El acceso es por aprobación.",
-    ctaSolicitar: "Solicitar acceso",
-    ctaIngresar: "Ya tengo acceso",
     irEntradas: "Entrar →",
+    logueadoH: "Ya ingresaste",
+    nuevoH: "¿Nuevo usuario?",
+    cartelPre: "Este sitio es solo para agencias y agentes de viajes. Completá el ",
+    cartelLink: "formulario",
+    cartelPost: " y te enviamos el acceso.",
+    nuevoBtn: "Nuevo usuario",
+    cerrar: "Cerrar",
     bullets: [
       "Eventos seleccionados de todo el mundo",
       "Una persona real por WhatsApp, nunca un bot",
@@ -830,6 +842,7 @@ const es: typeof en = {
     entering: "Ingresando…",
     badCreds: "Email o contraseña incorrectos.",
     forgot: "Olvidé mi contraseña",
+    remember: "Recordar usuario",
     requestAccess: "Solicitar acceso",
     resetTitle: "Recuperar contraseña",
     resetSub: "Te mandamos un link para crear una nueva.",
