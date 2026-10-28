@@ -878,7 +878,7 @@
   width: 100%; max-width: 420px; background: var(--field); border: 1.5px solid var(--ink);
   box-shadow: 6px 6px 0 var(--ink); padding: 26px 24px;
 }
-.lp-auth-card h1 {
+.lp-auth-title {
   font-family: var(--font-body), sans-serif; font-weight: 900; text-transform: uppercase;
   letter-spacing: -.01em; font-size: 26px; line-height: 1.02; margin: 8px 0 6px;
 }
@@ -896,6 +896,42 @@
 @media (max-width: 640px) {
   .lp-auth-card { box-shadow: 4px 4px 0 var(--ink); padding: 22px 18px; }
 }
+
+/* Bloque de acceso del hero de la home: login arriba, "Nuevo usuario" abajo. */
+.lp-acceso { max-width: 460px; }
+.lp-nuevo { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hair); }
+.lp-nuevo h3 {
+  font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--mute); margin: 0 0 10px;
+}
+/* Cartel: a quién está dirigido el sitio y cómo se pide el acceso. */
+.lp-cartel {
+  margin: 0 0 14px; font-size: 13.5px; line-height: 1.5; color: var(--ink);
+  background: #1f33e00d; border-left: 3px solid var(--cobalt); padding: 10px 12px;
+}
+.lp-cartel-link {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--cobalt); font-weight: 700; text-decoration: underline;
+}
+.lp-cartel-link:hover { color: var(--cobalt-d); }
+.lp-nuevo-btn { display: block; width: 100%; text-align: center; cursor: pointer; }
+
+/* Solicitud de acceso en modal (<dialog> nativo). La tarjeta es el .lp-form. */
+.lp-modal {
+  padding: 0; border: none; background: transparent; overflow: visible;
+  width: min(560px, calc(100% - 32px)); max-height: calc(100dvh - 32px);
+}
+.lp-modal[open] { overflow-y: auto; }
+.lp-modal::backdrop { background: rgba(14, 14, 20, .55); }
+.lp-modal .lp-form, .lp-modal .lp-ok { max-width: none; margin: 0 8px 8px 0; }
+.lp-modal-cerrar {
+  position: absolute; top: 8px; right: 16px; z-index: 1;
+  width: 34px; height: 34px; background: none; border: none; cursor: pointer;
+  font-size: 26px; line-height: 1; color: var(--ink);
+}
+.lp-modal-cerrar:hover { color: var(--cobalt); }
+/* Sin scroll de la página de fondo mientras el modal está abierto. */
+html:has(.lp-modal[open]) { overflow: hidden; }
 
 /* Mi cuenta del cliente: perfil y contraseña en UNA línea (lado a lado en
    desktop, apiladas en mobile). */
