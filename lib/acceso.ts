@@ -74,6 +74,32 @@ export function validarSolicitud(raw: {
   return { ok: true, value: { nombre, email, telefono, legajo, mensaje, acepto } };
 }
 
+// --- límite de solicitudes ----------------------------------------------------
+// El formulario es público y cada solicitud nueva le manda un WhatsApp y un
+// email a todo el equipo: sin límite, cualquiera lo usa para spamear (y para
+// meterle texto propio al staff). Dos topes, en la última hora:
+//   - por IP: pasado el tope se finge éxito, igual que el honeypot, para no
+//     darle señal al que abusa;
+//   - en total: pasado el tope las solicitudes se siguen guardando y se ven
+//     en la campana del panel, pero ya no salen WhatsApp ni email.
+export const SOL_VENTANA_MS = 60 * 60 * 1000;
+export const SOL_MAX_POR_IP = 3;
+export const SOL_AVISOS_POR_HORA = 10;
+
+export function evaluarLimiteSolicitud(c: { deEstaIp: number; total: number }): {
+  aceptar: boolean;
+  avisarAfuera: boolean;
+} {
+  return { aceptar: c.deEstaIp < SOL_MAX_POR_IP, avisarAfuera: c.total < SOL_AVISOS_POR_HORA };
+}
+
+// IP del visitante según el proxy (Vercel pone la real primero en
+// x-forwarded-for). null si no viene: entonces no hay tope por IP.
+export function ipDe(headers: Pick<Headers, "get">): string | null {
+  const xff = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return xff || headers.get("x-real-ip")?.trim() || null;
+}
+
 // Contraseña legible pero fuerte: 4 bloques de 3 (sin caracteres ambiguos).
 // Por defecto usa Math.random; en el server conviene pasar una fuente basada
 // en crypto (ver generarPasswordSegura en la API).
