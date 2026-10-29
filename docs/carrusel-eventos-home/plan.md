@@ -1,6 +1,6 @@
 # Carrusel de eventos con fotos en la home
 
-> Estado: **plan, sin implementar.** Antes de codear conviene tener las respuestas de [preguntas-cliente.md](preguntas-cliente.md); varias cambian el alcance.
+> Estado: **implementado** (carrusel, panel de fotos y encuadre), con las decisiones de este plan. Las respuestas de [preguntas-cliente.md](preguntas-cliente.md) siguen pendientes: varias pueden cambiar el alcance. Falta aplicar `0051_fotos_carrusel.sql` en Supabase (punto 4 de la verificación); sin ella la home no muestra el carrusel.
 
 ## Contexto
 Después de "Cómo funciona", la home termina en el footer. Los eventos solo se nombran en la bajada del hero. El agente que llega en frío (por un comentario o una tarjeta, no por referido) necesita ver el producto. Se agrega un carrusel de eventos disponibles, con fotos y **sin precio**: es el cierre del funnel de la home, y querer ver el precio es lo que lleva a pedir acceso.
