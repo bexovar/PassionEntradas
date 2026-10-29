@@ -43,6 +43,10 @@ import { actorDe, registrarActividad, type Actor } from "@/lib/actividad";
 
 type Ctx = { cliente_id: string | null; cliente_email: string | null; comprador: string; actor: Actor | null };
 
+// Lo que ve el cliente si falla la base: el detalle (tablas, constraints) va a
+// los logs, no a la tienda.
+const ERROR_GENERICO = "No pudimos registrar tu pedido. Probá de nuevo en un momento.";
+
 async function contexto(): Promise<Ctx | { error: string; status: number }> {
   if (isMock()) {
     const id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -385,7 +389,8 @@ export async function POST(request: Request) {
         }
         if (error && (error as any).code !== "23505") {
           await deshacer();
-          return NextResponse.json({ error: error.message }, { status: 500 });
+          console.error("[pedidos] no se pudo crear la operación:", error.message);
+          return NextResponse.json({ error: ERROR_GENERICO }, { status: 500 });
         }
       }
       if (!creada) {
@@ -458,7 +463,8 @@ export async function POST(request: Request) {
           break;
         }
         if (error && (error as any).code !== "23505") {
-          return NextResponse.json({ error: error.message }, { status: 500 });
+          console.error("[pedidos] no se pudo crear la consulta:", error.message);
+          return NextResponse.json({ error: ERROR_GENERICO }, { status: 500 });
         }
       }
     }
@@ -644,6 +650,10 @@ export async function POST(request: Request) {
   const wa: WhatsappResult =
     resultados.map((r) => r.whatsapp).find((r): r is WhatsappResult => r !== null) ??
     { ok: false, error: "No había a quién avisar por WhatsApp.", noConfigurado: true };
+  // El motivo de un aviso fallido va a los logs y a la campana del equipo,
+  // nunca al cliente: el error de Meta trae los teléfonos del equipo.
+  if (!wa.ok && !wa.noConfigurado) console.warn("[pedidos] aviso por WhatsApp falló:", wa.error);
+  if (!mail.ok && !mail.noConfigurado) console.warn("[pedidos] aviso por email falló");
 
   return NextResponse.json(
     {
@@ -658,15 +668,6 @@ export async function POST(request: Request) {
       consultas: consultasCreadas.map((c) => ({ id: c.id, code: c.code })),
       // Entradas pedidas que no tenían stock y quedaron como consulta.
       aConsultaPorStock,
-      // El error se manda al cliente (no solo el booleano) para poder ver el
-      // motivo real desde la pestaña Network sin tener que ir a buscar los
-      // logs del servidor — Meta no dice mucho más que "rejected" en la UI.
-      whatsapp: wa.ok
-        ? { ok: true, enviados: wa.enviados }
-        : { ok: false, noConfigurado: wa.noConfigurado ?? false, error: wa.error },
-      email: mail.ok
-        ? { ok: true }
-        : { ok: false, noConfigurado: mail.noConfigurado ?? false },
     },
     { status: 201 }
   );

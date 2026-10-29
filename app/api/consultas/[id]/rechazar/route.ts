@@ -39,7 +39,11 @@ export async function POST(_request: Request, { params }: { params: { id: string
     // La cotización rechazada: para el registro de actividad.
     .select("code, evento, sector, cantidad, cotizacion_monto, cotizacion_fee, moneda, cotizacion_version")
     .maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // El detalle de la base va a los logs, no a la tienda.
+    console.error("[rechazar]", error.message);
+    return NextResponse.json({ error: "No pudimos rechazar la cotización. Probá de nuevo." }, { status: 500 });
+  }
   if (!data) {
     const { data: existe } = await admin
       .from("consultas")

@@ -36,6 +36,9 @@ import { actorDe, registrarActividad, type Actor, type NuevaActividad } from "@/
 // devuelve.
 const CLIENTE_DEMO = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
+// Si falla la base, el cliente ve esto; el detalle va a los logs.
+const ERROR_GENERICO = "No pudimos cancelar. Probá de nuevo o escribinos.";
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   let body: any;
   try {
@@ -93,7 +96,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .in("estado", ["pendiente", "cotizada"])
       .select("id, code, evento, sector, cantidad, moneda, cotizacion_monto")
       .maybeSingle();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[cancelar] consulta:", error.message);
+      return NextResponse.json({ error: ERROR_GENERICO }, { status: 500 });
+    }
     if (!data) {
       const { data: existe } = await admin
         .from("consultas")
@@ -140,8 +146,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .select("id")
     .maybeSingle();
   if (error) {
+    // P0001 = lo frenó un trigger nuestro (el pedido avanzó): el mensaje es
+    // para el usuario. Cualquier otro error de la base, genérico.
     const esInvariante = (error as { code?: string }).code === "P0001";
-    return NextResponse.json({ error: error.message }, { status: esInvariante ? 409 : 500 });
+    if (!esInvariante) console.error("[cancelar] pedido:", error.message);
+    return NextResponse.json({ error: esInvariante ? error.message : ERROR_GENERICO }, { status: esInvariante ? 409 : 500 });
   }
   let errorStock: string | null = null;
   if (upd) {
