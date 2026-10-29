@@ -11,6 +11,8 @@ import { createClient } from "@/lib/supabase/client";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { PAISES, PAIS_DEFAULT, dialDe, nombrePais } from "@/lib/paises";
 import { LegalLinks } from "@/components/tienda/LegalLinks";
+import { CarruselEventos } from "@/components/tienda/CarruselEventos";
+import type { TarjetaCarrusel } from "@/lib/carrusel";
 
 // La landing es estática, pero si el visitante ya tiene sesión mostramos
 // accesos de logueado (Mi cuenta / Ver entradas) en vez de "Ingresar". Se
@@ -66,7 +68,7 @@ function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => voi
 
 type Estado = "idle" | "sending" | "ok" | "error";
 
-export function Landing() {
+export function Landing({ carrusel = [] }: { carrusel?: TarjetaCarrusel[] }) {
   const [lang, setLang] = useLang();
   const t = TX[lang];
   const lp = t.lp;
@@ -349,6 +351,14 @@ export function Landing() {
           ))}
         </div>
       </section>
+
+      {/* Eventos disponibles, con foto y sin precio: el cierre de la home. */}
+      <CarruselEventos
+        tarjetas={carrusel}
+        lang={lang}
+        ctaHref={logueado ? "/entradas" : "#solicitar"}
+        ctaLabel={logueado ? lp.irEntradas : lp.ctaSolicitar}
+      />
 
       <footer className="foot foot--legal">
         <span>TicketMirror</span>

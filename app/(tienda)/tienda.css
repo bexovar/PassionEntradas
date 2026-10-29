@@ -1496,3 +1496,92 @@
 .campana-lista span { font-size: 12.5px; color: var(--mute); line-height: 1.45; }
 .campana-lista time { font-size: 11px; color: var(--mute); font-family: var(--font-mono), monospace; }
 .campana-lista li.is-nueva a { box-shadow: inset 3px 0 0 #d14d68; }
+
+/* ============ carrusel de eventos (home) ============ */
+/* Tarjeta tipo ticket: foto 4:3 arriba, talón perforado abajo. La pista hace
+   scroll-snap; en el celular una tarjeta al ~80% deja asomar la siguiente. */
+.lp-carrusel-h { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.lp-carrusel-flechas { display: flex; gap: 10px; flex: 0 0 auto; }
+.lp-carrusel-flechas button {
+  width: 44px; height: 44px; font-size: 18px; font-weight: 700; cursor: pointer;
+  background: var(--field); color: var(--ink); border: 1.5px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink); transition: transform .12s, box-shadow .12s;
+}
+.lp-carrusel-flechas button:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--cobalt); }
+.lp-carrusel-flechas button:disabled { opacity: .35; cursor: default; box-shadow: none; }
+
+.lp-carrusel-pista {
+  list-style: none; margin: 0; padding: 6px 10px 16px 2px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 3 * 18px) / 3.4); gap: 18px;
+  overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.lp-carrusel-pista::-webkit-scrollbar { display: none; }
+
+.lp-cc {
+  scroll-snap-align: start; display: flex; flex-direction: column; min-width: 0;
+  background: var(--field); border: 1.5px solid var(--ink); box-shadow: 5px 5px 0 var(--ink);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.lp-cc:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--cobalt); }
+
+/* Proporción fija: la tarjeta cambia de tamaño pero no de forma. Las fotos
+   llegan encuadradas a 4:3; si alguna no, se ve entera y el sobrante se
+   rellena con la misma foto desenfocada (nunca se recorta). */
+.lp-cc-foto { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--ink); }
+.lp-cc-fondo {
+  position: absolute; inset: -24px; width: calc(100% + 48px); height: calc(100% + 48px);
+  object-fit: cover; filter: blur(22px) brightness(.75);
+}
+.lp-cc-img { position: relative; display: block; width: 100%; height: 100%; object-fit: contain; }
+
+.lp-cc-stub {
+  position: relative; flex: 1; display: flex; align-items: flex-start; gap: 14px;
+  padding: 18px 16px 16px; border-top: 2px dashed var(--ink);
+}
+.lp-cc-stub::before, .lp-cc-stub::after {
+  content: ""; position: absolute; top: -10px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--paper); border: 1.5px solid var(--ink);
+}
+.lp-cc-stub::before { left: -10px; }
+.lp-cc-stub::after { right: -10px; }
+.lp-cc-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lp-cc-comp {
+  font-family: var(--font-mono), monospace; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--cobalt);
+}
+/* Los nombres hacen salto de línea: nunca "…". */
+.lp-cc h3 {
+  margin: 0; font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase;
+  font-size: 19px; line-height: 1.05; overflow-wrap: anywhere;
+}
+.lp-cc-ctx { font-size: 12px; color: var(--ink); }
+.lp-cc-donde { font-size: 12.5px; color: var(--mute); }
+
+/* Cierre del funnel: la última tarjeta lleva a pedir acceso. */
+.lp-cc--cierre {
+  justify-content: center; align-items: flex-start; gap: 20px; padding: 28px 24px;
+  background: var(--cobalt); color: #fff;
+}
+.lp-cc--cierre p {
+  margin: 0; font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase;
+  font-size: 24px; line-height: 1.05;
+}
+.lp-cc--cierre .btn-primary { background: var(--field); color: var(--ink); }
+
+.lp-carrusel-puntos { display: none; justify-content: center; gap: 8px; padding-top: 4px; }
+.lp-carrusel-puntos span { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink); }
+.lp-carrusel-puntos span.on { background: var(--ink); }
+
+@media (max-width: 860px) {
+  .lp-carrusel-pista { grid-auto-columns: calc((100% - 18px) / 1.7); }
+}
+@media (max-width: 640px) {
+  .lp-carrusel-flechas { display: none; }
+  .lp-carrusel-pista { grid-auto-columns: 80%; gap: 14px; }
+  .lp-carrusel-puntos { display: flex; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-cc, .lp-carrusel-flechas button { transition: none; }
+  .lp-cc:hover { transform: none; }
+}
