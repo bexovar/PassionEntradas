@@ -80,6 +80,8 @@ type MockDB = {
   avisos: AvisoGuardado[];
   // Espejo de la tabla actividad.
   actividad: Actividad[];
+  // Espejo de la tabla fotos_carrusel.
+  fotosCarrusel?: FotoCarrusel[];
 };
 
 export type MockUsuario = {
@@ -1243,6 +1245,40 @@ const MOCK_FOTOS_CARRUSEL: FotoCarrusel[] = [
   { id: "demo-river-boca", competicion: "Primera División", evento: "River vs Boca - Superclásico", imagen_url: "/carrusel-demo/superclasico.svg", orden: 0 },
 ];
 
+// Se siembra al primer uso (y si el hot-reload trae un db de antes del carrusel).
+function fotosCarrusel(): FotoCarrusel[] {
+  const d = db();
+  d.fotosCarrusel ??= MOCK_FOTOS_CARRUSEL.map((f) => ({ ...f }));
+  return d.fotosCarrusel;
+}
+
 export function mockListFotosCarrusel(): FotoCarrusel[] {
-  return MOCK_FOTOS_CARRUSEL.map((f) => ({ ...f }));
+  return fotosCarrusel().map((f) => ({ ...f }));
+}
+
+// Va al final de su grupo, como en la API.
+export function mockAddFotoCarrusel(input: Omit<FotoCarrusel, "id" | "orden">): FotoCarrusel {
+  const fotos = fotosCarrusel();
+  const grupo = fotos.filter((f) => f.competicion === input.competicion && f.evento === input.evento);
+  const foto: FotoCarrusel = {
+    ...input,
+    id: `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    orden: grupo.reduce((m, f) => Math.max(m, f.orden + 1), 0),
+  };
+  fotos.push(foto);
+  return { ...foto };
+}
+
+export function mockDeleteFotosCarrusel(ids: string[]): FotoCarrusel[] {
+  const d = db();
+  const borradas = fotosCarrusel().filter((f) => ids.includes(f.id));
+  d.fotosCarrusel = fotosCarrusel().filter((f) => !ids.includes(f.id));
+  return borradas;
+}
+
+export function mockSetOrdenFotosCarrusel(cambios: { id: string; orden: number }[]): void {
+  for (const c of cambios) {
+    const f = fotosCarrusel().find((x) => x.id === c.id);
+    if (f) f.orden = c.orden;
+  }
 }

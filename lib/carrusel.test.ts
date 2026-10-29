@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { eventosCarrusel, fotoCarruselValida, type FotoCarrusel } from "./carrusel";
+import {
+  eventosCarrusel,
+  fotoCarruselValida,
+  grupoValido,
+  panelCarrusel,
+  reordenar,
+  type FotoCarrusel,
+} from "./carrusel";
 import { buildEvents, type Ticket } from "./tickets";
 
 // La home es pública: estos tests fijan qué evento entra al carrusel, con qué
@@ -115,5 +122,80 @@ describe("fotoCarruselValida", () => {
     expect(fotoCarruselValida("/carrusel-demo/../secreto", true)).toBeNull();
     expect(fotoCarruselValida("data:image/webp;base64,AAAA", true)).toBe("data:image/webp;base64,AAAA");
     expect(fotoCarruselValida("data:image/webp;base64,AAAA")).toBeNull();
+  });
+});
+
+describe("panelCarrusel", () => {
+  const ev = (comp: string, evento: string, fecha: string | null) => ({ comp, evento, fecha });
+
+  it("agrupa por competición y marca de dónde sale la foto de cada evento", () => {
+    const eventos = [
+      ev(WC, "Final", "2026-12-13"),
+      ev(WC, "México vs Sudáfrica", "2026-11-11"),
+      ev("Formula 1", "GP de Monza", "2026-12-28"),
+    ];
+    const comp = foto(WC, null);
+    const propia = foto(WC, "Final");
+    const { competiciones, vencidas } = panelCarrusel(eventos, [comp, propia], HOY);
+
+    expect(competiciones.map((c) => c.competicion)).toEqual(["FIFA World Cup 2026", "Formula 1"]);
+    const wc = competiciones[0];
+    expect(wc.fotos).toEqual([comp]);
+    // Por fecha: primero el más cercano.
+    expect(wc.eventos.map((e) => [e.evento, e.estado])).toEqual([
+      ["México vs Sudáfrica", "competicion"],
+      ["Final", "propias"],
+    ]);
+    expect(wc.eventos[1].fotos).toEqual([propia]);
+    expect(competiciones[1].eventos[0].estado).toBe("sin_foto");
+    expect(vencidas).toEqual([]);
+  });
+
+  it("las fotos de un evento que ya no está (o ya pasó) van a vencidas; las de competición no vencen", () => {
+    const eventos = [ev(WC, "Ayer", "2026-10-28"), ev(WC, "Mañana", "2026-10-30")];
+    const deAyer = foto(WC, "Ayer");
+    const deUnoQueSalio = foto(WC, "Ya no está");
+    const comp = foto("Copa Libertadores", null);
+    const { competiciones, vencidas } = panelCarrusel(eventos, [deAyer, deUnoQueSalio, comp], HOY);
+    expect(vencidas).toEqual([deAyer, deUnoQueSalio]);
+    // La competición sin eventos sigue en el panel por sus fotos.
+    expect(competiciones.map((c) => c.competicion)).toEqual(["Copa Libertadores", WC]);
+    expect(competiciones[1].eventos.map((e) => e.evento)).toEqual(["Mañana"]);
+  });
+});
+
+describe("reordenar", () => {
+  it("cambia de lugar con la vecina dentro del mismo grupo y renumera", () => {
+    const a = foto(WC, null, 0);
+    const b = foto(WC, null, 1);
+    const c = foto(WC, null, 2);
+    const otra = foto(WC, "Final", 0);
+    expect(reordenar([c, otra, a, b], c.id, -1)).toEqual([
+      { id: a.id, orden: 0 },
+      { id: c.id, orden: 1 },
+      { id: b.id, orden: 2 },
+    ]);
+  });
+
+  it("no hace nada en los bordes ni con un id que no existe", () => {
+    const a = foto(WC, null, 0);
+    const b = foto(WC, null, 1);
+    expect(reordenar([a, b], a.id, -1)).toBeNull();
+    expect(reordenar([a, b], b.id, 1)).toBeNull();
+    expect(reordenar([a, b], "nope", 1)).toBeNull();
+  });
+});
+
+describe("grupoValido", () => {
+  it("limpia espacios y deja evento en null si viene vacío", () => {
+    expect(grupoValido("  FIFA World Cup 2026 ", "")).toEqual({ competicion: WC, evento: null });
+    expect(grupoValido(WC, " Final ")).toEqual({ competicion: WC, evento: "Final" });
+  });
+
+  it("rechaza competición vacía, tipos raros o textos larguísimos", () => {
+    expect(grupoValido("", null)).toBeNull();
+    expect(grupoValido(42, null)).toBeNull();
+    expect(grupoValido(WC, 7)).toBeNull();
+    expect(grupoValido("x".repeat(201), null)).toBeNull();
   });
 });

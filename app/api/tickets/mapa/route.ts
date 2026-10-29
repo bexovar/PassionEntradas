@@ -4,6 +4,7 @@ import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server
 import { getRol } from "@/lib/auth";
 import { isMock } from "@/lib/mock-db";
 import { actorDe, actorDemo, registrarActividad, type Actor, type NuevaActividad } from "@/lib/actividad";
+import { MAX_BYTES_IMAGEN as MAX_BYTES, pesoLegible, tipoReal } from "@/lib/imagenes";
 
 // POST /api/tickets/mapa — sube el mapa del estadio de una entrada PROPIA al
 // bucket público `mapas` (el mismo donde el worker deja los de Passion) y
@@ -11,21 +12,7 @@ import { actorDe, actorDemo, registrarActividad, type Actor, type NuevaActividad
 // pasar el mouse en PC y abrir con zoom en el celular.
 //
 // Se valida el contenido, no el nombre ni el tipo que dice el navegador: se
-// leen los primeros bytes del archivo.
-
-const MAX_BYTES = 5 * 1024 * 1024;
-
-function tipoReal(b: Uint8Array): { mime: string; ext: string } | null {
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return { mime: "image/png", ext: "png" };
-  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return { mime: "image/jpeg", ext: "jpg" };
-  if (
-    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
-    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
-  ) {
-    return { mime: "image/webp", ext: "webp" };
-  }
-  return null;
-}
+// leen los primeros bytes del archivo (lib/imagenes).
 
 export async function POST(request: Request) {
   let actor: Actor | null = isMock() ? actorDemo() : null;
@@ -83,10 +70,7 @@ export async function POST(request: Request) {
 // "Subió un mapa de estadio (PNG, 840 KB)". Todavía no es de ninguna entrada:
 // se asigna al guardar el alta o la edición (ticket.crear / ticket.editar).
 function actividadMapa(actor: Actor | null, archivo: File, ext: string, url: string | null): NuevaActividad {
-  const peso =
-    archivo.size < 1024 * 1024
-      ? `${Math.max(1, Math.round(archivo.size / 1024))} KB`
-      : `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(archivo.size / (1024 * 1024))} MB`;
+  const peso = pesoLegible(archivo.size);
   return {
     actor,
     accion: "ticket.mapa",

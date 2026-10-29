@@ -26,6 +26,7 @@ const ENTIDADES: { value: string; label: string }[] = [
   { value: "solicitud", label: "Solicitudes de acceso" },
   { value: "usuario", label: "Equipo, cuentas e ingresos" },
   { value: "config", label: "Configuración" },
+  { value: "carrusel", label: "Fotos del carrusel" },
 ];
 
 const PERIODOS: { value: string; label: string; dias: number | null }[] = [
