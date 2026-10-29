@@ -5,6 +5,7 @@ import { getRol } from "@/lib/auth";
 import { decidirRuteo } from "@/lib/ruteo";
 import { sesionCaida } from "@/lib/sesion";
 import { usuarioDeClaims, type UsuarioDeClaims } from "@/lib/claims";
+import { modoDemo } from "@/lib/entorno";
 
 // Refresca la sesión de Supabase Auth y RUTEA los módulos:
 // - /admin: solo administrador (los moderadores van a /moderador), salvo
@@ -41,7 +42,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Modo demo sin Supabase: todo abierto; los logins mandan a su módulo.
-  if (process.env.MOCK_DATA === "1") {
+  // Nunca en producción (lib/entorno).
+  if (modoDemo()) {
     if (path === "/admin/login") return redirectTo("/admin");
     if (path === "/ingresar") return redirectTo("/entradas");
     return NextResponse.next();
