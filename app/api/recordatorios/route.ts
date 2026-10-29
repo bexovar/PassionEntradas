@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { correrRecordatorios } from "@/lib/avisos-equipo";
 import { isMock } from "@/lib/mock-db";
 import { baseUrlDe } from "@/lib/base-url";
+import { tokenWorkerValido } from "@/lib/token-worker";
 
 // POST /api/recordatorios — revisa lo que quedó esperando (pedido sin
 // confirmar 2 h, consulta sin cotizar 4 h, cotización por vencer, evento en
@@ -12,18 +12,12 @@ import { baseUrlDe } from "@/lib/base-url";
 //
 // Lo llama el WORKER en cada vuelta (cada 5 min), igual que /api/revalidar:
 // así no hace falta un cron aparte (el gratis de Vercel corre una vez por
-// día). Mismo secreto compartido: la service role key en un header.
+// día). Mismo secreto compartido (REVALIDAR_TOKEN, ver lib/token-worker).
 export const dynamic = "force-dynamic";
 
 function tokenValido(request: Request): boolean {
   if (isMock()) return true;
-  const esperado = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-  const recibido = request.headers.get("x-revalidar-token") ?? "";
-  if (!esperado || !recibido) return false;
-  const a = Buffer.from(recibido);
-  const b = Buffer.from(esperado);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  return tokenWorkerValido(request.headers.get("x-revalidar-token"));
 }
 
 
