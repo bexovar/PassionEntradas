@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { TAG_CATALOGO } from "@/lib/refrescar-tienda";
+import { esProduccion, modoDemo } from "@/lib/entorno";
 import {
   DEFAULT_EUR_USD,
   hoyArgentina,
@@ -24,7 +25,7 @@ export async function fetchTickets(): Promise<Ticket[]> {
   // En todos los caminos se filtran los eventos ya pasados: el worker no los
   // vuelve a traer, pero las filas viejas quedan en la tabla y no tienen que
   // aparecer en la tienda.
-  if (process.env.MOCK_DATA === "1") {
+  if (modoDemo()) {
     const { MOCK_TICKETS } = await import("@/lib/mock-tickets");
     const { mockListManual } = await import("@/lib/mock-db");
     // Portal mockeado + manuales del mock-db (así lo cargado desde el panel
@@ -37,6 +38,12 @@ export async function fetchTickets(): Promise<Ticket[]> {
   try {
     return sinEventosPasados(await catalogoCacheado(hoyArgentina()));
   } catch (err) {
+    // En producción, un catálogo de muestra serían entradas y precios
+    // inventados que se pueden pedir: mejor la tienda vacía por un rato.
+    if (esProduccion()) {
+      console.error("[tienda] Supabase no disponible, catálogo vacío:", err);
+      return [];
+    }
     console.warn("[tienda] Supabase no disponible, usando catálogo mock:", err);
     const { MOCK_TICKETS } = await import("@/lib/mock-tickets");
     return sinEventosPasados(MOCK_TICKETS);
@@ -99,18 +106,21 @@ async function leerCatalogoPaginado(hoy: string): Promise<FilaCatalogo[]> {
 // - eurUsd: cotización EUR->USD (portal Passion y propias en euros).
 // - arsPorUsd: pesos por dólar (propias en pesos). null = no cargada.
 // - portalActivo: si las entradas de Passion se muestran (false = solo propias).
-// Ante cualquier error caen a defaults seguros: la tienda nunca se rompe.
+// Ante cualquier error la tienda no se rompe, pero falla cerrada: el portal
+// queda apagado (no se reactiva algo que el admin apagó) y la cotización cae
+// al default.
 export type ConfigTienda = { eurUsd: number; arsPorUsd: number | null; portalActivo: boolean };
 
 export async function fetchConfigTienda(): Promise<ConfigTienda> {
-  if (process.env.MOCK_DATA === "1") {
+  if (modoDemo()) {
     const { mockGetEurUsd, mockGetArsPorUsd, mockGetPortalActivo } = await import("@/lib/mock-db");
     return { eurUsd: mockGetEurUsd(), arsPorUsd: mockGetArsPorUsd(), portalActivo: mockGetPortalActivo() };
   }
   try {
     return await configCacheada();
-  } catch {
-    return { eurUsd: DEFAULT_EUR_USD, arsPorUsd: null, portalActivo: true };
+  } catch (err) {
+    console.error("[tienda] config no disponible, portal apagado por ahora:", err);
+    return { eurUsd: DEFAULT_EUR_USD, arsPorUsd: null, portalActivo: false };
   }
 }
 

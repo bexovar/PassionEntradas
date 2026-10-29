@@ -142,13 +142,26 @@ describe("reconciliarItem — el resto de los datos también", () => {
   });
 });
 
-describe("reconciliarItem — casos que NO se tocan", () => {
-  // El catálogo rota en cada sync: si la entrada ya no está, el pedido igual
-  // se registra con lo que mandó el cliente y el panel lo resuelve.
-  it("sin fila en la base deja el item como vino", () => {
+describe("reconciliarItem — sin entrada en el catálogo", () => {
+  // El catálogo rota en cada sync, y un carrito manipulado puede no traer
+  // ticket: sin fila no hay precio confiable. No se pierde: queda como
+  // consulta en 0 y el staff la cotiza.
+  it("un pedido sin fila en la base pasa a consulta en 0, nunca con el precio del cliente", () => {
     const p = item({ evento: "Algo viejo", monto: 500 });
-    expect(reconciliarItem(p, undefined, TASA)).toEqual(p);
+    const r = reconciliarItem(p, undefined, TASA);
+    expect(r.tipo).toBe("consulta");
+    expect(r.monto).toBe(0);
+    expect(r.comision).toBe(0);
+    expect(r.evento).toBe("Algo viejo");
   });
+
+  it("un pedido de una final por USD 1 sin ticket no se registra como pedido", () => {
+    const r = reconciliarItem(item({ evento: "Final", monto: 1, ticket_id: null }), undefined, TASA);
+    expect(r).toMatchObject({ tipo: "consulta", monto: 0 });
+  });
+});
+
+describe("reconciliarItem — casos que NO se tocan", () => {
 
   // Una consulta es "a confirmar", no una compra: el monto queda en 0 igual
   // que antes de estos cambios.

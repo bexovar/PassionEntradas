@@ -31,10 +31,12 @@ import { generarPassword, type SolicitudAcceso, type SolicitudInput } from "@/li
 import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
+import { modoDemo } from "@/lib/entorno";
 
 export type MockFactura = Factura & { operacion_id: string };
 
-export const isMock = () => process.env.MOCK_DATA === "1";
+// Todas las rutas preguntan acá: en producción siempre es false (lib/entorno).
+export const isMock = () => modoDemo();
 
 export const MOCK_USER = {
   // Id del admin demo en la "Auth" de mentira (ver `usuarios`).

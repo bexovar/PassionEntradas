@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { validarSolicitud } from "./acceso";
+import { evaluarLimiteSolicitud, ipDe, SOL_AVISOS_POR_HORA, SOL_MAX_POR_IP, validarSolicitud } from "./acceso";
+
+describe("evaluarLimiteSolicitud", () => {
+  it("acepta hasta el tope por IP y después no", () => {
+    expect(evaluarLimiteSolicitud({ deEstaIp: 0, total: 0 }).aceptar).toBe(true);
+    expect(evaluarLimiteSolicitud({ deEstaIp: SOL_MAX_POR_IP - 1, total: 0 }).aceptar).toBe(true);
+    expect(evaluarLimiteSolicitud({ deEstaIp: SOL_MAX_POR_IP, total: 0 }).aceptar).toBe(false);
+  });
+
+  it("pasado el tope total de la hora deja de avisar afuera (WhatsApp y email)", () => {
+    expect(evaluarLimiteSolicitud({ deEstaIp: 0, total: SOL_AVISOS_POR_HORA - 1 }).avisarAfuera).toBe(true);
+    expect(evaluarLimiteSolicitud({ deEstaIp: 0, total: SOL_AVISOS_POR_HORA }).avisarAfuera).toBe(false);
+  });
+});
+
+describe("ipDe", () => {
+  const h = (o: Record<string, string>) => ({ get: (k: string) => o[k] ?? null });
+  it("toma la primera IP de x-forwarded-for", () => {
+    expect(ipDe(h({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" }))).toBe("203.0.113.7");
+  });
+  it("si no está, usa x-real-ip; si no hay ninguna, null", () => {
+    expect(ipDe(h({ "x-real-ip": "198.51.100.2" }))).toBe("198.51.100.2");
+    expect(ipDe(h({}))).toBeNull();
+  });
+});
 
 // El formulario de acceso es público y sin auth, así que TODO lo que llega es
 // input hostil. Estos tests fijan qué se acepta y qué mensaje se devuelve.
