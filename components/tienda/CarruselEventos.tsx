@@ -54,8 +54,9 @@ export function CarruselEventos({
     const el = pista.current;
     if (!el) return;
     const paso = (el.firstElementChild as HTMLElement | null)?.offsetWidth ?? el.clientWidth;
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
     const suave = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollBy({ left: dir * (paso + 18), behavior: suave ? "smooth" : "auto" });
+    el.scrollBy({ left: dir * (paso + gap), behavior: suave ? "smooth" : "auto" });
   }
 
   if (tarjetas.length === 0) return null;
