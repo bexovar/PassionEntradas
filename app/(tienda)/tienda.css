@@ -1512,7 +1512,7 @@
 
 .lp-carrusel-pista {
   list-style: none; margin: 0; padding: 6px 10px 16px 2px;
-  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 3 * 18px) / 3.4); gap: 18px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 3 * 26px) / 3.4); gap: 26px;
   overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
@@ -1539,12 +1539,13 @@
   position: relative; flex: 1; display: flex; align-items: flex-start; gap: 14px;
   padding: 18px 16px 16px; border-top: 2px dashed var(--ink);
 }
+/* Muescas: asoman ~8px por lado, así entre dos tarjetas queda aire (gap 26px). */
 .lp-cc-stub::before, .lp-cc-stub::after {
-  content: ""; position: absolute; top: -10px; width: 18px; height: 18px; border-radius: 50%;
+  content: ""; position: absolute; top: -9px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--paper); border: 1.5px solid var(--ink);
 }
-.lp-cc-stub::before { left: -10px; }
-.lp-cc-stub::after { right: -10px; }
+.lp-cc-stub::before { left: -9px; }
+.lp-cc-stub::after { right: -9px; }
 .lp-cc-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .lp-cc-comp {
   font-family: var(--font-mono), monospace; font-size: 10.5px; font-weight: 700;
@@ -1565,20 +1566,23 @@
 }
 .lp-cc--cierre p {
   margin: 0; font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase;
-  font-size: 24px; line-height: 1.05;
+  font-size: 21px; line-height: 1.05; text-wrap: balance;
 }
-.lp-cc--cierre .btn-primary { background: var(--field); color: var(--ink); }
+/* flex: none le gana al "btn-primary a todo el ancho" del móvil, que en esta
+   columna lo estiraba a lo alto. */
+.lp-cc--cierre .btn-primary { flex: none; background: var(--field); color: var(--ink); }
 
 .lp-carrusel-puntos { display: none; justify-content: center; gap: 8px; padding-top: 4px; }
 .lp-carrusel-puntos span { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink); }
 .lp-carrusel-puntos span.on { background: var(--ink); }
 
 @media (max-width: 860px) {
-  .lp-carrusel-pista { grid-auto-columns: calc((100% - 18px) / 1.7); }
+  .lp-carrusel-pista { grid-auto-columns: calc((100% - 26px) / 1.7); }
 }
 @media (max-width: 640px) {
   .lp-carrusel-flechas { display: none; }
-  .lp-carrusel-pista { grid-auto-columns: 80%; gap: 14px; }
+  .lp-carrusel-pista { grid-auto-columns: 80%; gap: 22px; }
+  .lp-cc--cierre p { font-size: 24px; }
   .lp-carrusel-puntos { display: flex; }
 }
 @media (prefers-reduced-motion: reduce) {
