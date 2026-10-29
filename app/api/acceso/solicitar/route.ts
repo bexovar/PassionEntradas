@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { createAdminSupabase } from "@/lib/supabase/server";
-import { validarSolicitud } from "@/lib/acceso";
+import { evaluarLimiteSolicitud, ipDe, SOL_VENTANA_MS, validarSolicitud } from "@/lib/acceso";
 import { isMock, mockCrearSolicitud, mockListSolicitudes } from "@/lib/mock-db";
 import { notificarSolicitudAcceso } from "@/lib/whatsapp";
 import { notificarVendedoresEmail } from "@/lib/email";
@@ -10,9 +11,10 @@ import { registrarActividad } from "@/lib/actividad";
 
 // POST /api/acceso/solicitar — PÚBLICO. Un visitante de la landing pide
 // acceso a la tienda. Se inserta con service role (la tabla es RLS deny-all).
-// Anti-spam: honeypot + validación. Una sola solicitud PENDIENTE por email
-// (unique index); un duplicado se trata como éxito idempotente (no se filtra
-// si el email ya pidió, ni se le da error al usuario legítimo que reintenta).
+// Anti-spam: honeypot + validación + límite por hora (por IP y en total, ver
+// evaluarLimiteSolicitud). Una sola solicitud PENDIENTE por email (unique
+// index); un duplicado se trata como éxito idempotente (no se filtra si el
+// email ya pidió, ni se le da error al usuario legítimo que reintenta).
 export async function POST(request: Request) {
   let body: any;
   try {
@@ -36,7 +38,9 @@ export async function POST(request: Request) {
   // Aviso al staff. Best-effort y DESPUÉS de guardar: una solicitud no se
   // pierde porque WhatsApp o el mail estén caídos. Sin esto la solicitud
   // quedaba esperando a que alguien se acordara de mirar el panel.
-  const avisar = async () => {
+  // `afuera` = false (pasó el tope de la hora): solo la campana del panel,
+  // sin WhatsApp ni email.
+  const avisar = async (afuera: boolean) => {
     const texto =
       `Nueva solicitud de acceso\n` +
       `Nombre: ${nombre}\n` +
@@ -50,9 +54,11 @@ export async function POST(request: Request) {
       avisarEquipo(
         isMock() ? null : createAdminSupabase(),
         { tipo: "nuevo_acceso", ref: crypto.randomUUID(), datos: { nombre, email }, url: "/admin/solicitudes" },
-        (para, url) => notificarSolicitudAcceso({ nombre, email, telefono, legajo, texto, link: `${baseUrlDe(request)}${url}` }, para)
+        afuera
+          ? (para, url) => notificarSolicitudAcceso({ nombre, email, telefono, legajo, texto, link: `${baseUrlDe(request)}${url}` }, para)
+          : null
       ),
-      notificarVendedoresEmail(`Nueva solicitud de acceso — ${nombre}`, texto),
+      afuera ? notificarVendedoresEmail(`Nueva solicitud de acceso — ${nombre}`, texto) : null,
     ]).catch(() => [] as const);
     const wa = res?.whatsapp;
     // Antes se descartaba el resultado entero: si fallaba, no quedaba
@@ -87,15 +93,41 @@ export async function POST(request: Request) {
     const r = mockCrearSolicitud(parsed.value);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
     if (!yaPendiente) await registrar(null, mockListSolicitudes().find(pendienteDe)?.id ?? null);
-    await avisar();
+    await avisar(true);
     return NextResponse.json({ ok: true }, { status: 201 });
   }
 
   const admin = createAdminSupabase();
-  const { data: creada, error } = await admin
+
+  // Límite de la última hora. Si contar falla (o la columna ip_hash todavía
+  // no existe, 0050 sin aplicar) se cuenta 0: mejor dejar pasar una
+  // solicitud legítima que perderla.
+  const ip = ipDe(request.headers);
+  const ipHash = ip ? createHash("sha256").update(`tm-solicitud:${ip}`).digest("hex") : null;
+  const desde = new Date(Date.now() - SOL_VENTANA_MS).toISOString();
+  const contar = async (soloEstaIp: boolean) => {
+    let q = admin.from("solicitudes_acceso").select("id", { count: "exact", head: true }).gte("created_at", desde);
+    if (soloEstaIp) q = q.eq("ip_hash", ipHash);
+    const { count, error } = await q;
+    return error ? 0 : count ?? 0;
+  };
+  const [deEstaIp, total] = await Promise.all([ipHash ? contar(true) : 0, contar(false)]);
+  const limite = evaluarLimiteSolicitud({ deEstaIp, total });
+  if (!limite.aceptar) {
+    // Igual que el honeypot: éxito fingido, sin guardar ni avisar.
+    console.warn(`[acceso] tope por IP alcanzado (${deEstaIp} en la última hora): solicitud descartada`);
+    return NextResponse.json({ ok: true });
+  }
+
+  const fila = { nombre, email, telefono, legajo, mensaje, acepto_terminos: acepto };
+  let { data: creada, error } = await admin
     .from("solicitudes_acceso")
-    .insert({ nombre, email, telefono, legajo, mensaje, acepto_terminos: acepto })
+    .insert({ ...fila, ip_hash: ipHash })
     .select("id");
+  // 42703 = columna inexistente: la migración 0050 todavía no se aplicó.
+  if (error && (error as { code?: string }).code === "42703") {
+    ({ data: creada, error } = await admin.from("solicitudes_acceso").insert(fila).select("id"));
+  }
 
   if (error) {
     // 23505 = unique_violation: ya hay una solicitud PENDIENTE con ese email.
@@ -112,6 +144,7 @@ export async function POST(request: Request) {
   }
 
   await registrar(admin, creada?.[0]?.id ?? null);
-  await avisar();
+  if (!limite.avisarAfuera) console.warn(`[acceso] ${total} solicitudes en la última hora: aviso solo en la campana`);
+  await avisar(limite.avisarAfuera);
   return NextResponse.json({ ok: true }, { status: 201 });
 }

@@ -21,7 +21,7 @@ const csvList = z.preprocess((v) => {
   return [];
 }, z.array(z.string()));
 
-const ConfigSchema = z
+export const ConfigSchema = z
   .object({
     // Portal
     PE_USER: z.string().min(1, "PE_USER es obligatorio"),
@@ -64,7 +64,21 @@ const ConfigSchema = z
     // Supabase
     // La tienda a revalidar al terminar cada sync (el worker escribe directo
     // en la base y la app no se entera; con esto los cambios se ven YA).
-    TIENDA_URL: z.string().url().default("https://tickermirror.vercel.app"),
+    // Solo HTTPS (salvo localhost): el token viaja en un header.
+    TIENDA_URL: z
+      .string()
+      .url()
+      .refine(
+        (u) => u.startsWith("https://") || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(u),
+        "TIENDA_URL tiene que ser https:// (http solo para localhost)"
+      )
+      .default("https://tickermirror.vercel.app"),
+    // Secreto compartido con la tienda para /api/revalidar y
+    // /api/recordatorios. Mismo valor que REVALIDAR_TOKEN en Vercel. Sin él se
+    // manda la service role key (transición; dejarlo configurado).
+    REVALIDAR_TOKEN: optionalString.pipe(
+      z.string().min(32, "REVALIDAR_TOKEN tiene que tener al menos 32 caracteres").optional()
+    ),
     SUPABASE_URL: z.string().url(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, "SUPABASE_SERVICE_ROLE_KEY es obligatorio"),
     SUPABASE_DB_URL: optionalString.pipe(z.string().optional()),
@@ -130,6 +144,7 @@ export function redactedConfigSummary(cfg: Config): Record<string, unknown> {
     HEALTH_PORT: cfg.HEALTH_PORT,
     STATE_DIR: cfg.STATE_DIR,
     TIENDA_URL: cfg.TIENDA_URL,
+    REVALIDAR_TOKEN: cfg.REVALIDAR_TOKEN ? "(set, redacted)" : "(falta: se usa la service role key)",
     SUPABASE_URL: cfg.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: "(set, redacted)",
     BACKUP: cfg.BACKUP_DB_URL

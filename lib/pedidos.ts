@@ -74,9 +74,11 @@ function aVenta(valor: number | null, t: TicketRef, tasa: number | Tasas): numbe
 // El cliente manda evento/sector/monto/cantidad, pero son datos suyos: no se
 // guardan a ciegas. Cuando el item trae `ticket_id` y esa fila existe, los
 // campos se toman de la base. Si la entrada ya no está (el catálogo rota en
-// cada sync), se respeta lo que mandó el cliente para no perder el pedido.
+// cada sync) o el item no trae ticket, no hay de dónde sacar el precio: pasa
+// a consulta en 0 para que el staff lo cotice. Nunca se guarda un precio que
+// puso el cliente (si no, cualquiera crea un pedido de una final por USD 1).
 export function reconciliarItem(p: ItemPedido, t: TicketRef | undefined, tasa: number | Tasas): ItemPedido {
-  if (!t) return p;
+  if (!t) return { ...p, tipo: "consulta", monto: 0, comision: 0 };
   const out: ItemPedido = { ...p };
 
   if (t.evento) out.evento = t.evento;

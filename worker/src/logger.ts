@@ -30,6 +30,8 @@ export function createLogger(cfg: Pick<Config, "LOG_LEVEL">) {
         "storageState",
         "*.storageState",
         "SUPABASE_SERVICE_ROLE_KEY",
+        "REVALIDAR_TOKEN",
+        'headers["x-revalidar-token"]',
         "SUPABASE_DB_URL",
         "BACKUP_DB_URL",
         "service_role",

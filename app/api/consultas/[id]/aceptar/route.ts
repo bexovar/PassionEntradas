@@ -90,10 +90,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
     })
     .maybeSingle();
   if (error) {
-    // P0002 = no es suya o no existe; P0001 = estado/versión/vencimiento.
+    // P0002 = no es suya o no existe; P0001 = estado/versión/vencimiento. Esos
+    // mensajes los escribe aceptar_cotizacion y son para el usuario; cualquier
+    // otro error de la base va a los logs y el cliente ve uno genérico.
     const code = (error as { code?: string }).code;
     const status = code === "P0002" ? 404 : code === "P0001" ? 409 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    if (status === 500) console.error("[aceptar]", error.message);
+    const mensaje = status === 500 ? "No pudimos aceptar la cotización. Probá de nuevo." : error.message;
+    return NextResponse.json({ error: mensaje }, { status });
   }
   const op = data as { op_id: string; op_code: string } | null;
   if (!op) return NextResponse.json({ error: "No se pudo crear el pedido" }, { status: 500 });
