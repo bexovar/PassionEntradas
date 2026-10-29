@@ -173,7 +173,7 @@ export async function POST(request: Request) {
     if (tipo !== "pedido" && tipo !== "consulta") {
       return NextResponse.json({ error: "Tipo inválido (pedido o consulta)" }, { status: 400 });
     }
-    const evento = String(it?.evento ?? "").trim();
+    const evento = String(it?.evento ?? "").trim().slice(0, 200);
     if (!evento) {
       return NextResponse.json({ error: "Falta el evento en una entrada" }, { status: 400 });
     }
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
   // fila real: evento, sector, fecha y PRECIO salen de la base, no del cliente.
   // Lo que pide más que el stock que queda se parte: lo disponible como
   // pedido y el resto como consulta (ver partirPorStock). Los que no matchean
-  // quedan como vinieron.
+  // pasan a consulta en 0: el precio nunca sale del cliente.
   const refs = await buscarTickets(
     parsed.map((p) => p.ticket_id).filter((id): id is string => !!id)
   );
