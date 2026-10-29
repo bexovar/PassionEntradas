@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   MARCO,
-  MIN_LADO,
+  MIN_RECORTE,
   SALIDA,
-  ZOOM_MAX,
   centrar,
   fotoMuyChica,
   mover,
   rectRecorte,
   tamanoEnMarco,
   zoomear,
+  zoomMax,
   type Encuadre,
   type Tamano,
 } from "@/lib/encuadre";
@@ -53,7 +53,7 @@ export default function EncuadreFoto({ archivo, competicion, evento, progreso, o
       const t = { w: el.naturalWidth, h: el.naturalHeight };
       if (fotoMuyChica(t)) {
         setError(
-          `La foto es muy chica (${t.w}×${t.h} px), se vería pixelada. Tiene que medir al menos ${MIN_LADO} px de ancho y de alto.`
+          `Esta foto es muy chica (${t.w}×${t.h} px) y se vería borrosa en la tarjeta. Elegí una de al menos ${MIN_RECORTE.w}×${MIN_RECORTE.h} px: sirve cualquier foto común, horizontal o vertical.`
         );
         return;
       }
@@ -205,19 +205,23 @@ export default function EncuadreFoto({ archivo, competicion, evento, progreso, o
               </div>
             </div>
 
+            {/* El tope sale de la foto: más zoom la dejaría pixelada. */}
             <label className="mt-4 flex items-center gap-3 text-sm">
               <span className="w-10 shrink-0 text-muted">Zoom</span>
               <input
                 type="range"
                 min={1}
-                max={ZOOM_MAX}
+                max={tam ? zoomMax(tam) : 1}
                 step={0.01}
                 value={enc?.zoom ?? 1}
-                disabled={!tam || !enc}
+                disabled={!tam || !enc || zoomMax(tam) <= 1}
                 onChange={(e) => tam && enc && setEnc(zoomear(tam, enc, Number(e.target.value)))}
-                className="w-full accent-brand"
+                className="w-full accent-brand disabled:opacity-40"
               />
             </label>
+            {tam && zoomMax(tam) <= 1 && (
+              <p className="mt-1 text-xs text-muted">Esta foto no da para acercarla más: se puede mover.</p>
+            )}
           </>
         )}
 

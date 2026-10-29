@@ -72,7 +72,7 @@ Después de "Cómo funciona", la home termina en el footer. Los eventos solo se 
   - **Encuadre al subir:** al elegir una foto se abre un editor con un marco fijo 4:3. El admin arrastra y hace zoom con un slider para elegir qué parte se ve.
     - El recorte se hace en el navegador (canvas) y se sube ya exportado a **1200×900 WebP**, así todas las fotos quedan iguales y livianas sin agregar nada al servidor.
     - Componente propio `components/admin/EncuadreFoto.tsx` (con pointer events y canvas, sin librerías nuevas). La lógica del encuadre (zoom mínimo, límites del arrastre, rectángulo de recorte) va en `lib/encuadre.ts`, con test.
-    - **Validación:** se rechaza una foto de menos de 800 px de ancho o de alto, con un mensaje claro ("La foto es muy chica, se vería pixelada"). La API además revalida tipo y peso.
+    - **Validación:** solo se rechaza una foto que no da un recorte 4:3 de 600×450 px (una miniatura); cualquier foto común pasa, incluida una 16:9 de 1200×675. El zoom se frena solo antes de que el recorte baje de 600 px, así nunca queda pixelada. La API además revalida tipo y peso.
     - Si se suben varias a la vez, se encuadran de a una.
   - Vista previa de la tarjeta tal como se va a ver.
   - Sección aparte **"Eventos que ya pasaron"**: lista las fotos de eventos que salieron del catálogo, con un botón para borrarlas. Las fotos de competición no vencen.
@@ -174,7 +174,7 @@ No hace falta lógica nueva: el carrusel sale del mismo catálogo que la tienda,
    - Orden por fecha y corte en `max`.
    - **Ningún objeto devuelto tiene campos de precio.**
    - `fotoCarruselValida` rechaza URLs fuera del bucket.
-   - En `lib/encuadre.test.ts`: el zoom mínimo siempre cubre el marco 4:3, el arrastre no deja huecos en los bordes, el recorte de una foto vertical y de una panorámica da el rectángulo esperado, y se rechazan fotos de menos de 800 px.
+   - En `lib/encuadre.test.ts`: el zoom mínimo siempre cubre el marco 4:3, el arrastre no deja huecos en los bordes, el recorte de una foto vertical y de una panorámica da el rectángulo esperado, solo se rechazan fotos que no dan un recorte de 600×450, y el zoom tiene tope por foto.
 2. `npx tsc --noEmit`, `npm test` y `MOCK_DATA=1 npm run build`.
 3. **En el navegador** con `MOCK_DATA=1 npm run dev`:
    - Subir varias fotos a una competición y una a un evento puntual desde `/admin/entradas`, reordenarlas y ver en `/`, después de que se refresque, que los partidos alternan las fotos.

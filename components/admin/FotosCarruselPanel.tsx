@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import EncuadreFoto from "@/components/admin/EncuadreFoto";
+import { MIN_RECORTE } from "@/lib/encuadre";
 import { fmtDate } from "@/lib/tickets";
 import {
   MAX_CARRUSEL,
@@ -226,6 +227,10 @@ export default function FotosCarruselPanel() {
             precios. Un evento sin fotos propias usa las de su competición, alternándolas. <b>Sin ninguna foto, no
             aparece en la home.</b> Hasta {MAX_FOTOS_POR_GRUPO} fotos por competición o evento; en un evento se
             muestra la principal.
+          </p>
+          <p className="text-xs text-muted">
+            Sirve cualquier foto JPG, PNG o WEBP de al menos {MIN_RECORTE.w}×{MIN_RECORTE.h} px, horizontal o
+            vertical: al subirla elegís qué parte se ve.
           </p>
 
           {aviso && (
