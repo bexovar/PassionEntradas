@@ -3,6 +3,7 @@ import {
   MARCO,
   ZOOM_MAX,
   centrar,
+  zoomMax,
   fotoMuyChica,
   limitar,
   mover,
@@ -60,10 +61,10 @@ describe("mover", () => {
 });
 
 describe("zoomear", () => {
-  it("no baja de 1 (siempre cubre) ni pasa del máximo", () => {
+  it("no baja de 1 (siempre cubre) ni pasa del máximo de esa foto", () => {
     const e0 = centrar(VERTICAL);
     expect(zoomear(VERTICAL, e0, 0.2).zoom).toBe(1);
-    expect(zoomear(VERTICAL, e0, 99).zoom).toBe(ZOOM_MAX);
+    expect(zoomear(VERTICAL, e0, 99).zoom).toBe(zoomMax(VERTICAL));
   });
 
   it("acerca sobre el centro del marco y sigue cubriendo al alejar", () => {
@@ -119,11 +120,32 @@ describe("rectRecorte", () => {
 });
 
 describe("fotoMuyChica", () => {
-  it("rechaza menos de 800 px de ancho o de alto", () => {
-    expect(fotoMuyChica({ w: 600, h: 450 })).toBe(true);
-    expect(fotoMuyChica({ w: 1600, h: 700 })).toBe(true);
-    expect(fotoMuyChica({ w: 799, h: 1200 })).toBe(true);
-    expect(fotoMuyChica({ w: 800, h: 800 })).toBe(false);
-    expect(fotoMuyChica({ w: 4000, h: 3000 })).toBe(false);
+  it("acepta las fotos comunes: 16:9 de celular, verticales, 4:3", () => {
+    expect(fotoMuyChica({ w: 1200, h: 675 })).toBe(false);
+    expect(fotoMuyChica({ w: 1080, h: 1920 })).toBe(false);
+    expect(fotoMuyChica({ w: 800, h: 600 })).toBe(false);
+    expect(fotoMuyChica({ w: 600, h: 450 })).toBe(false);
+  });
+
+  it("rechaza solo las que no dan un recorte 4:3 de 600×450", () => {
+    expect(fotoMuyChica({ w: 599, h: 2000 })).toBe(true);
+    expect(fotoMuyChica({ w: 2000, h: 449 })).toBe(true);
+    expect(fotoMuyChica({ w: 400, h: 300 })).toBe(true);
+  });
+});
+
+describe("zoomMax", () => {
+  it("deja acercar hasta que el recorte mide 600 px de ancho", () => {
+    // 1200×675: el recorte 4:3 más grande es 900×675 → zoom hasta 1,5.
+    expect(zoomMax({ w: 1200, h: 675 })).toBeCloseTo(1.5);
+    expect(zoomMax({ w: 600, h: 450 })).toBe(1);
+    expect(zoomMax({ w: 6000, h: 4000 })).toBe(ZOOM_MAX);
+  });
+
+  it("zoomear no pasa de ese tope: el recorte nunca queda más chico que 600 px", () => {
+    const img = { w: 1200, h: 675 };
+    const e = zoomear(img, centrar(img), 99);
+    expect(e.zoom).toBeCloseTo(1.5);
+    expect(rectRecorte(img, e).w).toBeCloseTo(600);
   });
 });
