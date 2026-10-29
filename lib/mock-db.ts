@@ -31,6 +31,7 @@ import { generarPassword, type SolicitudAcceso, type SolicitudInput } from "@/li
 import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
+import type { FotoCarrusel } from "@/lib/carrusel";
 import { modoDemo } from "@/lib/entorno";
 
 export type MockFactura = Factura & { operacion_id: string };
@@ -1227,4 +1228,21 @@ export function mockListActividad(filtro: (a: Actividad) => boolean, limite = 20
     .actividad.filter(filtro)
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || Number(b.id) - Number(a.id))
     .slice(0, limite);
+}
+
+// ---- fotos del carrusel de la home (espejo de fotos_carrusel) ---------------
+// Mundial: dos fotos de competición (los partidos las alternan) y una propia de
+// la final. La Libertadores no tiene ninguna: el demo muestra que un evento
+// sin foto no entra. La del superclásico es panorámica a propósito.
+const MOCK_FOTOS_CARRUSEL: FotoCarrusel[] = [
+  { id: "demo-wc-1", competicion: "FIFA World Cup 2026", evento: null, imagen_url: "/carrusel-demo/mundial-1.svg", orden: 0 },
+  { id: "demo-wc-2", competicion: "FIFA World Cup 2026", evento: null, imagen_url: "/carrusel-demo/mundial-2.svg", orden: 1 },
+  { id: "demo-wc-final", competicion: "FIFA World Cup 2026", evento: "Final - FIFA World Cup 2026", imagen_url: "/carrusel-demo/final.svg", orden: 0 },
+  { id: "demo-ucl", competicion: "UEFA Champions League", evento: null, imagen_url: "/carrusel-demo/champions.svg", orden: 0 },
+  { id: "demo-f1", competicion: "Formula 1", evento: null, imagen_url: "/carrusel-demo/f1.svg", orden: 0 },
+  { id: "demo-river-boca", competicion: "Primera División", evento: "River vs Boca - Superclásico", imagen_url: "/carrusel-demo/superclasico.svg", orden: 0 },
+];
+
+export function mockListFotosCarrusel(): FotoCarrusel[] {
+  return MOCK_FOTOS_CARRUSEL.map((f) => ({ ...f }));
 }
