@@ -220,10 +220,10 @@ const en = {
   lp: {
     navIngresar: "Log in",
     heroEyebrow: "Agency access",
-    heroTitle1: "The events everyone",
-    heroTitle2: "wants to be at",
+    heroTitle1: "Sell tickets to the events",
+    heroTitle2: "your travelers want",
     heroP:
-      "Request access to explore the events — World Cup 2026, Euro 2028, Formula 1 and the most wanted matches. Access is by approval.",
+      "Sign in, check availability and price, and build the order. We get the ticket and deliver it to you.",
     irEntradas: "Enter →",
     // bloque de acceso del hero: login + nuevo usuario
     logueadoH: "You're signed in",
@@ -236,10 +236,12 @@ const en = {
     cartelPost: " and we'll send you your access.",
     nuevoBtn: "New user",
     cerrar: "Close",
+    // Registro de operador mayorista (TKT-8): a quién está dirigido el sitio,
+    // sin exclusividad, sin precios y sin prometer lo que el flujo no cumple.
     bullets: [
-      "Curated events from around the world",
-      "A real person on WhatsApp — never a bot",
-      "Members-only access, by approval",
+      "European football, Formula 1, Champions League, World Cup 2026 and shows",
+      "Orders and tracking in one place",
+      "Access for agencies, tour operators, hotels and tourism sellers",
     ],
     comoEyebrow: "Simple",
     comoH2: "How it works",
@@ -658,10 +660,10 @@ const es: typeof en = {
   lp: {
     navIngresar: "Ingresar",
     heroEyebrow: "Acceso agencias",
-    heroTitle1: "Los eventos donde",
-    heroTitle2: "todos quieren estar",
+    heroTitle1: "Vendé entradas a los eventos",
+    heroTitle2: "que tus pasajeros quieren",
     heroP:
-      "Pedí acceso para explorar los eventos — Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados. El acceso es por aprobación.",
+      "Entrás, mirás disponibilidad y precio, y armás el pedido. Nosotros conseguimos la entrada y te la entregamos.",
     irEntradas: "Entrar →",
     logueadoH: "Ya ingresaste",
     irPanel: "Ir al panel →",
@@ -675,10 +677,12 @@ const es: typeof en = {
     cartelPost: " y te enviamos tu acceso.",
     nuevoBtn: "Nuevo usuario",
     cerrar: "Cerrar",
+    // Registro de operador mayorista (TKT-8): a quién está dirigido el sitio,
+    // sin exclusividad, sin precios y sin prometer lo que el flujo no cumple.
     bullets: [
-      "Eventos seleccionados de todo el mundo",
-      "Una persona real por WhatsApp, nunca un bot",
-      "Acceso exclusivo para miembros, por aprobación",
+      "Fútbol europeo, Fórmula 1, Champions, Mundial 2026 y shows",
+      "Pedidos y seguimiento en un solo lugar",
+      "Acceso para agencias, operadores, hoteles y vendedores de turismo",
     ],
     comoEyebrow: "Simple",
     comoH2: "Cómo funciona",
