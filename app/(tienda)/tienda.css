@@ -1531,16 +1531,19 @@ html:has(.lp-modal[open]) { overflow: hidden; }
   transition: transform .14s ease, box-shadow .14s ease;
 }
 .lp-cc:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--cobalt); }
-
-/* Proporción fija: la tarjeta cambia de tamaño pero no de forma. Las fotos
-   llegan encuadradas a 4:3; si alguna no, se ve entera y el sobrante se
-   rellena con la misma foto desenfocada (nunca se recorta). */
-.lp-cc-foto { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--ink); }
-.lp-cc-fondo {
-  position: absolute; inset: -24px; width: calc(100% + 48px); height: calc(100% + 48px);
-  object-fit: cover; filter: blur(22px) brightness(.75);
+/* La tarjeta entera es el botón que abre la solicitud (o el link, con sesión). */
+.lp-cc-accion {
+  flex: 1; display: flex; flex-direction: column; width: 100%; min-width: 0;
+  padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit;
+  text-align: left; text-decoration: none; cursor: pointer;
 }
-.lp-cc-img { position: relative; display: block; width: 100%; height: 100%; object-fit: contain; }
+.lp-cc-accion:focus-visible { outline: 3px solid var(--cobalt); outline-offset: 3px; }
+
+/* Proporción fija, la misma para todas: la tarjeta cambia de tamaño pero no
+   de forma. Las fotos llegan encuadradas a 4:3 desde el panel; cover asegura
+   el mismo recorte aunque alguna no lo esté. */
+.lp-cc-foto { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; background: var(--ink); }
+.lp-cc-img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .lp-cc-stub {
   position: relative; flex: 1; display: flex; align-items: flex-start; gap: 14px;
@@ -1558,13 +1561,12 @@ html:has(.lp-modal[open]) { overflow: hidden; }
   font-family: var(--font-mono), monospace; font-size: 10.5px; font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase; color: var(--cobalt);
 }
-/* Los nombres hacen salto de línea: nunca "…". */
-.lp-cc h3 {
+/* Los nombres hacen salto de línea: nunca "…". Cortan entre palabras (y
+   con guion si una sola no entra), no en cualquier letra. */
+.lp-cc-nombre {
   margin: 0; font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase;
-  font-size: 19px; line-height: 1.05; overflow-wrap: anywhere;
+  font-size: 18px; line-height: 1.05; overflow-wrap: break-word; hyphens: auto;
 }
-.lp-cc-ctx { font-size: 12px; color: var(--ink); }
-.lp-cc-donde { font-size: 12.5px; color: var(--mute); }
 
 /* Cierre del funnel: la última tarjeta lleva a pedir acceso. */
 .lp-cc--cierre {

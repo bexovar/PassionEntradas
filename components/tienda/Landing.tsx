@@ -266,13 +266,9 @@ export function Landing({ carrusel = [] }: { carrusel?: TarjetaCarrusel[] }) {
         </div>
       </section>
 
-      {/* Eventos con foto y sin precio: el cierre de la home. */}
-      <CarruselEventos
-        tarjetas={carrusel}
-        lang={lang}
-        ctaHref={logueado ? "/entradas" : "#solicitar"}
-        ctaLabel={logueado ? lp.irEntradas : lp.nuevoBtn}
-      />
+      {/* Eventos con foto y sin precio, curados en el panel: el cierre de la
+          home. Tocar una tarjeta abre el mismo modal de solicitud. */}
+      <CarruselEventos tarjetas={carrusel} lang={lang} logueado={logueado} onSolicitar={abrirSolicitud} />
 
       <footer className="foot foot--legal">
         <span>TicketMirror</span>

@@ -1,25 +1,28 @@
 "use client";
 
-// Carrusel de eventos de la home: tarjetas tipo ticket (foto arriba, talón
-// perforado abajo) en una pista con scroll-snap. En el celular se desliza con
-// el dedo; en escritorio hay flechas. Sin autoplay. Sin precios: las tarjetas
-// llegan ya recortadas a lo que se muestra (lib/carrusel).
+// Carrusel de eventos de la home (TKT-12): tarjetas tipo ticket (foto 4:3
+// arriba, talón perforado abajo) en una pista con scroll-snap. En el celular
+// se desliza con el dedo; en escritorio hay flechas. Sin autoplay. Curado a
+// mano desde el panel; sin precio, stock ni disponibilidad (lib/carrusel).
+//
+// Tocar una tarjeta abre el modal de solicitud de acceso: el visitante está
+// deslogueado y en el evento no podría ver nada, así que la curiosidad
+// desemboca en el formulario. Con sesión, la tarjeta lleva a la tienda.
 
 import { useEffect, useRef, useState } from "react";
-import { fmtDate, parseTitle } from "@/lib/tickets";
 import { TX, type Lang } from "@/lib/tienda-i18n";
-import type { TarjetaCarrusel } from "@/lib/carrusel";
+import { mesLegible, type TarjetaCarrusel } from "@/lib/carrusel";
 
 export function CarruselEventos({
   tarjetas,
   lang,
-  ctaHref,
-  ctaLabel,
+  logueado,
+  onSolicitar,
 }: {
   tarjetas: TarjetaCarrusel[];
   lang: Lang;
-  ctaHref: string;
-  ctaLabel: string;
+  logueado: boolean;
+  onSolicitar: () => void;
 }) {
   const lp = TX[lang].lp;
   const pista = useRef<HTMLUListElement>(null);
@@ -61,6 +64,20 @@ export function CarruselEventos({
 
   if (tarjetas.length === 0) return null;
 
+  // La tarjeta entera es el botón (o el link, con sesión). Función de render,
+  // no componente: así las tarjetas no se remontan al deslizar.
+  function accion(label: string, children: React.ReactNode) {
+    return logueado ? (
+      <a className="lp-cc-accion" href="/entradas" aria-label={label} data-sin-wa>
+        {children}
+      </a>
+    ) : (
+      <button type="button" className="lp-cc-accion" onClick={onSolicitar} aria-label={label} data-sin-wa>
+        {children}
+      </button>
+    );
+  }
+
   return (
     <section className="block lp-carrusel" aria-roledescription="carousel" aria-label={lp.carruselH2}>
       <div className="section-h lp-carrusel-h">
@@ -80,35 +97,45 @@ export function CarruselEventos({
 
       <ul className="lp-carrusel-pista" ref={pista}>
         {tarjetas.map((t, i) => {
-          const f = fmtDate(t.fecha, lang);
-          const { title, context } = parseTitle(t.evento, t.competicion);
+          const m = mesLegible(t.mes, lang);
+          const label = `${t.nombre} · ${t.categoria} · ${m.completo}. ${logueado ? lp.irEntradas : lp.carruselTocar}`;
           return (
-            <li className="lp-cc" key={t.clave} aria-label={`${i + 1} / ${total}`}>
-              <div className="lp-cc-foto">
-                {/* Fondo: la misma foto desenfocada. Solo se ve si la foto no es 4:3. */}
-                <img className="lp-cc-fondo" src={t.imagen} alt="" aria-hidden loading="lazy" />
-                <img className="lp-cc-img" src={t.imagen} alt={title} loading={i < 3 ? "eager" : "lazy"} />
-              </div>
-              <div className="lp-cc-stub">
-                <div className="cal" aria-label={f.full}>
-                  <b>{f.d}</b>
-                  <span>{f.m}</span>
-                </div>
-                <div className="lp-cc-txt">
-                  <span className="lp-cc-comp">{t.competicion}</span>
-                  <h3>{title}</h3>
-                  {context && <span className="lp-cc-ctx">{context}</span>}
-                  {t.ciudad && <span className="lp-cc-donde">{t.ciudad}</span>}
-                </div>
-              </div>
+            <li className="lp-cc" key={t.id} aria-label={`${i + 1} / ${total}`}>
+              {accion(
+                label,
+                <>
+                  <span className="lp-cc-foto">
+                    {/* Todas recortadas igual (4:3, ya encuadradas en el panel). */}
+                    {t.imagen_url && (
+                      <img className="lp-cc-img" src={t.imagen_url} alt="" loading={i < 3 ? "eager" : "lazy"} />
+                    )}
+                  </span>
+                  <span className="lp-cc-stub">
+                    <span className="cal" aria-hidden>
+                      <b>{m.mes}</b>
+                      <span>{m.anio}</span>
+                    </span>
+                    <span className="lp-cc-txt">
+                      <span className="lp-cc-comp">{t.categoria}</span>
+                      <span className="lp-cc-nombre">{t.nombre}</span>
+                    </span>
+                  </span>
+                </>
+              )}
             </li>
           );
         })}
         <li className="lp-cc lp-cc--cierre">
           <p>{lp.carruselCierre}</p>
-          <a className="btn-primary" href={ctaHref}>
-            {ctaLabel}
-          </a>
+          {logueado ? (
+            <a className="btn-primary" href="/entradas">
+              {lp.irEntradas}
+            </a>
+          ) : (
+            <button type="button" className="btn-primary" onClick={onSolicitar}>
+              {lp.nuevoBtn}
+            </button>
+          )}
         </li>
       </ul>
 

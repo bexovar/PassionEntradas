@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { TAG_CATALOGO } from "@/lib/refrescar-tienda";
 import { esProduccion, modoDemo } from "@/lib/entorno";
-import { fotoCarruselValida, type FotoCarrusel } from "@/lib/carrusel";
+import { tarjetasVisibles, type TarjetaCarrusel } from "@/lib/carrusel";
 import {
   DEFAULT_EUR_USD,
   hoyArgentina,
@@ -156,30 +156,31 @@ async function leerConfigTienda(): Promise<ConfigTienda> {
   }
 }
 
-// Fotos del carrusel de la home (tabla fotos_carrusel, las sube el admin).
-// Si no se pueden leer, el carrusel no se muestra: la home no se rompe por eso.
-export async function fetchFotosCarrusel(): Promise<FotoCarrusel[]> {
+// Carrusel de la home (tabla carrusel_home, lo arma el admin a mano). Si no
+// se puede leer, el carrusel no se muestra: la home no se rompe por eso.
+// Devuelve solo lo que se muestra (lib/carrusel: con foto, sin vencidas, 8).
+export async function fetchCarrusel(): Promise<TarjetaCarrusel[]> {
   if (modoDemo()) {
-    const { mockListFotosCarrusel } = await import("@/lib/mock-db");
-    return mockListFotosCarrusel().filter((f) => fotoCarruselValida(f.imagen_url, true));
+    const { mockListCarrusel } = await import("@/lib/mock-db");
+    return tarjetasVisibles(mockListCarrusel(), hoyArgentina(), true);
   }
   try {
-    return (await fotosCacheadas()).filter((f) => fotoCarruselValida(f.imagen_url));
+    return tarjetasVisibles(await carruselCacheado());
   } catch (err) {
-    console.warn("[tienda] fotos del carrusel no disponibles:", err);
+    console.warn("[tienda] carrusel no disponible:", err);
     return [];
   }
 }
 
-// Misma caché que el catálogo: subir o sacar una foto llama a refrescarTienda().
-const fotosCacheadas = unstable_cache(
-  async (): Promise<FotoCarrusel[]> => {
+// Misma caché que el catálogo: cada cambio del panel llama a refrescarTienda().
+const carruselCacheado = unstable_cache(
+  async (): Promise<TarjetaCarrusel[]> => {
     const { data, error } = await createPublicSupabase()
-      .from("fotos_carrusel")
-      .select("id, competicion, evento, imagen_url, orden");
+      .from("carrusel_home")
+      .select("id, nombre, categoria, mes, imagen_url, orden");
     if (error) throw new Error(error.message);
-    return (data ?? []) as FotoCarrusel[];
+    return (data ?? []) as TarjetaCarrusel[];
   },
-  ["fotos-carrusel-v1"],
+  ["carrusel-home-v1"],
   { revalidate: 300, tags: [TAG_CATALOGO] }
 );

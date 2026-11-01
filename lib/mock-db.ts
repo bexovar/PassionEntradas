@@ -31,7 +31,7 @@ import { generarPassword, type SolicitudAcceso, type SolicitudInput } from "@/li
 import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
-import type { FotoCarrusel } from "@/lib/carrusel";
+import type { DatosTarjeta, TarjetaCarrusel } from "@/lib/carrusel";
 import { modoDemo } from "@/lib/entorno";
 
 export type MockFactura = Factura & { operacion_id: string };
@@ -80,8 +80,8 @@ type MockDB = {
   avisos: AvisoGuardado[];
   // Espejo de la tabla actividad.
   actividad: Actividad[];
-  // Espejo de la tabla fotos_carrusel.
-  fotosCarrusel?: FotoCarrusel[];
+  // Espejo de la tabla carrusel_home.
+  carrusel?: TarjetaCarrusel[];
 };
 
 export type MockUsuario = {
@@ -1232,53 +1232,62 @@ export function mockListActividad(filtro: (a: Actividad) => boolean, limite = 20
     .slice(0, limite);
 }
 
-// ---- fotos del carrusel de la home (espejo de fotos_carrusel) ---------------
-// Mundial: dos fotos de competición (los partidos las alternan) y una propia de
-// la final. La Libertadores no tiene ninguna: el demo muestra que un evento
-// sin foto no entra. La del superclásico es panorámica a propósito.
-const MOCK_FOTOS_CARRUSEL: FotoCarrusel[] = [
-  { id: "demo-wc-1", competicion: "FIFA World Cup 2026", evento: null, imagen_url: "/carrusel-demo/mundial-1.svg", orden: 0 },
-  { id: "demo-wc-2", competicion: "FIFA World Cup 2026", evento: null, imagen_url: "/carrusel-demo/mundial-2.svg", orden: 1 },
-  { id: "demo-wc-final", competicion: "FIFA World Cup 2026", evento: "Final - FIFA World Cup 2026", imagen_url: "/carrusel-demo/final.svg", orden: 0 },
-  { id: "demo-ucl", competicion: "UEFA Champions League", evento: null, imagen_url: "/carrusel-demo/champions.svg", orden: 0 },
-  { id: "demo-f1", competicion: "Formula 1", evento: null, imagen_url: "/carrusel-demo/f1.svg", orden: 0 },
-  { id: "demo-river-boca", competicion: "Primera División", evento: "River vs Boca - Superclásico", imagen_url: "/carrusel-demo/superclasico.svg", orden: 0 },
+// ---- carrusel de la home (espejo de carrusel_home) --------------------------
+// Curado a mano, como en producción. La del show no tiene foto: el demo
+// muestra que una tarjeta sin foto no aparece en la home.
+const MOCK_CARRUSEL: TarjetaCarrusel[] = [
+  { id: "demo-superclasico", nombre: "River vs Boca", categoria: "Fútbol argentino", mes: "2026-11-01", imagen_url: "/carrusel-demo/superclasico.svg", orden: 0 },
+  { id: "demo-libertadores", nombre: "Final de la Copa Libertadores", categoria: "Copa Libertadores", mes: "2026-11-01", imagen_url: "/carrusel-demo/final.svg", orden: 1 },
+  { id: "demo-show", nombre: "Show en el Estadio Monumental", categoria: "Shows", mes: "2026-12-01", imagen_url: null, orden: 2 },
+  { id: "demo-premier", nombre: "Derby de Manchester", categoria: "Premier League", mes: "2027-01-01", imagen_url: "/carrusel-demo/mundial-2.svg", orden: 3 },
+  { id: "demo-clasico", nombre: "Real Madrid vs Barcelona", categoria: "LaLiga", mes: "2027-03-01", imagen_url: "/carrusel-demo/mundial-1.svg", orden: 4 },
+  { id: "demo-ucl", nombre: "Final de la Champions", categoria: "Champions League", mes: "2027-05-01", imagen_url: "/carrusel-demo/champions.svg", orden: 5 },
+  { id: "demo-f1", nombre: "Gran Premio de Mónaco", categoria: "Fórmula 1", mes: "2027-06-01", imagen_url: "/carrusel-demo/f1.svg", orden: 6 },
 ];
 
 // Se siembra al primer uso (y si el hot-reload trae un db de antes del carrusel).
-function fotosCarrusel(): FotoCarrusel[] {
+function carrusel(): TarjetaCarrusel[] {
   const d = db();
-  d.fotosCarrusel ??= MOCK_FOTOS_CARRUSEL.map((f) => ({ ...f }));
-  return d.fotosCarrusel;
+  d.carrusel ??= MOCK_CARRUSEL.map((t) => ({ ...t }));
+  return d.carrusel;
 }
 
-export function mockListFotosCarrusel(): FotoCarrusel[] {
-  return fotosCarrusel().map((f) => ({ ...f }));
+export function mockListCarrusel(): TarjetaCarrusel[] {
+  return carrusel().map((t) => ({ ...t }));
 }
 
-// Va al final de su grupo, como en la API.
-export function mockAddFotoCarrusel(input: Omit<FotoCarrusel, "id" | "orden">): FotoCarrusel {
-  const fotos = fotosCarrusel();
-  const grupo = fotos.filter((f) => f.competicion === input.competicion && f.evento === input.evento);
-  const foto: FotoCarrusel = {
+// Va al final, como en la API.
+export function mockAddTarjetaCarrusel(input: DatosTarjeta & { imagen_url: string | null }): TarjetaCarrusel {
+  const lista = carrusel();
+  const t: TarjetaCarrusel = {
     ...input,
     id: `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-    orden: grupo.reduce((m, f) => Math.max(m, f.orden + 1), 0),
+    orden: lista.reduce((m, x) => Math.max(m, x.orden + 1), 0),
   };
-  fotos.push(foto);
-  return { ...foto };
+  lista.push(t);
+  return { ...t };
 }
 
-export function mockDeleteFotosCarrusel(ids: string[]): FotoCarrusel[] {
+export function mockUpdateTarjetaCarrusel(
+  id: string,
+  cambios: Partial<DatosTarjeta & { imagen_url: string | null }>
+): TarjetaCarrusel | null {
+  const t = carrusel().find((x) => x.id === id);
+  if (!t) return null;
+  Object.assign(t, cambios);
+  return { ...t };
+}
+
+export function mockDeleteCarrusel(ids: string[]): TarjetaCarrusel[] {
   const d = db();
-  const borradas = fotosCarrusel().filter((f) => ids.includes(f.id));
-  d.fotosCarrusel = fotosCarrusel().filter((f) => !ids.includes(f.id));
+  const borradas = carrusel().filter((t) => ids.includes(t.id));
+  d.carrusel = carrusel().filter((t) => !ids.includes(t.id));
   return borradas;
 }
 
-export function mockSetOrdenFotosCarrusel(cambios: { id: string; orden: number }[]): void {
+export function mockSetOrdenCarrusel(cambios: { id: string; orden: number }[]): void {
   for (const c of cambios) {
-    const f = fotosCarrusel().find((x) => x.id === c.id);
-    if (f) f.orden = c.orden;
+    const t = carrusel().find((x) => x.id === c.id);
+    if (t) t.orden = c.orden;
   }
 }

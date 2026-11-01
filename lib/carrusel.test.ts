@@ -1,201 +1,136 @@
 import { describe, expect, it } from "vitest";
 import {
-  eventosCarrusel,
+  estadoTarjeta,
   fotoCarruselValida,
-  grupoValido,
-  panelCarrusel,
+  MAX_CARRUSEL,
+  mesLegible,
+  mesPasado,
   reordenar,
-  type FotoCarrusel,
+  tarjetasVisibles,
+  validarTarjeta,
+  type TarjetaCarrusel,
 } from "./carrusel";
-import { buildEvents, type Ticket } from "./tickets";
 
-// La home es pública: estos tests fijan qué evento entra al carrusel, con qué
-// foto, y que ningún precio se escape en lo que viaja al navegador.
+// La home es pública: estos tests fijan qué tarjeta entra al carrusel y que lo
+// que viaja al navegador no lleva nada de precio, stock ni disponibilidad.
 
-const HOY = "2026-10-29";
+const HOY = "2026-10-31";
+const FOTO = "https://abc.supabase.co/storage/v1/object/public/carrusel/x.webp";
 
-function ticket(evento: string, competicion: string, fecha: string | null, extra: Partial<Ticket> = {}): Ticket {
-  return {
-    id: `${competicion}::${evento}`,
-    evento,
-    competicion,
-    fecha,
-    ciudad: "Estadio, Ciudad (ARG)",
-    categoria: "Cat 1",
-    precio_final: 500,
-    stock: 3,
-    estado: "book",
-    source: "portal",
-    ...extra,
-  } as Ticket;
+function tarjeta(id: string, extra: Partial<TarjetaCarrusel> = {}): TarjetaCarrusel {
+  return { id, nombre: `Evento ${id}`, categoria: "Fútbol", mes: "2026-12-01", imagen_url: FOTO, orden: 0, ...extra };
 }
 
-let n = 0;
-function foto(competicion: string, evento: string | null, orden = 0): FotoCarrusel {
-  n += 1;
-  return { id: `f${n}`, competicion, evento, imagen_url: `/carrusel-demo/${n}.svg`, orden };
-}
-
-const WC = "FIFA World Cup 2026";
-
-describe("eventosCarrusel", () => {
-  it("usa la foto propia del evento antes que las de su competición", () => {
-    const evs = buildEvents([ticket("Final", WC, "2026-12-01")]);
-    const comp = foto(WC, null);
-    const propia = foto(WC, "Final");
-    const [t] = eventosCarrusel(evs, [comp, propia], 12, HOY);
-    expect(t.imagen).toBe(propia.imagen_url);
+describe("tarjetasVisibles", () => {
+  it("van en el orden del panel", () => {
+    const r = tarjetasVisibles([tarjeta("b", { orden: 1 }), tarjeta("a", { orden: 0 }), tarjeta("c", { orden: 2 })], HOY);
+    expect(r.map((t) => t.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("de varias fotos propias muestra la primera según orden", () => {
-    const evs = buildEvents([ticket("Final", WC, "2026-12-01")]);
-    const segunda = foto(WC, "Final", 2);
-    const primera = foto(WC, "Final", 1);
-    expect(eventosCarrusel(evs, [segunda, primera], 12, HOY)[0].imagen).toBe(primera.imagen_url);
+  it("sin foto no hay tarjeta (nada de placeholders)", () => {
+    const r = tarjetasVisibles([tarjeta("a", { imagen_url: null }), tarjeta("b")], HOY);
+    expect(r.map((t) => t.id)).toEqual(["b"]);
   });
 
-  it("deja afuera los eventos sin ninguna foto", () => {
-    const evs = buildEvents([
-      ticket("Con foto", WC, "2026-11-10"),
-      ticket("Sin foto", "Copa Libertadores", "2026-11-11"),
-    ]);
-    const res = eventosCarrusel(evs, [foto(WC, null)], 12, HOY);
-    expect(res.map((t) => t.evento)).toEqual(["Con foto"]);
+  it("una foto que no es de nuestro bucket tampoco cuenta", () => {
+    const r = tarjetasVisibles([tarjeta("a", { imagen_url: "https://otro.com/x.jpg" })], HOY);
+    expect(r).toEqual([]);
   });
 
-  it("reparte las fotos de la competición en orden de fecha: 1, 2, 3, 1, 2", () => {
-    const fechas = ["2026-11-05", "2026-11-01", "2026-11-04", "2026-11-02", "2026-11-03"];
-    const evs = buildEvents(fechas.map((f) => ticket(`Partido ${f}`, WC, f)));
-    const fotos = [foto(WC, null, 0), foto(WC, null, 1), foto(WC, null, 2)];
-    const urls = fotos.map((f) => f.imagen_url);
-    const res = eventosCarrusel(evs, fotos, 12, HOY);
-    expect(res.map((t) => t.imagen)).toEqual([urls[0], urls[1], urls[2], urls[0], urls[1]]);
-    // Determinístico: misma entrada, mismo resultado.
-    expect(eventosCarrusel([...evs].reverse(), [...fotos].reverse(), 12, HOY)).toEqual(res);
+  it("la de un mes que ya pasó no se muestra; la del mes en curso sí", () => {
+    const r = tarjetasVisibles(
+      [tarjeta("vieja", { mes: "2026-09-01" }), tarjeta("este-mes", { mes: "2026-10-01" })],
+      HOY
+    );
+    expect(r.map((t) => t.id)).toEqual(["este-mes"]);
   });
 
-  it("un evento ya pasado no aparece aunque tenga foto", () => {
-    const evs = buildEvents([ticket("Ayer", WC, "2026-10-28"), ticket("Hoy", WC, "2026-10-29")]);
-    const res = eventosCarrusel(evs, [foto(WC, null)], 12, HOY);
-    expect(res.map((t) => t.evento)).toEqual(["Hoy"]);
+  it("como mucho 8", () => {
+    const muchas = Array.from({ length: 11 }, (_, i) => tarjeta(`t${i}`, { orden: i }));
+    expect(tarjetasVisibles(muchas, HOY)).toHaveLength(MAX_CARRUSEL);
   });
 
-  it("ordena por fecha, los sin fecha al final, y corta en max", () => {
-    const evs = buildEvents([
-      ticket("Sin fecha", WC, null),
-      ticket("Tercero", WC, "2026-11-20"),
-      ticket("Primero", WC, "2026-11-01"),
-      ticket("Segundo", WC, "2026-11-10"),
-    ]);
-    const fotos = [foto(WC, null)];
-    expect(eventosCarrusel(evs, fotos, 12, HOY).map((t) => t.evento)).toEqual([
-      "Primero",
-      "Segundo",
-      "Tercero",
-      "Sin fecha",
-    ]);
-    expect(eventosCarrusel(evs, fotos, 2, HOY).map((t) => t.evento)).toEqual(["Primero", "Segundo"]);
+  it("lo que viaja es solo lo que muestra la tarjeta", () => {
+    const [t] = tarjetasVisibles([tarjeta("a")], HOY);
+    expect(Object.keys(t).sort()).toEqual(["categoria", "id", "imagen_url", "mes", "nombre", "orden"]);
+    expect(JSON.stringify(t)).not.toMatch(/precio|stock|dispon/i);
   });
+});
 
-  it("ninguna tarjeta lleva precio ni stock", () => {
-    const evs = buildEvents([ticket("Final", WC, "2026-12-01", { precio_final: 987654, stock: 7 })]);
-    const res = eventosCarrusel(evs, [foto(WC, null)], 12, HOY);
-    expect(Object.keys(res[0]).sort()).toEqual(["ciudad", "clave", "competicion", "evento", "fecha", "imagen"]);
-    expect(JSON.stringify(res)).not.toMatch(/987654|precio|price|stock/i);
+describe("estadoTarjeta (lo que ve el panel)", () => {
+  it("dice por qué no se muestra", () => {
+    expect(estadoTarjeta(tarjeta("a"), HOY)).toBe("visible");
+    expect(estadoTarjeta(tarjeta("a", { imagen_url: null }), HOY)).toBe("sin_foto");
+    expect(estadoTarjeta(tarjeta("a", { mes: "2026-01-01" }), HOY)).toBe("vencida");
+  });
+});
+
+describe("mesPasado", () => {
+  it("compara por mes, no por día", () => {
+    expect(mesPasado("2026-10-01", "2026-10-31")).toBe(false);
+    expect(mesPasado("2026-09-01", "2026-10-01")).toBe(true);
+    expect(mesPasado("2027-01-01", "2026-12-31")).toBe(false);
   });
 });
 
 describe("fotoCarruselValida", () => {
-  const BUCKET = "https://abc123.supabase.co/storage/v1/object/public/carrusel/wc/1.webp";
-
-  it("acepta solo nuestro bucket `carrusel`", () => {
-    expect(fotoCarruselValida(BUCKET)).toBe(BUCKET);
-    expect(fotoCarruselValida("https://abc123.supabase.co/storage/v1/object/public/mapas/x.png")).toBeNull();
-    expect(fotoCarruselValida("https://otro-sitio.com/foto.jpg")).toBeNull();
+  it("solo nuestro bucket", () => {
+    expect(fotoCarruselValida(FOTO)).toBe(FOTO);
+    expect(fotoCarruselValida("https://abc.supabase.co/storage/v1/object/public/mapas/x.webp")).toBeNull();
     expect(fotoCarruselValida("javascript:alert(1)")).toBeNull();
     expect(fotoCarruselValida(null)).toBeNull();
   });
 
-  it("las fotos de muestra valen solo en el demo", () => {
-    expect(fotoCarruselValida("/carrusel-demo/mundial-1.svg", true)).toBe("/carrusel-demo/mundial-1.svg");
-    expect(fotoCarruselValida("/carrusel-demo/mundial-1.svg")).toBeNull();
+  it("en el demo, también las de muestra", () => {
+    expect(fotoCarruselValida("/carrusel-demo/f1.svg", true)).toBe("/carrusel-demo/f1.svg");
+    expect(fotoCarruselValida("/carrusel-demo/f1.svg")).toBeNull();
     expect(fotoCarruselValida("/carrusel-demo/../secreto", true)).toBeNull();
-    expect(fotoCarruselValida("data:image/webp;base64,AAAA", true)).toBe("data:image/webp;base64,AAAA");
-    expect(fotoCarruselValida("data:image/webp;base64,AAAA")).toBeNull();
-  });
-});
-
-describe("panelCarrusel", () => {
-  const ev = (comp: string, evento: string, fecha: string | null) => ({ comp, evento, fecha });
-
-  it("agrupa por competición y marca de dónde sale la foto de cada evento", () => {
-    const eventos = [
-      ev(WC, "Final", "2026-12-13"),
-      ev(WC, "México vs Sudáfrica", "2026-11-11"),
-      ev("Formula 1", "GP de Monza", "2026-12-28"),
-    ];
-    const comp = foto(WC, null);
-    const propia = foto(WC, "Final");
-    const { competiciones, vencidas } = panelCarrusel(eventos, [comp, propia], HOY);
-
-    expect(competiciones.map((c) => c.competicion)).toEqual(["FIFA World Cup 2026", "Formula 1"]);
-    const wc = competiciones[0];
-    expect(wc.fotos).toEqual([comp]);
-    // Por fecha: primero el más cercano.
-    expect(wc.eventos.map((e) => [e.evento, e.estado])).toEqual([
-      ["México vs Sudáfrica", "competicion"],
-      ["Final", "propias"],
-    ]);
-    expect(wc.eventos[1].fotos).toEqual([propia]);
-    expect(competiciones[1].eventos[0].estado).toBe("sin_foto");
-    expect(vencidas).toEqual([]);
-  });
-
-  it("las fotos de un evento que ya no está (o ya pasó) van a vencidas; las de competición no vencen", () => {
-    const eventos = [ev(WC, "Ayer", "2026-10-28"), ev(WC, "Mañana", "2026-10-30")];
-    const deAyer = foto(WC, "Ayer");
-    const deUnoQueSalio = foto(WC, "Ya no está");
-    const comp = foto("Copa Libertadores", null);
-    const { competiciones, vencidas } = panelCarrusel(eventos, [deAyer, deUnoQueSalio, comp], HOY);
-    expect(vencidas).toEqual([deAyer, deUnoQueSalio]);
-    // La competición sin eventos sigue en el panel por sus fotos.
-    expect(competiciones.map((c) => c.competicion)).toEqual(["Copa Libertadores", WC]);
-    expect(competiciones[1].eventos.map((e) => e.evento)).toEqual(["Mañana"]);
   });
 });
 
 describe("reordenar", () => {
-  it("cambia de lugar con la vecina dentro del mismo grupo y renumera", () => {
-    const a = foto(WC, null, 0);
-    const b = foto(WC, null, 1);
-    const c = foto(WC, null, 2);
-    const otra = foto(WC, "Final", 0);
-    expect(reordenar([c, otra, a, b], c.id, -1)).toEqual([
-      { id: a.id, orden: 0 },
-      { id: c.id, orden: 1 },
-      { id: b.id, orden: 2 },
+  const lista = [tarjeta("a", { orden: 0 }), tarjeta("b", { orden: 1 }), tarjeta("c", { orden: 2 })];
+
+  it("sube y baja una tarjeta", () => {
+    expect(reordenar(lista, "b", -1)).toEqual([
+      { id: "b", orden: 0 },
+      { id: "a", orden: 1 },
+      { id: "c", orden: 2 },
     ]);
+    expect(reordenar(lista, "b", 1)?.map((c) => c.id)).toEqual(["a", "c", "b"]);
   });
 
-  it("no hace nada en los bordes ni con un id que no existe", () => {
-    const a = foto(WC, null, 0);
-    const b = foto(WC, null, 1);
-    expect(reordenar([a, b], a.id, -1)).toBeNull();
-    expect(reordenar([a, b], b.id, 1)).toBeNull();
-    expect(reordenar([a, b], "nope", 1)).toBeNull();
+  it("no se sale de la lista", () => {
+    expect(reordenar(lista, "a", -1)).toBeNull();
+    expect(reordenar(lista, "c", 1)).toBeNull();
+    expect(reordenar(lista, "zz", 1)).toBeNull();
   });
 });
 
-describe("grupoValido", () => {
-  it("limpia espacios y deja evento en null si viene vacío", () => {
-    expect(grupoValido("  FIFA World Cup 2026 ", "")).toEqual({ competicion: WC, evento: null });
-    expect(grupoValido(WC, " Final ")).toEqual({ competicion: WC, evento: "Final" });
+describe("validarTarjeta", () => {
+  it("limpia y lleva el mes al día 1", () => {
+    expect(validarTarjeta({ nombre: "  Final   Mundial ", categoria: "Mundial 2026", mes: "2026-07" })).toEqual({
+      ok: true,
+      value: { nombre: "Final Mundial", categoria: "Mundial 2026", mes: "2026-07-01" },
+    });
+    expect(validarTarjeta({ nombre: "GP Monza", categoria: "Fórmula 1", mes: "2026-09-06" })).toMatchObject({
+      ok: true,
+      value: { mes: "2026-09-01" },
+    });
   });
 
-  it("rechaza competición vacía, tipos raros o textos larguísimos", () => {
-    expect(grupoValido("", null)).toBeNull();
-    expect(grupoValido(42, null)).toBeNull();
-    expect(grupoValido(WC, 7)).toBeNull();
-    expect(grupoValido("x".repeat(201), null)).toBeNull();
+  it("pide lo que falta", () => {
+    expect(validarTarjeta({ nombre: "", categoria: "x", mes: "2026-07" })).toMatchObject({ ok: false });
+    expect(validarTarjeta({ nombre: "x", categoria: " ", mes: "2026-07" })).toMatchObject({ ok: false });
+    expect(validarTarjeta({ nombre: "x", categoria: "y", mes: "2026-13" })).toMatchObject({ ok: false });
+    expect(validarTarjeta({ nombre: "x", categoria: "y", mes: "julio" })).toMatchObject({ ok: false });
+    expect(validarTarjeta({ nombre: "x".repeat(200), categoria: "y", mes: "2026-07" })).toMatchObject({ ok: false });
+  });
+});
+
+describe("mesLegible", () => {
+  it("mes y año, sin correrse de mes", () => {
+    expect(mesLegible("2026-11-01")).toEqual({ mes: "NOV", anio: "2026", completo: "Noviembre 2026" });
+    expect(mesLegible("2026-01-01", "en")).toEqual({ mes: "JAN", anio: "2026", completo: "January 2026" });
   });
 });
