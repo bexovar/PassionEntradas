@@ -75,6 +75,17 @@ export default function AppHeader({ subtitle, email, nav = false }: Props) {
           >
             Tienda ↗
           </a>
+          {/* La home pública, también en pestaña nueva: de ahí se copia el
+              link de solicitud para mandárselo a alguien. */}
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Home pública (link de solicitud de acceso)"
+            className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-xl border border-white/15 bg-white/5 px-3.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/15 md:h-9"
+          >
+            Home ↗
+          </a>
           {/* Avisos del equipo (pedidos nuevos, recordatorios…). */}
           <CampanaEquipo />
           <Link

@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { getRol } from "@/lib/auth";
-import { decidirRuteo } from "@/lib/ruteo";
+import { decidirRuteo, destinoTrasLogin, loginConRetorno, PARAM_RETORNO, zonaDe } from "@/lib/ruteo";
 import { sesionCaida } from "@/lib/sesion";
 import { usuarioDeClaims, type UsuarioDeClaims } from "@/lib/claims";
 import { modoDemo } from "@/lib/entorno";
@@ -14,7 +14,8 @@ import { modoDemo } from "@/lib/entorno";
 // - /entradas y /buscar (la tienda): staff o CLIENTE aprobado. Anónimo -> al
 //   login de cliente (/ingresar). La tienda dejó de ser pública.
 // - Sesión SIN rol: no es de nadie, se corta y afuera.
-// - La landing (/) es pública, pero al staff lo manda a su panel.
+// - La landing (/) es pública; también la ve el staff (para pasar el link de
+//   solicitud).
 //
 // La REGLA en sí (qué rol va a dónde) vive en lib/ruteo.ts, pura y con tests:
 // es lo que sostiene los permisos del sitio, y acá no se puede verificar — el
@@ -28,9 +29,13 @@ export async function middleware(request: NextRequest) {
   // cualquier redirect porque redirectTo las tiene que arrastrar.
   let response = NextResponse.next({ request });
 
-  function redirectTo(pathname: string) {
+  // `destino` puede traer query (el ?next= del login); la query del pedido
+  // original no se arrastra.
+  function redirectTo(destino: string) {
     const url = request.nextUrl.clone();
+    const [pathname, query] = destino.split("?");
     url.pathname = pathname;
+    url.search = query ? `?${query}` : "";
     const redirect = NextResponse.redirect(url);
     // Un NextResponse.redirect nuevo NO hereda nada de `response`. Si se
     // devuelve pelado, el Set-Cookie que borra la sesión muerta nunca llega al
@@ -126,7 +131,7 @@ export async function middleware(request: NextRequest) {
   // cambio de rol o un "desactivar" de Equipo todavía no está ahí. Para dejar
   // pasar alcanza (la página revalida); para SACAR a alguien de donde está
   // (redirect, cerrar sesión) se confirma con Auth primero. Es raro: el staff
-  // entrando a la landing o a un login, un rol que cambió.
+  // entrando a un login, un rol que cambió.
   if (user && !verificado && decision.accion !== "seguir") {
     const r = await supabase.auth.getUser();
     if (sesionCaida(r.error)) {
@@ -153,6 +158,15 @@ export async function middleware(request: NextRequest) {
     return redirectTo(decision.a);
   }
   if (decision.accion === "redirigir") {
+    // Sin sesión, al login con el link pedido: al ingresar vuelve ahí.
+    if (!user && decision.a === "/ingresar") {
+      return redirectTo(loginConRetorno(path + request.nextUrl.search));
+    }
+    // Ya logueado en el login: al link que traía (si es seguro) o a su inicio.
+    if (user && zonaDe(path) === "login") {
+      const rol = getRol(user as User);
+      return redirectTo(destinoTrasLogin(rol, request.nextUrl.searchParams.get(PARAM_RETORNO)));
+    }
     return redirectTo(decision.a);
   }
 
@@ -161,8 +175,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // La raíz entra al matcher solo para mandar al staff a su panel; el
-    // anónimo y el cliente siguen viendo la landing estática.
+    // La raíz entra al matcher para cerrar la sesión que no es de nadie; el
+    // resto sigue viendo la landing estática.
     "/",
     "/admin/:path*",
     "/moderador/:path*",

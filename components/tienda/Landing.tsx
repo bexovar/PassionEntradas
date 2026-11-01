@@ -9,6 +9,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { esStaff, getRol, type Rol } from "@/lib/auth";
+import { inicioDe } from "@/lib/ruteo";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { PAISES, PAIS_DEFAULT, dialDe, nombrePais } from "@/lib/paises";
 import { LegalLinks } from "@/components/tienda/LegalLinks";
@@ -16,15 +18,17 @@ import { LoginForm } from "@/components/tienda/LoginForm";
 
 // La landing es estática, pero si el visitante ya tiene sesión mostramos
 // accesos de logueado (Mi cuenta / Ver entradas) en vez de "Ingresar". Se
-// chequea en el cliente para no volver dinámica toda la página.
-function useLogueado(): boolean {
-  const [logueado, setLogueado] = useState(false);
+// chequea en el cliente para no volver dinámica toda la página. Devuelve el
+// rol (null = visitante): el staff ve el acceso a su panel y el link de
+// solicitud para copiar.
+function useRolSesion(): Rol | null {
+  const [rol, setRol] = useState<Rol | null>(null);
   useEffect(() => {
     let vivo = true;
     (async () => {
       try {
         const { data } = await createClient().auth.getSession();
-        if (vivo) setLogueado(!!data.session);
+        if (vivo && data.session) setRol(getRol(data.session.user));
       } catch {
         /* sin cliente / sin sesión: se queda como visitante */
       }
@@ -33,7 +37,37 @@ function useLogueado(): boolean {
       vivo = false;
     };
   }, []);
-  return logueado;
+  return rol;
+}
+
+// "Copiar link de solicitud": el admin se lo manda a quien quiere sumar. El
+// link abre la home con el formulario ya abierto (/#solicitar).
+function CopiarLinkSolicitud({ lang }: { lang: Lang }) {
+  const lp = TX[lang].lp;
+  const [copiado, setCopiado] = useState(false);
+  const link = typeof window === "undefined" ? "/#solicitar" : `${window.location.origin}/#solicitar`;
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    } catch {
+      /* sin portapapeles: queda el link visible para copiarlo a mano */
+    }
+  }
+  return (
+    <div className="lp-copiar">
+      <button type="button" className="btn-ghost lp-nuevo-btn" onClick={copiar}>
+        {copiado ? lp.linkCopiado : lp.copiarLink}
+      </button>
+      <a className="lp-copiar-link" href="/#solicitar">
+        {link}
+      </a>
+      <span className="lp-sr" role="status">
+        {copiado ? lp.linkCopiado : ""}
+      </span>
+    </div>
+  );
 }
 
 function useLang() {
@@ -71,17 +105,22 @@ type Estado = "idle" | "sending" | "ok" | "error";
 export function Landing() {
   const [lang, setLang] = useLang();
   const lp = TX[lang].lp;
-  const logueado = useLogueado();
+  const rol = useRolSesion();
+  const logueado = rol != null;
 
   const emailRef = useRef<HTMLInputElement>(null);
   // <dialog> nativo: showModal() trae gratis el foco atrapado, el Esc y el
   // fondo inerte. Queda siempre montado, así cerrarlo sin querer no borra lo
   // que el usuario ya había completado.
   const modalRef = useRef<HTMLDialogElement>(null);
+  // Quién abrió el modal, para devolverle el foco al cerrar (X, Esc o click
+  // afuera).
+  const abridorRef = useRef<HTMLElement | null>(null);
 
   function abrirSolicitud() {
     const m = modalRef.current;
     if (!m || m.open) return;
+    abridorRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     m.showModal();
     // showModal enfoca la ×; arrancar en el primer campo es lo que se espera.
     m.querySelector<HTMLInputElement>("input[name=nombre]")?.focus();
@@ -148,9 +187,19 @@ export function Landing() {
             {logueado ? (
               <div className="lp-auth-card">
                 <h2 className="lp-auth-title">{lp.logueadoH}</h2>
-                <Link className="btn-primary lp-submit" href="/entradas">
-                  {lp.irEntradas}
-                </Link>
+                {esStaff(rol) ? (
+                  <>
+                    {/* Carga completa: el panel trae su propio CSS. */}
+                    <a className="btn-primary lp-submit" href={inicioDe(rol)}>
+                      {lp.irPanel}
+                    </a>
+                    <CopiarLinkSolicitud lang={lang} />
+                  </>
+                ) : (
+                  <Link className="btn-primary lp-submit" href="/entradas">
+                    {lp.irEntradas}
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="lp-auth-card lp-acceso">
@@ -178,6 +227,10 @@ export function Landing() {
         ref={modalRef}
         className="lp-modal"
         aria-label={lp.formTitle}
+        onClose={() => {
+          abridorRef.current?.focus();
+          abridorRef.current = null;
+        }}
         // Click en el fondo (fuera de la tarjeta) cierra, como el Esc.
         onClick={(e) => {
           if (e.target === e.currentTarget) e.currentTarget.close();

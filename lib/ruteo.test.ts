@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidirRuteo, inicioDe, zonaDe } from "./ruteo";
+import { decidirRuteo, destinoTrasLogin, inicioDe, loginConRetorno, retornoSeguro, zonaDe } from "./ruteo";
 
 // Estos tests son los permisos del sitio. En el modo demo la autenticación se
 // saltea entera, así que es el único lugar donde esto se puede verificar.
@@ -114,15 +114,13 @@ describe("administrador", () => {
   });
 });
 
-describe("el staff no aterriza en la tienda", () => {
-  it("entrando por la raíz va derecho a su panel", () => {
-    // Era el motivo por el que un admin terminaba en la tienda: entraba por
-    // la raíz, que no estaba en el matcher.
-    expect(ir("/", "administrador")).toEqual({ accion: "redirigir", a: "/admin" });
-    expect(ir("/", "moderador")).toEqual({ accion: "redirigir", a: "/moderador" });
+describe("el staff y la landing", () => {
+  it("puede abrir la home pública (para copiar el link de solicitud)", () => {
+    expect(ir("/", "administrador")).toEqual({ accion: "seguir" });
+    expect(ir("/", "moderador")).toEqual({ accion: "seguir" });
   });
 
-  it("y desde el login también", () => {
+  it("desde el login va a su panel", () => {
     expect(ir("/ingresar", "administrador")).toEqual({ accion: "redirigir", a: "/admin" });
     expect(ir("/admin/login", "moderador")).toEqual({ accion: "redirigir", a: "/moderador" });
   });
@@ -134,5 +132,37 @@ describe("inicioDe", () => {
     expect(inicioDe("moderador")).toBe("/moderador");
     expect(inicioDe("cliente")).toBe("/entradas");
     expect(inicioDe(null)).toBe("/entradas");
+  });
+});
+
+describe("volver al link profundo", () => {
+  it("el login lleva el link pedido", () => {
+    expect(loginConRetorno("/buscar?q=river boca")).toBe("/ingresar?next=%2Fbuscar%3Fq%3Driver%20boca");
+  });
+
+  it("vuelve al link si el rol puede entrar", () => {
+    expect(retornoSeguro("/buscar?q=x", "cliente")).toBe("/buscar?q=x");
+    expect(retornoSeguro("/mis-pedidos#P-12", "cliente")).toBe("/mis-pedidos#P-12");
+    expect(retornoSeguro("/admin/solicitudes", "administrador")).toBe("/admin/solicitudes");
+  });
+
+  it("no sigue links a otro sitio (redirect abierto)", () => {
+    expect(retornoSeguro("https://malo.com", "cliente")).toBeNull();
+    expect(retornoSeguro("//malo.com/x", "cliente")).toBeNull();
+    expect(retornoSeguro("/\\malo.com", "cliente")).toBeNull();
+    expect(retornoSeguro("javascript:alert(1)", "cliente")).toBeNull();
+  });
+
+  it("no manda a donde el rol no entra, ni a otro login", () => {
+    expect(retornoSeguro("/admin", "cliente")).toBeNull();
+    expect(retornoSeguro("/admin/equipo", "moderador")).toBeNull();
+    expect(retornoSeguro("/ingresar", "cliente")).toBeNull();
+  });
+
+  it("sin link (o con uno que no sirve) va a su inicio", () => {
+    expect(destinoTrasLogin("cliente")).toBe("/entradas");
+    expect(destinoTrasLogin("administrador", null)).toBe("/admin");
+    expect(destinoTrasLogin("cliente", "/admin")).toBe("/entradas");
+    expect(destinoTrasLogin("cliente", "/buscar?q=f1")).toBe("/buscar?q=f1");
   });
 });

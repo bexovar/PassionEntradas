@@ -817,13 +817,16 @@
 }
 
 .lp-field { display: grid; gap: 6px; }
-.lp-field > span {
+.lp-field > span,
+.lp-field > label {
   font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .1em; color: var(--mute);
 }
+/* 16px como mínimo en todo lo que se tipea: con menos, iOS hace zoom al tocar
+   el campo. */
 .lp-field input,
 .lp-field textarea {
-  font-family: var(--font-spline), system-ui, sans-serif; font-size: 15px; color: var(--ink);
+  font-family: var(--font-spline), system-ui, sans-serif; font-size: 16px; color: var(--ink);
   background: #fff; border: 1.5px solid var(--ink); padding: 11px 12px; width: 100%;
   transition: .12s; resize: vertical;
 }
@@ -831,11 +834,25 @@
 .lp-field textarea:focus {
   outline: none; border-color: var(--cobalt); box-shadow: 0 0 0 3px #1f33e022;
 }
+.lp-field input[aria-invalid="true"] { border-color: var(--flare); }
+.lp-field-err { font-size: 13px; font-weight: 600; color: var(--flare); }
+
+/* Contraseña con "Mostrar / Ocultar" adentro del campo. */
+.lp-pass { position: relative; }
+.lp-pass input { padding-right: 88px; }
+.lp-pass-ver {
+  position: absolute; top: 0; right: 0; bottom: 0; min-width: 80px; padding: 0 12px;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--cobalt);
+}
+.lp-pass-ver:hover { color: var(--cobalt-d); }
+.lp-pass-ver:focus-visible { outline: 2px solid var(--cobalt); outline-offset: -4px; }
 
 /* Teléfono: selector de código de país + número. */
 .lp-tel { display: grid; grid-template-columns: minmax(0, 44%) 1fr; gap: 8px; }
 .lp-tel-cod {
-  font-family: var(--font-spline), system-ui, sans-serif; font-size: 15px; color: var(--ink);
+  font-family: var(--font-spline), system-ui, sans-serif; font-size: 16px; color: var(--ink);
   background: #fff; border: 1.5px solid var(--ink); padding: 11px 8px 11px 12px; width: 100%;
   transition: .12s; text-overflow: ellipsis;
 }
@@ -915,6 +932,17 @@
 }
 .lp-cartel-link:hover { color: var(--cobalt-d); }
 .lp-nuevo-btn { display: block; width: 100%; text-align: center; cursor: pointer; }
+
+/* Staff en la home: el link de solicitud, para copiarlo y mandarlo. */
+.lp-copiar { margin-top: 14px; display: grid; gap: 8px; }
+.lp-copiar-link {
+  font-family: var(--font-mono), monospace; font-size: 12px; color: var(--mute);
+  word-break: break-all; text-align: center;
+}
+.lp-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
 
 /* Solicitud de acceso en modal (<dialog> nativo). La tarjeta es el .lp-form. */
 .lp-modal {
