@@ -220,7 +220,7 @@ export function LoginForm({
             <span>{a.remember}</span>
           </label>
 
-          <button className="btn-primary lp-submit" type="submit" disabled={loading} aria-busy={loading}>
+          <button className="btn-primary lp-submit" type="submit" disabled={loading} aria-busy={loading} data-sin-wa>
             {loading ? a.entering : a.enter}
           </button>
 

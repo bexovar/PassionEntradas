@@ -190,13 +190,13 @@ export function Landing() {
                 {esStaff(rol) ? (
                   <>
                     {/* Carga completa: el panel trae su propio CSS. */}
-                    <a className="btn-primary lp-submit" href={inicioDe(rol)}>
+                    <a className="btn-primary lp-submit" href={inicioDe(rol)} data-sin-wa>
                       {lp.irPanel}
                     </a>
                     <CopiarLinkSolicitud lang={lang} />
                   </>
                 ) : (
-                  <Link className="btn-primary lp-submit" href="/entradas">
+                  <Link className="btn-primary lp-submit" href="/entradas" data-sin-wa>
                     {lp.irEntradas}
                   </Link>
                 )}
@@ -206,14 +206,14 @@ export function Landing() {
                 <LoginForm lang={lang} titulo="h2" emailRef={emailRef} />
                 <div className="lp-nuevo">
                   <h3>{lp.nuevoH}</h3>
-                  <p className="lp-cartel">
+                  <p className="lp-cartel" data-sin-wa>
                     {lp.cartelPre}
                     <button type="button" className="lp-cartel-link" onClick={abrirSolicitud}>
                       {lp.cartelLink}
                     </button>
                     {lp.cartelPost}
                   </p>
-                  <button type="button" className="btn-ghost lp-nuevo-btn" onClick={abrirSolicitud}>
+                  <button type="button" className="btn-ghost lp-nuevo-btn" onClick={abrirSolicitud} data-sin-wa>
                     {lp.nuevoBtn}
                   </button>
                 </div>
@@ -469,6 +469,7 @@ function SolicitudForm({ lang }: { lang: Lang }) {
         className="btn-primary lp-submit"
         type="submit"
         disabled={estado === "sending" || !acepto}
+        data-sin-wa
       >
         {estado === "sending" ? lp.enviando : lp.enviar}
       </button>

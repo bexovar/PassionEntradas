@@ -16,6 +16,7 @@ import { formatMonto, pasosCliente, type EstadoPublico, type Moneda } from "@/li
 import { waLink } from "@/lib/tickets";
 import { tiempoRestante } from "@/lib/cotizaciones";
 import { fechaDia, fechaHora } from "@/lib/fechas";
+import { useContextoWhatsApp } from "@/components/WhatsAppFlotante";
 
 export type PedidoView = {
   id: string;
@@ -127,6 +128,9 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
   const router = useRouter();
   const [cancelando, setCancelando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Con un solo pedido, el WhatsApp flotante ya sale con su número; con
+  // varios no sabemos por cuál pregunta y va el mensaje general.
+  useContextoWhatsApp(pedidos.length === 1 ? { tipo: "pedido", codigo: pedidos[0].code } : null);
 
   // Aceptar o rechazar la cotización. Aceptar crea el pedido: se confirma
   // en el mismo botón, igual que cancelar.

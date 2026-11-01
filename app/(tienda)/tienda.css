@@ -472,7 +472,7 @@
   border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
   font-weight: 700; font-size: 15px; transition: transform .12s, box-shadow .12s;
 }
-/* Más específico que .empty (gris y mono): mismo verde/tinta que .wa-float. */
+/* Más específico que .empty (gris y mono): mismo verde/tinta que el WhatsApp flotante. */
 .empty .empty-wa { color: #06310f; font-family: var(--font-body), sans-serif; font-weight: 800; }
 .empty-wa svg { width: 20px; height: 20px; }
 .empty-wa:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
@@ -581,66 +581,6 @@
 }
 .cta-band h2 { font-family: var(--font-body), sans-serif; font-weight: 900; text-transform: uppercase; font-size: 24px; margin: 0 0 4px; }
 .cta-band p { margin: 0; color: #c9ccd6; font-size: 14px; }
-
-/* WhatsApp flotante: botón + panel de agentes */
-.wa-widget {
-  /* bottom respeta el home indicator de iOS (safe area) */
-  position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 50;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
-}
-.wa-float {
-  background: #25d366; color: #06310f; cursor: pointer;
-  font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: .03em;
-  padding: 13px 18px; text-decoration: none; border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
-  transition: .12s;
-}
-.wa-float:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
-
-.wa-panel {
-  width: min(290px, calc(100vw - 36px));
-  background: var(--field); border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
-  animation: rise .25s cubic-bezier(.2,.7,.2,1) both;
-}
-.wa-panel-head { padding: 13px 15px 11px; border-bottom: 1px solid var(--hair); }
-.wa-panel-title {
-  margin: 0; font-family: var(--font-body), sans-serif; font-weight: 900;
-  text-transform: uppercase; font-size: 13px; letter-spacing: .02em;
-}
-.wa-panel-sub { margin: 3px 0 0; font-size: 11px; color: var(--mute); }
-.wa-agente {
-  display: flex; align-items: center; gap: 10px; padding: 11px 15px;
-  border-bottom: 1px solid var(--hair);
-}
-.wa-agente:last-child { border-bottom: none; }
-.wa-avatar {
-  width: 34px; height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-body), sans-serif; font-weight: 900; font-size: 14px; color: #fff;
-  border: 1.5px solid var(--ink);
-}
-.wa-avatar--a { background: var(--cobalt); }
-.wa-avatar--b { background: var(--flare); }
-.wa-agente-info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.wa-agente-nombre { font-family: var(--font-body), sans-serif; font-weight: 800; font-size: 13px; }
-.wa-agente-estado {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--font-mono), monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
-  transition: color .3s;
-}
-.wa-agente-estado i { width: 7px; height: 7px; border-radius: 50%; transition: background .3s; }
-.wa-agente-estado.on { color: var(--ok); }
-.wa-agente-estado.on i { background: var(--ok); animation: wa-pulso 1.6s ease-in-out infinite; }
-.wa-agente-estado.off { color: var(--mute); }
-.wa-agente-estado.off i { background: #b07a14; animation: none; }
-.wa-agente-btn {
-  flex-shrink: 0; background: #25d366; color: #06310f; border: 1px solid var(--ink);
-  font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; text-transform: uppercase;
-  padding: 7px 12px; transition: .12s;
-}
-.wa-agente-btn:hover { background: #1fba58; }
-@keyframes wa-pulso {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(31, 138, 76, .45); }
-  50% { box-shadow: 0 0 0 4px rgba(31, 138, 76, 0); }
-}
 
 /* ============ admin ============ */
 .admin-login { max-width: 420px; margin: 60px auto; text-align: center; }
@@ -932,6 +872,9 @@
 }
 .lp-cartel-link:hover { color: var(--cobalt-d); }
 .lp-nuevo-btn { display: block; width: 100%; text-align: center; cursor: pointer; }
+
+/* El WhatsApp flotante (56px + margen) no tapa los links legales del pie. */
+.foot--legal { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 
 /* Staff en la home: el link de solicitud, para copiarlo y mandarlo. */
 .lp-copiar { margin-top: 14px; display: grid; gap: 8px; }

@@ -46,7 +46,7 @@ const en = {
   porque: [
     ["Real stock", "We sync availability and prices every few minutes: what you see is what there is."],
     ["Clear pricing", "No surprises: all prices are in US dollars (USD)."],
-    ["Direct service", "You talk to a person on WhatsApp, not a bot."],
+    ["Direct service", "Message us on WhatsApp from any screen and our team answers."],
   ] as [string, string][],
   faqs: [
     [
@@ -108,16 +108,6 @@ const en = {
   msgConsultarRank: (evento: string, link: string) =>
     `Hi! Asking about ${evento}. Can you get it?\n${link}`,
   msgBuscoEvento: "Hi! I'm looking for an event that isn't on the site.",
-
-  // widget de WhatsApp (agentes)
-  waTitle: "Talk to our team",
-  waSubtitle: "Real people, replies in minutes",
-  waDisponible: "Available now",
-  waOcupado: "With a customer",
-  waChat: "Chat",
-  // Un solo contacto y sin nombre propio: quién atiende es asunto del equipo.
-  waAgenteNombre: "Agent",
-  waAgenteMsg: (agente: string) => `Hi ${agente}! I'd like to ask about tickets.`,
 
   // catálogo
   fCategoria: "Category",
@@ -501,7 +491,7 @@ const es: typeof en = {
   porque: [
     ["Stock real", "Sincronizamos disponibilidad y precios cada pocos minutos: lo que ves es lo que hay."],
     ["Precio claro", "Sin sorpresas: todos los precios están en dólares (USD)."],
-    ["Atención directa", "Hablás con una persona por WhatsApp, no con un bot."],
+    ["Atención directa", "Nos escribís por WhatsApp desde cualquier pantalla y te responde el equipo."],
   ],
   faqs: [
     [
@@ -559,14 +549,6 @@ const es: typeof en = {
   msgConsultarRank: (evento, link) =>
     `Hola! Consulto por ${evento}. ¿Se puede conseguir?\n${link}`,
   msgBuscoEvento: "Hola! Busco un evento que no aparece en la web.",
-
-  waTitle: "Hablá con el equipo",
-  waSubtitle: "Personas reales, respuesta en minutos",
-  waDisponible: "Disponible ahora",
-  waOcupado: "Con un cliente",
-  waChat: "Chatear",
-  waAgenteNombre: "Agente",
-  waAgenteMsg: (agente) => `Hola ${agente}! Quiero consultar por entradas.`,
 
   fCategoria: "Categoría",
   fLugar: "Lugar",

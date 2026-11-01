@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server";
 import StatusStub from "@/components/StatusStub";
 import AutoRefresh from "@/components/AutoRefresh";
+import { WhatsAppFlotante } from "@/components/WhatsAppFlotante";
 import { estadoPublicoDe, type ItemPublico, type OperacionPublica, type Status } from "@/lib/operaciones";
 import { claveTextoPago, textoPagoDe } from "@/lib/textos";
 import { isMock, mockGetTextosPago, mockListItems, mockOpPublica } from "@/lib/mock-db";
@@ -87,6 +88,8 @@ export default async function OperacionPublicaPage({
       <footer className="mt-6 text-center text-xs text-muted">
         AdminTickets · Custodia de operaciones
       </footer>
+      {/* Seguimiento de un pedido: el WhatsApp ya sale con su número. */}
+      <WhatsAppFlotante contexto={{ tipo: "pedido", codigo: op.code }} />
     </main>
   );
 }

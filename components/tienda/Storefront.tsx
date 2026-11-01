@@ -18,7 +18,6 @@ import {
   isWC,
   parseTitle,
   waLink,
-  WHATSAPP_TIENDA,
   zonaDelMapa,
   type EventoAgrupado,
   type Ticket,
@@ -31,6 +30,7 @@ import { LegalLinks } from "@/components/tienda/LegalLinks";
 import { empezarNavegacion } from "@/components/NavProgress";
 import type { ResumenHome } from "@/lib/resumen-home";
 import { desempacarCatalogo, type CatalogoCompacto } from "@/lib/catalogo-compacto";
+import { useContextoWhatsApp } from "@/components/WhatsAppFlotante";
 
 // Idioma elegido: default español; se recuerda entre visitas.
 function useLang() {
@@ -242,92 +242,6 @@ function WcLogo({ comp }: { comp: string | null }) {
   );
 }
 
-// Widget de WhatsApp: el botón flotante abre un panel con UN contacto y su
-// estado (disponible / con un cliente). El estado rota solo en intervalos
-// irregulares — transmite que del otro lado hay alguien atendiendo.
-//
-// Antes eran dos agentes con nombre propio (Kiru y Nacho). Ahora es un solo
-// "Agente": quién responde es asunto interno, y así sumar o sacar gente del
-// equipo no obliga a tocar la tienda.
-//
-// El número es el mismo de toda la tienda (WHATSAPP_TIENDA en lib/tickets).
-const WA_AGENTE_TEL = WHATSAPP_TIENDA;
-
-function waAgente(telefono: string, text: string): string {
-  return waLink(text, telefono);
-}
-
-type EstadoAgente = "disponible" | "ocupado";
-
-function WaFloat({ lang }: { lang: Lang }) {
-  const t = TX[lang];
-  const [abierto, setAbierto] = useState(false);
-  // Arranca disponible (mismo HTML en server y cliente: nada de Math.random
-  // en el render inicial o rompería la hidratación). Recién montado empieza
-  // a alternar.
-  const [estado, setEstado] = useState<EstadoAgente>("disponible");
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    function programar(delay: number) {
-      timer = setTimeout(() => {
-        // Sesgo a "disponible" (65%): ocupado aparece lo justo para que se
-        // note movimiento sin espantar consultas.
-        setEstado(Math.random() < 0.65 ? "disponible" : "ocupado");
-        programar(15000 + Math.random() * 35000);
-      }, delay);
-    }
-    // Primer cambio a los pocos segundos, después cada 15-50s.
-    programar(6000 + Math.random() * 10000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const nombre = t.waAgenteNombre;
-  const disponible = estado === "disponible";
-
-  return (
-    <div className="wa-widget">
-      {abierto && (
-        <div className="wa-panel" role="dialog" aria-label={t.waTitle}>
-          <div className="wa-panel-head">
-            <p className="wa-panel-title">{t.waTitle}</p>
-            <p className="wa-panel-sub">{t.waSubtitle}</p>
-          </div>
-          <div className="wa-agente">
-            <span className="wa-avatar wa-avatar--a" aria-hidden>
-              {nombre.charAt(0).toUpperCase()}
-            </span>
-            <span className="wa-agente-info">
-              <span className="wa-agente-nombre">{nombre}</span>
-              <span className={`wa-agente-estado ${disponible ? "on" : "off"}`}>
-                <i aria-hidden />
-                {disponible ? t.waDisponible : t.waOcupado}
-              </span>
-            </span>
-            <a
-              className="wa-agente-btn"
-              href={waAgente(WA_AGENTE_TEL, t.waAgenteMsg(nombre))}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setAbierto(false)}
-            >
-              {t.waChat}
-            </a>
-          </div>
-        </div>
-      )}
-      <button
-        className="wa-float"
-        onClick={() => setAbierto((v) => !v)}
-        aria-expanded={abierto}
-        aria-label="WhatsApp"
-      >
-        {abierto ? "✕" : "WhatsApp"}
-      </button>
-    </div>
-  );
-}
-
 function Foot({ lang }: { lang: Lang }) {
   const t = TX[lang];
   return (
@@ -461,12 +375,13 @@ function LadderRow({
           type="button"
           className={`seat-act ${bookable ? "go" : "ask"}`}
           onClick={agregar}
+          data-sin-wa
         >
           {bookable ? t.pedir : t.consultar}
         </button>
       ) : bookable ? (
         // En el carrito: stepper de cantidad topeado por el stock del sector.
-        <span className="seat-qty" role="group" aria-label={t.carrito.cantidad}>
+        <span className="seat-qty" role="group" aria-label={t.carrito.cantidad} data-sin-wa>
           <button
             type="button"
             onClick={() => cart.setQty(u.id, (item?.cantidad ?? 1) - 1)}
@@ -487,7 +402,7 @@ function LadderRow({
           </button>
         </span>
       ) : (
-        <button type="button" className="seat-act done" onClick={() => cart.remove(u.id)}>
+        <button type="button" className="seat-act done" onClick={() => cart.remove(u.id)} data-sin-wa>
           {t.agregado}
         </button>
       )}
@@ -917,7 +832,6 @@ export function StorefrontHome({ resumen }: { resumen: ResumenHome }) {
       </section>
 
       <Foot lang={lang} />
-      <WaFloat lang={lang} />
     </>
   );
 }
@@ -1045,6 +959,13 @@ export function StorefrontCatalog({ catalogo }: { catalogo: CatalogoCompacto }) 
   useEffect(() => {
     setMostrar(TANDA);
   }, [state.cat, state.lugar, state.mes, state.q, state.evento]);
+
+  // Detalle de un evento (link /buscar?ev=…): el WhatsApp flotante ya sale
+  // con el nombre y la fecha.
+  const abierto = state.evento ? filtered.find((ev) => ev.evento === state.evento) : undefined;
+  useContextoWhatsApp(
+    abierto ? { tipo: "evento", nombre: abierto.evento, fecha: abierto.fecha ?? null } : null
+  );
 
   // Link compartido: centrar la card del evento apenas se abre la página.
   // (La card ya viene desplegada por defaultOpen.)
@@ -1199,7 +1120,6 @@ export function StorefrontCatalog({ catalogo }: { catalogo: CatalogoCompacto }) 
       )}
 
       <Foot lang={lang} />
-      <WaFloat lang={lang} />
     </>
   );
 }
