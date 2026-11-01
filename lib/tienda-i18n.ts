@@ -231,7 +231,7 @@ const en = {
     copiarLink: "Copy the request link",
     linkCopiado: "Link copied",
     nuevoH: "New user?",
-    cartelPre: "This site is only for travel agencies and agents. Fill in the ",
+    cartelPre: "Site only for travel agencies and agents. Fill in our ",
     cartelLink: "form",
     cartelPost: " and we'll send you your access.",
     nuevoBtn: "New user",
@@ -668,9 +668,11 @@ const es: typeof en = {
     copiarLink: "Copiar link de solicitud",
     linkCopiado: "Link copiado",
     nuevoH: "¿Nuevo usuario?",
-    cartelPre: "Este sitio es solo para agencias y agentes de viajes. Completá el ",
+    // El texto del ticket (TKT-7) dice "Sitio exclusivo…"; va "solo para"
+    // porque TKT-8, que fija el tono, saca "exclusivo" de todos los copys.
+    cartelPre: "Sitio solo para agencias y agentes de viajes. Completá nuestro ",
     cartelLink: "formulario",
-    cartelPost: " y te enviamos el acceso.",
+    cartelPost: " y te enviamos tu acceso.",
     nuevoBtn: "Nuevo usuario",
     cerrar: "Cerrar",
     bullets: [
