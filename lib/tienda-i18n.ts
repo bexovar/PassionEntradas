@@ -317,6 +317,8 @@ const en = {
     pagoSinTexto: "Message us on WhatsApp and we will send you the payment details.",
     waPagar: "Hi! I want to pay my order",
     escribinos: "Message us on WhatsApp ↗",
+    // Por pedido (TKT-9): abre WhatsApp con el número del pedido ya escrito.
+    consultarWa: "Ask about it on WhatsApp ↗",
     cancelarPedido: "Cancel order",
     cancelarConsulta: "Cancel enquiry",
     cancelando: "Cancelling…",
@@ -746,6 +748,7 @@ const es: typeof en = {
     pagoSinTexto: "Escribinos por WhatsApp y te pasamos los datos para pagar.",
     waPagar: "¡Hola! Quiero pagar mi pedido",
     escribinos: "Escribinos por WhatsApp ↗",
+    consultarWa: "Consultar por WhatsApp ↗",
     cancelarPedido: "Cancelar pedido",
     cancelarConsulta: "Cancelar consulta",
     cancelando: "Cancelando…",
