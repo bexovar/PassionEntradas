@@ -62,6 +62,7 @@ describe("cliente", () => {
   it("NO entra al panel", () => {
     expect(ir("/admin", "cliente")).toEqual({ accion: "redirigir", a: "/entradas" });
     expect(ir("/admin/entradas", "cliente")).toEqual({ accion: "redirigir", a: "/entradas" });
+    expect(ir("/admin/configuracion", "cliente")).toEqual({ accion: "redirigir", a: "/entradas" });
     expect(ir("/moderador", "cliente")).toEqual({ accion: "redirigir", a: "/entradas" });
     expect(ir("/admin/cuenta", "cliente")).toEqual({ accion: "redirigir", a: "/entradas" });
   });
@@ -86,6 +87,7 @@ describe("moderador", () => {
     expect(ir("/admin/solicitudes", "moderador")).toEqual({ accion: "redirigir", a: "/moderador" });
     expect(ir("/admin/equipo", "moderador")).toEqual({ accion: "redirigir", a: "/moderador" });
     expect(ir("/admin/clientes/x", "moderador")).toEqual({ accion: "redirigir", a: "/moderador" });
+    expect(ir("/admin/configuracion", "moderador")).toEqual({ accion: "redirigir", a: "/moderador" });
   });
 
   it("salvo su propia cuenta, para cambiar la contraseña", () => {
@@ -106,6 +108,7 @@ describe("administrador", () => {
   it("entra a todo el panel", () => {
     expect(ir("/admin", "administrador")).toEqual({ accion: "seguir" });
     expect(ir("/admin/entradas", "administrador")).toEqual({ accion: "seguir" });
+    expect(ir("/admin/configuracion", "administrador")).toEqual({ accion: "seguir" });
     expect(ir("/moderador", "administrador")).toEqual({ accion: "seguir" });
   });
 

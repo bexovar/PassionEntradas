@@ -40,7 +40,7 @@ export default function BottomNav() {
               >
                 {item.icon}
               </span>
-              {item.label}
+              {item.corto ?? item.label}
             </Link>
           );
         })}

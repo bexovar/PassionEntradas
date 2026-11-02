@@ -31,6 +31,7 @@ import { generarPassword, type SolicitudAcceso, type SolicitudInput } from "@/li
 import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
+import type { DatosTarjeta, TarjetaCarrusel } from "@/lib/carrusel";
 import { modoDemo } from "@/lib/entorno";
 
 export type MockFactura = Factura & { operacion_id: string };
@@ -79,6 +80,8 @@ type MockDB = {
   avisos: AvisoGuardado[];
   // Espejo de la tabla actividad.
   actividad: Actividad[];
+  // Espejo de la tabla carrusel_home.
+  carrusel?: TarjetaCarrusel[];
 };
 
 export type MockUsuario = {
@@ -1227,4 +1230,64 @@ export function mockListActividad(filtro: (a: Actividad) => boolean, limite = 20
     .actividad.filter(filtro)
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || Number(b.id) - Number(a.id))
     .slice(0, limite);
+}
+
+// ---- carrusel de la home (espejo de carrusel_home) --------------------------
+// Curado a mano, como en producción. La del show no tiene foto: el demo
+// muestra que una tarjeta sin foto no aparece en la home.
+const MOCK_CARRUSEL: TarjetaCarrusel[] = [
+  { id: "demo-superclasico", nombre: "River vs Boca", categoria: "Fútbol argentino", mes: "2026-11-01", imagen_url: "/carrusel-demo/superclasico.svg", orden: 0 },
+  { id: "demo-libertadores", nombre: "Final de la Copa Libertadores", categoria: "Copa Libertadores", mes: "2026-11-01", imagen_url: "/carrusel-demo/final.svg", orden: 1 },
+  { id: "demo-show", nombre: "Show en el Estadio Monumental", categoria: "Shows", mes: "2026-12-01", imagen_url: null, orden: 2 },
+  { id: "demo-premier", nombre: "Derby de Manchester", categoria: "Premier League", mes: "2027-01-01", imagen_url: "/carrusel-demo/mundial-2.svg", orden: 3 },
+  { id: "demo-clasico", nombre: "Real Madrid vs Barcelona", categoria: "LaLiga", mes: "2027-03-01", imagen_url: "/carrusel-demo/mundial-1.svg", orden: 4 },
+  { id: "demo-ucl", nombre: "Final de la Champions", categoria: "Champions League", mes: "2027-05-01", imagen_url: "/carrusel-demo/champions.svg", orden: 5 },
+  { id: "demo-f1", nombre: "Gran Premio de Mónaco", categoria: "Fórmula 1", mes: "2027-06-01", imagen_url: "/carrusel-demo/f1.svg", orden: 6 },
+];
+
+// Se siembra al primer uso (y si el hot-reload trae un db de antes del carrusel).
+function carrusel(): TarjetaCarrusel[] {
+  const d = db();
+  d.carrusel ??= MOCK_CARRUSEL.map((t) => ({ ...t }));
+  return d.carrusel;
+}
+
+export function mockListCarrusel(): TarjetaCarrusel[] {
+  return carrusel().map((t) => ({ ...t }));
+}
+
+// Va al final, como en la API.
+export function mockAddTarjetaCarrusel(input: DatosTarjeta & { imagen_url: string | null }): TarjetaCarrusel {
+  const lista = carrusel();
+  const t: TarjetaCarrusel = {
+    ...input,
+    id: `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    orden: lista.reduce((m, x) => Math.max(m, x.orden + 1), 0),
+  };
+  lista.push(t);
+  return { ...t };
+}
+
+export function mockUpdateTarjetaCarrusel(
+  id: string,
+  cambios: Partial<DatosTarjeta & { imagen_url: string | null }>
+): TarjetaCarrusel | null {
+  const t = carrusel().find((x) => x.id === id);
+  if (!t) return null;
+  Object.assign(t, cambios);
+  return { ...t };
+}
+
+export function mockDeleteCarrusel(ids: string[]): TarjetaCarrusel[] {
+  const d = db();
+  const borradas = carrusel().filter((t) => ids.includes(t.id));
+  d.carrusel = carrusel().filter((t) => !ids.includes(t.id));
+  return borradas;
+}
+
+export function mockSetOrdenCarrusel(cambios: { id: string; orden: number }[]): void {
+  for (const c of cambios) {
+    const t = carrusel().find((x) => x.id === c.id);
+    if (t) t.orden = c.orden;
+  }
 }

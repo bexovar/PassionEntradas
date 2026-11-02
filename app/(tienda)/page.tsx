@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Landing } from "@/components/tienda/Landing";
+import { fetchCarrusel } from "@/lib/supabase/public";
 
 // Landing pública (/): la cara nueva del sitio para captar clientes. La tienda
 // de entradas pasó a ser privada (/entradas, /buscar) y sólo se ve con una
@@ -11,9 +12,14 @@ export const metadata: Metadata = {
     "Vendé entradas a los eventos que tus pasajeros quieren: fútbol europeo, Fórmula 1, Champions, Mundial 2026 y shows. Acceso para agencias, operadores, hoteles y vendedores de turismo.",
 };
 
-// Página estática (sin datos dinámicos): el formulario postea a la API.
-export const dynamic = "force-static";
+// Sigue siendo estática para el visitante (el formulario postea a la API),
+// pero lleva el carrusel de eventos: se regenera cada 5 minutos y al toque
+// cuando el admin lo cambia desde el panel (refrescarTienda revalida "/").
+export const revalidate = 300;
 
-export default function LandingPage() {
-  return <Landing />;
+export default async function LandingPage() {
+  // Curado a mano en el panel, no sale del inventario: solo viaja lo que
+  // muestra la tarjeta (ver lib/carrusel).
+  const carrusel = await fetchCarrusel();
+  return <Landing carrusel={carrusel} />;
 }

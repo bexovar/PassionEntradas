@@ -1,11 +1,13 @@
 // Secciones del admin, compartidas por BottomNav (móvil) y TopNav (desktop).
 //
-// Son CUATRO a propósito. Con una quinta ("Consultas") la barra se partía en
-// dos líneas; las consultas viven ahora dentro del Panel, mezcladas con las
-// operaciones y marcadas con un signo de pregunta.
+// Son CINCO como máximo, y en la barra de abajo cada nombre tiene que entrar
+// en ~56px a 320px de ancho (10px de letra). Una quinta con un nombre largo
+// ("Consultas") partía la barra en dos líneas: las consultas viven ahora
+// dentro del Panel. "Configuración" no entra: abajo dice "Ajustes" (`corto`).
 
 // `rutas`: otras páginas que también marcan la sección como activa.
-export type NavItem = { href: string; label: string; icon: React.ReactNode; rutas?: string[] };
+// `corto`: el nombre en la barra de abajo (móvil), si el completo no entra.
+export type NavItem = { href: string; label: string; corto?: string; icon: React.ReactNode; rutas?: string[] };
 
 const ICON_CLS = "h-[18px] w-[18px]";
 
@@ -52,6 +54,20 @@ export const NAV_ITEMS: NavItem[] = [
       <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
         <path d="m3.5 6.5 8.5 6 8.5-6" />
+      </svg>
+    ),
+  },
+  {
+    // Cotización y margen, cotizaciones y pagos, carrusel de la home.
+    href: "/admin/configuracion",
+    label: "Configuración",
+    corto: "Ajustes",
+    icon: (
+      <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />
+        <circle cx="15" cy="6" r="2" />
+        <circle cx="9" cy="12" r="2" />
+        <circle cx="17" cy="18" r="2" />
       </svg>
     ),
   },
