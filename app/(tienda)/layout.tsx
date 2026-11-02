@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Spline_Sans } from "next/font/google";
 import { CartProvider, CartBar } from "@/components/tienda/Cart";
+import { WhatsAppFlotante } from "@/components/WhatsAppFlotante";
 import "./tienda.css";
 
 const spline = Spline_Sans({
@@ -24,6 +25,8 @@ export default function TiendaLayout({ children }: { children: React.ReactNode }
       <CartProvider>
         <div className="tienda-app">{children}</div>
         <CartBar />
+        {/* En todas las pantallas del agente, públicas y logueadas. */}
+        <WhatsAppFlotante />
       </CartProvider>
     </div>
   );

@@ -16,6 +16,8 @@ import { formatMonto, pasosCliente, type EstadoPublico, type Moneda } from "@/li
 import { waLink } from "@/lib/tickets";
 import { tiempoRestante } from "@/lib/cotizaciones";
 import { fechaDia, fechaHora } from "@/lib/fechas";
+import { useContextoWhatsApp } from "@/components/WhatsAppFlotante";
+import { mensajeWa } from "@/lib/whatsapp-flotante";
 
 export type PedidoView = {
   id: string;
@@ -127,6 +129,9 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
   const router = useRouter();
   const [cancelando, setCancelando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Con un solo pedido, el WhatsApp flotante ya sale con su número; con
+  // varios no sabemos por cuál pregunta y va el mensaje general.
+  useContextoWhatsApp(pedidos.length === 1 ? { tipo: "pedido", codigo: pedidos[0].code } : null);
 
   // Aceptar o rechazar la cotización. Aceptar crea el pedido: se confirma
   // en el mismo botón, igual que cancelar.
@@ -381,6 +386,16 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
                             : mp.cancelarConsulta}
                       </ConfirmarBoton>
                     )}
+                    {/* Consulta por ESTE pedido: con varios pedidos, el
+                        flotante no sabe cuál; acá sale con su número. */}
+                    <a
+                      className="mp-link"
+                      href={waLink(mensajeWa("pedidos", { tipo: "pedido", codigo: p.code }, lang))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {mp.consultarWa}
+                    </a>
                     {/* Factura: solo si el staff ya la emitió. */}
                     {p.facturaId && (
                       <a
