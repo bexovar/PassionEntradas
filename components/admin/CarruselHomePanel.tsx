@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Combo from "@/components/admin/Combo";
 import EncuadreFoto from "@/components/admin/EncuadreFoto";
+import { compararAZ } from "@/lib/orden";
 import { MIN_RECORTE } from "@/lib/encuadre";
+import type { OpcionCombo } from "@/lib/combo";
 import {
   estadoTarjeta,
   MAX_CARRUSEL,
@@ -11,13 +14,16 @@ import {
   mesLegible,
   MIN_CARRUSEL,
   type EstadoTarjeta,
+  type EventoCatalogo,
   type TarjetaCarrusel,
 } from "@/lib/carrusel";
 
 // Carrusel de eventos de la home pública (TKT-12). Curado a mano: lo que se
-// carga acá es lo que se ve al final de la home, en este orden. No sale del
-// inventario. Cada foto se encuadra a 4:3 antes de subir (EncuadreFoto). Los
-// cambios se ven en la home sin desplegar.
+// carga acá es lo que se ve al final de la home, en este orden. El evento se
+// elige de los que ya están en el catálogo (completa competición y mes) o se
+// escribe uno que no esté; la tarjeta guarda una copia, editable. Cada foto
+// se encuadra a 4:3 antes de subir (EncuadreFoto). Los cambios se ven en la
+// home sin desplegar.
 
 const ESTADO: Record<EstadoTarjeta, { texto: string; clase: string }> = {
   visible: { texto: "Se muestra", clase: "bg-emerald-50 text-emerald-800" },
@@ -25,7 +31,8 @@ const ESTADO: Record<EstadoTarjeta, { texto: string; clase: string }> = {
   vencida: { texto: "Ya pasó, no se muestra", clase: "bg-canvas text-[#4A4E5E]" },
 };
 
-// Sugerencias para el campo de categoría (se puede escribir cualquiera).
+// Sugerencias extra para la categoría, por si el catálogo no las tiene (se
+// puede escribir cualquiera).
 const CATEGORIAS = ["Fútbol europeo", "Fórmula 1", "Champions League", "Mundial 2026", "Copa Libertadores", "Shows"];
 
 type Datos = { nombre: string; categoria: string; mes: string };
@@ -35,7 +42,24 @@ const VACIO: Datos = { nombre: "", categoria: "", mes: "" };
 // la nueva (id null).
 type Encuadrando = { id: string | null; archivo: File; nombre: string; categoria: string };
 
-export default function CarruselHomePanel() {
+// "11 nov 2026" (el día del evento viene como día UTC).
+function diaCorto(fecha: string): string {
+  const d = new Date(`${fecha}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "";
+  return d
+    .toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+    .replace(/\./g, "");
+}
+
+export default function CarruselHomePanel({
+  eventos = [],
+  competiciones = [],
+}: {
+  // Eventos vigentes del catálogo, para elegir en vez de escribir.
+  eventos?: EventoCatalogo[];
+  // Competiciones del catálogo, para la categoría.
+  competiciones?: string[];
+}) {
   const [tarjetas, setTarjetas] = useState<TarjetaCarrusel[]>([]);
   const [cargando, setCargando] = useState(true);
   // Las fotos de muestra de la demo viven fuera del bucket: en la demo el
@@ -69,6 +93,27 @@ export default function CarruselHomePanel() {
     },
     [fotoNueva]
   );
+
+  const opcionesEvento = useMemo<OpcionCombo<EventoCatalogo>[]>(
+    () =>
+      eventos.map((e) => ({
+        clave: e.clave,
+        texto: e.nombre,
+        detalle: [e.categoria, e.fecha ? diaCorto(e.fecha) : "sin fecha"].filter(Boolean).join(" · "),
+        valor: e,
+      })),
+    [eventos]
+  );
+  const opcionesCategoria = useMemo<OpcionCombo<string>[]>(() => {
+    const todas = new Map<string, string>();
+    for (const c of [...competiciones, ...tarjetas.map((t) => t.categoria), ...CATEGORIAS]) {
+      const limpia = c.trim();
+      if (limpia && !todas.has(limpia.toLowerCase())) todas.set(limpia.toLowerCase(), limpia);
+    }
+    return Array.from(todas.values())
+      .sort(compararAZ)
+      .map((c) => ({ clave: c, texto: c, valor: c }));
+  }, [competiciones, tarjetas]);
 
   const ordenadas = [...tarjetas].sort((a, b) => a.orden - b.orden);
   const estados = new Map(ordenadas.map((t) => [t.id, estadoTarjeta(t, undefined, demo)]));
@@ -187,25 +232,31 @@ export default function CarruselHomePanel() {
       <div className="grid gap-3 sm:grid-cols-[2fr_1.4fr_1fr]">
         <label className="grid gap-1 text-xs font-medium text-[#4A4E5E]">
           Evento
-          <input
-            className={campo}
+          {/* Uno del catálogo completa competición y mes; también se puede
+              escribir uno que no esté. */}
+          <Combo
             value={d.nombre}
+            onChange={(nombre) => set({ ...d, nombre })}
+            onElegir={(o) =>
+              set({ nombre: o.valor.nombre, categoria: o.valor.categoria || d.categoria, mes: o.valor.mes ?? d.mes })
+            }
+            opciones={opcionesEvento}
+            inputCls={campo}
             maxLength={MAX_NOMBRE}
             required
-            placeholder="Ej. Final de la Champions"
-            onChange={(e) => set({ ...d, nombre: e.target.value })}
+            placeholder={eventos.length ? "Elegí un evento del catálogo o escribí uno" : "Ej. Final de la Champions"}
           />
         </label>
         <label className="grid gap-1 text-xs font-medium text-[#4A4E5E]">
           Competencia o categoría
-          <input
-            className={campo}
+          <Combo
             value={d.categoria}
+            onChange={(categoria) => set({ ...d, categoria })}
+            opciones={opcionesCategoria}
+            inputCls={campo}
             maxLength={MAX_CATEGORIA}
             required
-            list="carrusel-categorias"
-            placeholder="Ej. Fórmula 1"
-            onChange={(e) => set({ ...d, categoria: e.target.value })}
+            placeholder="Elegí o escribí una nueva"
           />
         </label>
         <label className="grid gap-1 text-xs font-medium text-[#4A4E5E]">
@@ -266,11 +317,6 @@ export default function CarruselHomePanel() {
           )}
 
           <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onArchivo} />
-          <datalist id="carrusel-categorias">
-            {CATEGORIAS.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
 
           {cargando ? (
             <p className="text-sm text-muted">Cargando…</p>

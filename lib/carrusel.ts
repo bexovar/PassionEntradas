@@ -99,6 +99,53 @@ export function validarTarjeta(raw: {
   return { ok: true, value: { nombre, categoria, mes: `${m[1]}-${m[2]}-01` } };
 }
 
+// Un evento que ya está en el catálogo, para elegirlo en el form del panel:
+// al elegirlo se completan nombre, competición y mes. La tarjeta guarda una
+// copia (el carrusel sigue curado a mano: se puede editar o escribir otro).
+export type EventoCatalogo = {
+  clave: string;
+  nombre: string;
+  categoria: string;
+  // Primer día del mes ("2026-11-01"); null si el evento no tiene fecha.
+  mes: string | null;
+  // Día del evento ("2026-11-11"), para mostrarlo en la sugerencia.
+  fecha: string | null;
+};
+
+const normalizado = (s: string) => s.trim().replace(/\s+/g, " ");
+
+/**
+ * Los eventos vigentes del catálogo, uno por nombre y día (un evento tiene una
+ * fila por sector): por fecha y, el mismo día, por nombre; los sin fecha al
+ * final. `hoy` es el día argentino ("2026-10-31"): los anteriores no entran.
+ */
+export function eventosParaCarrusel(
+  tickets: { evento: string | null; competicion: string | null; fecha: string | null }[],
+  hoy = hoyArgentina()
+): EventoCatalogo[] {
+  const porClave = new Map<string, EventoCatalogo>();
+  for (const t of tickets) {
+    const nombre = normalizado(t.evento ?? "");
+    if (!nombre) continue;
+    const fecha = t.fecha ? t.fecha.slice(0, 10) : null;
+    if (fecha && fecha < hoy) continue;
+    const clave = `${nombre.toLowerCase()}|${fecha ?? ""}`;
+    if (porClave.has(clave)) continue;
+    porClave.set(clave, {
+      clave,
+      nombre,
+      categoria: normalizado(t.competicion ?? ""),
+      mes: fecha ? `${fecha.slice(0, 7)}-01` : null,
+      fecha,
+    });
+  }
+  return Array.from(porClave.values()).sort(
+    (a, b) =>
+      (a.fecha ?? "9999").localeCompare(b.fecha ?? "9999") ||
+      a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" })
+  );
+}
+
 /** "NOV" + "2026", y "Noviembre 2026" para lectores de pantalla. */
 export function mesLegible(mes: string, lang: "es" | "en" = "es"): { mes: string; anio: string; completo: string } {
   const d = new Date(`${mes.slice(0, 7)}-01T12:00:00Z`);

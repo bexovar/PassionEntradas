@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   estadoTarjeta,
+  eventosParaCarrusel,
   fotoCarruselValida,
   MAX_CARRUSEL,
   mesLegible,
@@ -132,5 +133,58 @@ describe("mesLegible", () => {
   it("mes y año, sin correrse de mes", () => {
     expect(mesLegible("2026-11-01")).toEqual({ mes: "NOV", anio: "2026", completo: "Noviembre 2026" });
     expect(mesLegible("2026-01-01", "en")).toEqual({ mes: "JAN", anio: "2026", completo: "January 2026" });
+  });
+});
+
+describe("eventosParaCarrusel (los eventos existentes para el form del panel)", () => {
+  const t = (evento: string, competicion: string | null, fecha: string | null) => ({ evento, competicion, fecha });
+
+  it("un evento por nombre y día, aunque tenga varios sectores", () => {
+    const r = eventosParaCarrusel(
+      [
+        t("Real Madrid vs Manchester City", "UEFA Champions League", "2026-11-11T20:00:00Z"),
+        t("Real Madrid vs Manchester City", "UEFA Champions League", "2026-11-11T20:00:00Z"),
+        t("real madrid  vs Manchester City ", "UEFA Champions League", "2026-11-11T21:00:00Z"),
+      ],
+      HOY
+    );
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({
+      nombre: "Real Madrid vs Manchester City",
+      categoria: "UEFA Champions League",
+      mes: "2026-11-01",
+      fecha: "2026-11-11",
+    });
+  });
+
+  it("el mismo nombre en otra fecha es otro evento", () => {
+    const r = eventosParaCarrusel([t("Final", "Copa", "2026-12-01"), t("Final", "Copa", "2027-05-01")], HOY);
+    expect(r.map((e) => e.fecha)).toEqual(["2026-12-01", "2027-05-01"]);
+    expect(new Set(r.map((e) => e.clave)).size).toBe(2);
+  });
+
+  it("deja afuera los ya pasados y los sin nombre", () => {
+    const r = eventosParaCarrusel([t("Ayer", "X", "2026-10-30"), t("  ", "X", "2026-12-01"), t("Hoy", "X", HOY)], HOY);
+    expect(r.map((e) => e.nombre)).toEqual(["Hoy"]);
+  });
+
+  it("sin fecha: entra sin mes (lo elige el admin) y va al final", () => {
+    const r = eventosParaCarrusel([t("Abono", "Liga", null), t("Clásico", "Liga", "2027-03-01")], HOY);
+    expect(r.map((e) => [e.nombre, e.mes])).toEqual([
+      ["Clásico", "2027-03-01"],
+      ["Abono", null],
+    ]);
+  });
+
+  it("sin competición: categoría vacía", () => {
+    expect(eventosParaCarrusel([t("Show", null, "2026-12-05")], HOY)[0].categoria).toBe("");
+  });
+
+  it("ordena por fecha y, el mismo día, por nombre", () => {
+    const r = eventosParaCarrusel(
+      [t("Zeta", "A", "2026-12-01"), t("Alfa", "A", "2026-12-01"), t("Beta", "A", "2026-11-20")],
+      HOY
+    );
+    expect(r.map((e) => e.nombre)).toEqual(["Beta", "Alfa", "Zeta"]);
   });
 });

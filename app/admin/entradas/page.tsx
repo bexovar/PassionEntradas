@@ -9,6 +9,8 @@ import MargenesPanel from "@/components/admin/MargenesPanel";
 import TextosPagoPanel from "@/components/admin/TextosPagoPanel";
 import CarruselHomePanel from "@/components/admin/CarruselHomePanel";
 import { hoyArgentina, type SyncRun, type TicketFull } from "@/lib/tickets";
+import { eventosParaCarrusel } from "@/lib/carrusel";
+import { fetchTickets } from "@/lib/supabase/public";
 import { usuarioVerificado } from "@/lib/usuario-verificado";
 import {
   isMock,
@@ -103,6 +105,15 @@ export default async function AdminEntradasPage() {
     competiciones = (compsRes.data ?? []) as string[];
   }
 
+  // Eventos vigentes del catálogo para el form del carrusel: los mismos que
+  // ve la tienda (si Passion está apagado, solo los propios). Lectura
+  // cacheada del catálogo público (lib/supabase/public).
+  const catalogo = await fetchTickets();
+  const eventosCarrusel = eventosParaCarrusel(
+    portalActivo ? catalogo : catalogo.filter((t) => t.source !== "portal"),
+    hoyArgentina()
+  );
+
   return (
     <main className="min-h-svh pb-16 md:pb-10">
       <AppHeader subtitle="Entradas de la tienda" email={email} nav />
@@ -117,7 +128,7 @@ export default async function AdminEntradasPage() {
       <div className="mx-auto w-full max-w-5xl px-4 pb-6">
         <MargenesPanel />
         <TextosPagoPanel />
-        <CarruselHomePanel />
+        <CarruselHomePanel eventos={eventosCarrusel} competiciones={competiciones} />
       </div>
       <AutoRefresh intervalMs={30000} versionUrl="/api/tickets/version" />
       <BottomNav />
