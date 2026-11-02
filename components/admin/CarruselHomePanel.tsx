@@ -5,7 +5,7 @@ import Combo from "@/components/admin/Combo";
 import EncuadreFoto from "@/components/admin/EncuadreFoto";
 import { compararAZ } from "@/lib/orden";
 import { MIN_RECORTE } from "@/lib/encuadre";
-import type { OpcionCombo } from "@/lib/combo";
+import { plano, type OpcionCombo } from "@/lib/combo";
 import {
   estadoTarjeta,
   MAX_CARRUSEL,
@@ -105,10 +105,11 @@ export default function CarruselHomePanel({
     [eventos]
   );
   const opcionesCategoria = useMemo<OpcionCombo<string>[]>(() => {
+    // Sin repetir "Formula 1" y "Fórmula 1": queda la primera, la del catálogo.
     const todas = new Map<string, string>();
     for (const c of [...competiciones, ...tarjetas.map((t) => t.categoria), ...CATEGORIAS]) {
       const limpia = c.trim();
-      if (limpia && !todas.has(limpia.toLowerCase())) todas.set(limpia.toLowerCase(), limpia);
+      if (limpia && !todas.has(plano(limpia))) todas.set(plano(limpia), limpia);
     }
     return Array.from(todas.values())
       .sort(compararAZ)
@@ -244,7 +245,7 @@ export default function CarruselHomePanel({
             inputCls={campo}
             maxLength={MAX_NOMBRE}
             required
-            placeholder={eventos.length ? "Elegí un evento del catálogo o escribí uno" : "Ej. Final de la Champions"}
+            placeholder={eventos.length ? "Elegí del catálogo o escribí uno" : "Ej. Final de la Champions"}
           />
         </label>
         <label className="grid gap-1 text-xs font-medium text-[#4A4E5E]">

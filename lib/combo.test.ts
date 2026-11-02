@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { filtrarOpciones } from "./combo";
+import { filtrarOpciones, plano } from "./combo";
+
+describe("plano", () => {
+  it("iguala mayúsculas, acentos y espacios de los bordes", () => {
+    expect(plano(" Fórmula 1 ")).toBe(plano("formula 1"));
+  });
+});
 
 const op = (texto: string, detalle?: string) => ({ clave: texto, texto, detalle, valor: texto });
 

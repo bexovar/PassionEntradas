@@ -10,8 +10,9 @@ export type OpcionCombo<T> = {
   valor: T;
 };
 
-// Sin mayúsculas ni acentos: "formula" encuentra "Fórmula 1".
-const plano = (s: string) =>
+// Sin mayúsculas ni acentos: "formula" encuentra "Fórmula 1". También sirve
+// de clave para no repetir "Formula 1" y "Fórmula 1" en una lista.
+export const plano = (s: string) =>
   s
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
