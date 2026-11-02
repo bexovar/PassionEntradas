@@ -7,6 +7,8 @@
 // stock ni una disponibilidad. La tarjeta no tiene dónde guardarlos.
 
 import { hoyArgentina, imagenSegura } from "@/lib/tickets";
+import { plano } from "@/lib/combo";
+import { compararAZ } from "@/lib/orden";
 
 export type TarjetaCarrusel = {
   id: string;
@@ -144,6 +146,30 @@ export function eventosParaCarrusel(
       (a.fecha ?? "9999").localeCompare(b.fecha ?? "9999") ||
       a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" })
   );
+}
+
+/**
+ * Lo que ofrece el form del carrusel: los eventos vigentes y sus
+ * competiciones (A-Z, sin repetir "Formula 1" / "Fórmula 1"). Con Passion
+ * apagado, solo lo propio: lo mismo que ve la tienda.
+ */
+export function opcionesDelCatalogo(
+  catalogo: { evento: string | null; competicion: string | null; fecha: string | null; source: string }[],
+  portalActivo: boolean,
+  hoy = hoyArgentina()
+): { eventos: EventoCatalogo[]; competiciones: string[] } {
+  const visibles = portalActivo ? catalogo : catalogo.filter((t) => t.source !== "portal");
+  // Por competición, la primera forma en que aparece en el catálogo.
+  const competiciones = new Map<string, string>();
+  for (const t of visibles) {
+    const c = normalizado(t.competicion ?? "");
+    if (!c || (t.fecha && t.fecha.slice(0, 10) < hoy)) continue;
+    if (!competiciones.has(plano(c))) competiciones.set(plano(c), c);
+  }
+  return {
+    eventos: eventosParaCarrusel(visibles, hoy),
+    competiciones: Array.from(competiciones.values()).sort(compararAZ),
+  };
 }
 
 /** "NOV" + "2026", y "Noviembre 2026" para lectores de pantalla. */

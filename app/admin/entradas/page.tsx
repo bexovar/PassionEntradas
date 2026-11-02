@@ -5,12 +5,7 @@ import AppHeader from "@/components/AppHeader";
 import AutoRefresh from "@/components/AutoRefresh";
 import BottomNav from "@/components/BottomNav";
 import TicketsPanel from "@/components/admin/TicketsPanel";
-import MargenesPanel from "@/components/admin/MargenesPanel";
-import TextosPagoPanel from "@/components/admin/TextosPagoPanel";
-import CarruselHomePanel from "@/components/admin/CarruselHomePanel";
 import { hoyArgentina, type SyncRun, type TicketFull } from "@/lib/tickets";
-import { eventosParaCarrusel } from "@/lib/carrusel";
-import { fetchTickets } from "@/lib/supabase/public";
 import { usuarioVerificado } from "@/lib/usuario-verificado";
 import {
   isMock,
@@ -24,7 +19,8 @@ import {
 export const dynamic = "force-dynamic";
 
 // Gestión del catálogo de la tienda: carga manual de entradas propias y
-// estado de la sincronización del worker (portal Passion Events).
+// estado de la sincronización del worker (portal Passion Events). Margen,
+// textos de pago y carrusel están en /admin/configuracion.
 export default async function AdminEntradasPage() {
   let email: string | null | undefined;
   let manual: TicketFull[];
@@ -105,15 +101,6 @@ export default async function AdminEntradasPage() {
     competiciones = (compsRes.data ?? []) as string[];
   }
 
-  // Eventos vigentes del catálogo para el form del carrusel: los mismos que
-  // ve la tienda (si Passion está apagado, solo los propios). Lectura
-  // cacheada del catálogo público (lib/supabase/public).
-  const catalogo = await fetchTickets();
-  const eventosCarrusel = eventosParaCarrusel(
-    portalActivo ? catalogo : catalogo.filter((t) => t.source !== "portal"),
-    hoyArgentina()
-  );
-
   return (
     <main className="min-h-svh pb-16 md:pb-10">
       <AppHeader subtitle="Entradas de la tienda" email={email} nav />
@@ -125,11 +112,6 @@ export default async function AdminEntradasPage() {
         portalActivo={portalActivo}
         competiciones={competiciones}
       />
-      <div className="mx-auto w-full max-w-5xl px-4 pb-6">
-        <MargenesPanel />
-        <TextosPagoPanel />
-        <CarruselHomePanel eventos={eventosCarrusel} competiciones={competiciones} />
-      </div>
       <AutoRefresh intervalMs={30000} versionUrl="/api/tickets/version" />
       <BottomNav />
     </main>

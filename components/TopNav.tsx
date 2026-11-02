@@ -20,16 +20,17 @@ export default function TopNav() {
             href={item.href}
             aria-current={isActive ? "page" : undefined}
             title={item.label}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm xl:px-3 font-semibold transition-colors ${
               isActive
                 ? "bg-cobalt text-white"
                 : "text-white/50 hover:bg-white/10 hover:text-white/85"
             }`}
           >
             {item.icon}
-            {/* En tablet solo el ícono (si no, no entraba en una fila con
-                las acciones); el nombre vuelve desde lg. */}
-            <span className="sr-only lg:not-sr-only">{item.label}</span>
+            {/* Hasta xl solo el ícono: con cinco secciones los nombres no
+                entran en una fila con las acciones (el header tiene tope de
+                6xl, así que más pantalla no suma lugar). */}
+            <span className="sr-only xl:not-sr-only">{item.label}</span>
           </Link>
         );
       })}

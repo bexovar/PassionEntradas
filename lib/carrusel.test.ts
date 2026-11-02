@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   estadoTarjeta,
   eventosParaCarrusel,
+  opcionesDelCatalogo,
   fotoCarruselValida,
   MAX_CARRUSEL,
   mesLegible,
@@ -186,5 +187,33 @@ describe("eventosParaCarrusel (los eventos existentes para el form del panel)", 
       HOY
     );
     expect(r.map((e) => e.nombre)).toEqual(["Beta", "Alfa", "Zeta"]);
+  });
+});
+
+describe("opcionesDelCatalogo (lo que ofrece el form del carrusel)", () => {
+  const t = (evento: string, competicion: string | null, source: "portal" | "manual", fecha = "2026-12-01") => ({
+    evento,
+    competicion,
+    fecha,
+    source,
+  });
+  const catalogo = [
+    t("Clásico", "LaLiga", "portal"),
+    t("Superclásico", "Liga Profesional", "manual"),
+    t("Derby", "Premier League", "portal", "2026-01-01"), // pasado
+    t("Otro", "liga profesional", "manual"),
+    t("Show", null, "manual"),
+  ];
+
+  it("eventos y competiciones de todo el catálogo vigente, sin repetir", () => {
+    const r = opcionesDelCatalogo(catalogo, true, HOY);
+    expect(r.eventos.map((e) => e.nombre)).toEqual(["Clásico", "Otro", "Show", "Superclásico"]);
+    expect(r.competiciones).toEqual(["LaLiga", "Liga Profesional"]);
+  });
+
+  it("con Passion apagado, solo lo propio (lo mismo que ve la tienda)", () => {
+    const r = opcionesDelCatalogo(catalogo, false, HOY);
+    expect(r.eventos.map((e) => e.nombre)).toEqual(["Otro", "Show", "Superclásico"]);
+    expect(r.competiciones).toEqual(["Liga Profesional"]);
   });
 });

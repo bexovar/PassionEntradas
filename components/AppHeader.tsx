@@ -58,7 +58,9 @@ export default function AppHeader({ subtitle, email, nav = false }: Props) {
             reciben min-height 40px del global táctil y los <Link> no — eso
             las dejaba desparejas en móvil). 40px en táctil, 36px en desktop. */}
         <div className="flex items-center gap-2">
-          {email && (
+          {/* Con las tabs el email no entra al lado de los cinco nombres:
+              queda en el tooltip de "Mi cuenta". */}
+          {email && !nav && (
             <span title={email} className="hidden max-w-[22ch] truncate font-mono text-xs text-white/50 xl:inline">
               {email}
             </span>
@@ -90,7 +92,7 @@ export default function AppHeader({ subtitle, email, nav = false }: Props) {
           <CampanaEquipo />
           <Link
             href="/admin/cuenta"
-            title="Mi cuenta"
+            title={email ? `Mi cuenta · ${email}` : "Mi cuenta"}
             aria-label="Mi cuenta"
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white/85 transition-colors hover:bg-white/15 md:h-9 md:w-9"
           >
