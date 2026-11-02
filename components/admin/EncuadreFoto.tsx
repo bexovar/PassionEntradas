@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   MARCO,
   MIN_RECORTE,
@@ -143,7 +144,12 @@ export default function EncuadreFoto({ archivo, competicion, evento, progreso, o
 
   const t = tam && enc ? tamanoEnMarco(tam, enc.zoom) : null;
 
-  return (
+  // Portal al <body>, como FacturaModal: el panel que lo abre tiene
+  // `card-shadow` (filter: drop-shadow), y un filter vuelve a ese ancestro el
+  // bloque contenedor del `fixed`. Adentro, el fondo oscuro tapaba solo el
+  // panel, el diálogo se centraba en el panel (no en la pantalla) y el header
+  // del admin le quedaba encima. Solo se monta abierto: document existe.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       role="dialog"
@@ -243,6 +249,7 @@ export default function EncuadreFoto({ archivo, competicion, evento, progreso, o
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
