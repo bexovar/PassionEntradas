@@ -5,8 +5,6 @@ import AppHeader from "@/components/AppHeader";
 import AutoRefresh from "@/components/AutoRefresh";
 import BottomNav from "@/components/BottomNav";
 import TicketsPanel from "@/components/admin/TicketsPanel";
-import MargenesPanel from "@/components/admin/MargenesPanel";
-import TextosPagoPanel from "@/components/admin/TextosPagoPanel";
 import { hoyArgentina, type SyncRun, type TicketFull } from "@/lib/tickets";
 import { usuarioVerificado } from "@/lib/usuario-verificado";
 import {
@@ -21,7 +19,8 @@ import {
 export const dynamic = "force-dynamic";
 
 // Gestión del catálogo de la tienda: carga manual de entradas propias y
-// estado de la sincronización del worker (portal Passion Events).
+// estado de la sincronización del worker (portal Passion Events). Margen,
+// textos de pago y carrusel están en /admin/configuracion.
 export default async function AdminEntradasPage() {
   let email: string | null | undefined;
   let manual: TicketFull[];
@@ -113,10 +112,6 @@ export default async function AdminEntradasPage() {
         portalActivo={portalActivo}
         competiciones={competiciones}
       />
-      <div className="mx-auto w-full max-w-5xl px-4 pb-6">
-        <MargenesPanel />
-        <TextosPagoPanel />
-      </div>
       <AutoRefresh intervalMs={30000} versionUrl="/api/tickets/version" />
       <BottomNav />
     </main>

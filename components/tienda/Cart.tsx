@@ -154,6 +154,7 @@ export function CartBar() {
   // segundo toque de un doble toque mandaba el pedido sin que el cliente
   // llegara a ver la revisión. Mismo margen que ConfirmarBoton.
   const revisionAbiertaAt = useRef(0);
+  const barraRef = useRef<HTMLDivElement>(null);
   // Entradas que no tenían stock y el server pasó a consulta (ver partirPorStock).
   const [aConsulta, setAConsulta] = useState(0);
 
@@ -209,13 +210,35 @@ export function CartBar() {
     }
   }
 
+  // Mientras la barra está a la vista, el WhatsApp flotante sube por encima
+  // (lee --tm-barra-pedido: del borde de abajo al tope de la barra, + aire).
+  const barraVisible = count > 0 && !open;
+  useEffect(() => {
+    const raiz = document.documentElement;
+    const barra = barraRef.current;
+    if (!barraVisible || !barra) return;
+    const medir = () => {
+      const r = barra.getBoundingClientRect();
+      raiz.style.setProperty("--tm-barra-pedido", `${Math.round(window.innerHeight - r.top + 12)}px`);
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(barra);
+    window.addEventListener("resize", medir);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", medir);
+      raiz.style.removeProperty("--tm-barra-pedido");
+    };
+  }, [barraVisible]);
+
   // Nada que mostrar: carrito vacío y sin el cartel de "enviado".
   if (count === 0 && estado !== "done") return null;
 
   return (
     <>
-      {count > 0 && !open && (
-        <div className="cart-bar">
+      {barraVisible && (
+        <div className="cart-bar" ref={barraRef}>
           <button
             type="button"
             onClick={() => {

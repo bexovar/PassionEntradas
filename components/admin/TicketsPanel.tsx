@@ -7,11 +7,11 @@ import { eventoPasado, type SyncRun, type TicketFull } from "@/lib/tickets";
 import { ToastViewport, useToast } from "./Toast";
 import { parsePrecio } from "@/lib/precios";
 import { formatMonto, type Moneda } from "@/lib/operaciones";
+import Combo from "./Combo";
 
-// Autocompletado propio para la competición: las sugerencias se ven ADENTRO
-// de la página (un desplegable bajo el input), no en la barra del teclado
-// como hacía <datalist> en móvil. A nivel módulo para que React no lo
-// remonte en cada render.
+// Autocompletado de la competición (components/admin/Combo, el mismo del
+// carrusel de la home). A nivel módulo para que React no lo remonte en cada
+// render.
 function CompeticionCombo({
   value,
   onChange,
@@ -23,52 +23,19 @@ function CompeticionCombo({
   opciones: string[];
   inputCls: string;
 }) {
-  const [abierto, setAbierto] = useState(false);
-  const sugerencias = useMemo(() => {
-    const q = value.trim().toLowerCase();
-    const todas = [...opciones].sort(compararAZ);
-    const base = q ? todas.filter((c) => c.toLowerCase().includes(q)) : todas;
-    // Si ya escribió una igual, no la sugerimos de nuevo.
-    return base.filter((c) => c.toLowerCase() !== q).slice(0, 8);
-  }, [value, opciones]);
-
+  const ops = useMemo(
+    () => [...opciones].sort(compararAZ).map((c) => ({ clave: c, texto: c, valor: c })),
+    [opciones]
+  );
   return (
-    <div className="relative">
-      <input
-        className={inputCls}
-        value={value}
-        autoComplete="off"
-        aria-label="Categoría o competición"
-        placeholder="Elegí o escribí una nueva"
-        onChange={(e) => {
-          onChange(e.target.value);
-          setAbierto(true);
-        }}
-        onFocus={() => setAbierto(true)}
-        onBlur={() => setAbierto(false)}
-      />
-      {abierto && sugerencias.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-line bg-white py-1 shadow-lg">
-          {sugerencias.map((c) => (
-            <li key={c}>
-              <button
-                type="button"
-                // onMouseDown (no onClick): dispara ANTES del blur del input,
-                // que si no cerraría la lista sin aplicar la selección.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onChange(c);
-                  setAbierto(false);
-                }}
-                className="w-full px-3 py-2 text-left text-sm transition-colors hover:bg-canvas"
-              >
-                {c}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <Combo
+      value={value}
+      onChange={onChange}
+      opciones={ops}
+      inputCls={inputCls}
+      ariaLabel="Categoría o competición"
+      placeholder="Elegí o escribí una nueva"
+    />
   );
 }
 

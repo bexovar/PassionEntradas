@@ -46,7 +46,7 @@ const en = {
   porque: [
     ["Real stock", "We sync availability and prices every few minutes: what you see is what there is."],
     ["Clear pricing", "No surprises: all prices are in US dollars (USD)."],
-    ["Direct service", "You talk to a person on WhatsApp, not a bot."],
+    ["Direct service", "Message us on WhatsApp from any screen and our team answers."],
   ] as [string, string][],
   faqs: [
     [
@@ -108,16 +108,6 @@ const en = {
   msgConsultarRank: (evento: string, link: string) =>
     `Hi! Asking about ${evento}. Can you get it?\n${link}`,
   msgBuscoEvento: "Hi! I'm looking for an event that isn't on the site.",
-
-  // widget de WhatsApp (agentes)
-  waTitle: "Talk to our team",
-  waSubtitle: "Real people, replies in minutes",
-  waDisponible: "Available now",
-  waOcupado: "With a customer",
-  waChat: "Chat",
-  // Un solo contacto y sin nombre propio: quién atiende es asunto del equipo.
-  waAgenteNombre: "Agent",
-  waAgenteMsg: (agente: string) => `Hi ${agente}! I'd like to ask about tickets.`,
 
   // catálogo
   fCategoria: "Category",
@@ -219,18 +209,33 @@ const en = {
   // landing pública (/): capta clientes y toma la solicitud de acceso.
   lp: {
     navIngresar: "Log in",
-    heroEyebrow: "Access by request",
-    heroTitle1: "The events everyone",
-    heroTitle2: "wants to be at",
+    heroEyebrow: "Agency access",
+    heroTitle1: "Sell tickets to the events",
+    heroTitle2: "your travelers want",
     heroP:
-      "Request access to explore the events — World Cup 2026, Euro 2028, Formula 1 and the most wanted matches. Access is by approval.",
-    ctaSolicitar: "Request access",
-    ctaIngresar: "I already have access",
+      "Sign in, check availability and price, and build the order. We get the ticket and deliver it to you.",
     irEntradas: "Enter →",
+    // bloque de acceso del hero: login + nuevo usuario
+    logueadoH: "You're signed in",
+    irPanel: "Go to the panel →",
+    copiarLink: "Copy the request link",
+    linkCopiado: "Link copied",
+    copiarError: "Couldn't copy it. Try again.",
+    sesionComo: "Signed in as",
+    sumarAgenciaH: "Bring in an agency",
+    sumarAgenciaP: "Send them the request link: it opens this home with the form ready.",
+    nuevoH: "New user?",
+    cartelPre: "Site only for travel agencies and agents. Fill in our ",
+    cartelLink: "form",
+    cartelPost: " and we'll send you your access.",
+    nuevoBtn: "New user",
+    cerrar: "Close",
+    // Registro de operador mayorista (TKT-8): a quién está dirigido el sitio,
+    // sin exclusividad, sin precios y sin prometer lo que el flujo no cumple.
     bullets: [
-      "Curated events from around the world",
-      "A real person on WhatsApp — never a bot",
-      "Members-only access, by approval",
+      "European football, Formula 1, Champions League, World Cup 2026 and shows",
+      "Orders and tracking in one place",
+      "Access for agencies, tour operators, hotels and tourism sellers",
     ],
     comoEyebrow: "Simple",
     comoH2: "How it works",
@@ -259,6 +264,14 @@ const en = {
     okOtra: "Send another request",
     errGeneric: "We couldn't send your request. Please try again.",
     footTagline: "Access to the events that matter.",
+    carruselEyebrow: "On the calendar",
+    carruselH2: "Events you can sell",
+    carruselAnterior: "Previous events",
+    carruselSiguiente: "Next events",
+    // Sin disponibilidad ni precio (TKT-12): la tarjeta muestra el evento, lo
+    // demás se ve adentro.
+    carruselCierre: "There's more inside. Request access to see the full catalog.",
+    carruselTocar: "Request access to see more.",
     // cuenta del cliente (logueado)
     navCuenta: "My account",
     navPedidos: "My orders",
@@ -316,6 +329,8 @@ const en = {
     pagoSinTexto: "Message us on WhatsApp and we will send you the payment details.",
     waPagar: "Hi! I want to pay my order",
     escribinos: "Message us on WhatsApp ↗",
+    // Por pedido (TKT-9): abre WhatsApp con el número del pedido ya escrito.
+    consultarWa: "Ask about it on WhatsApp ↗",
     cancelarPedido: "Cancel order",
     cancelarConsulta: "Cancel enquiry",
     cancelando: "Cancelling…",
@@ -417,7 +432,17 @@ const en = {
     enter: "Sign in",
     entering: "Signing in…",
     badCreds: "Wrong email or password.",
+    errRevision: "Your request is under review. We'll message you on WhatsApp as soon as it's ready.",
+    errInactiva: "This account isn't active. Message us on WhatsApp.",
+    errRed: "We couldn't connect. Try again in a moment.",
+    errEmailVacio: "Enter your email.",
+    errPassVacia: "Enter your password.",
+    mostrarPass: "Show",
+    ocultarPass: "Hide",
+    mostrarPassAria: "Show password",
+    ocultarPassAria: "Hide password",
     forgot: "Forgot my password",
+    remember: "Remember my email",
     requestAccess: "Request access",
     resetTitle: "Reset password",
     resetSub: "We'll send you a link to create a new one.",
@@ -480,7 +505,7 @@ const es: typeof en = {
   porque: [
     ["Stock real", "Sincronizamos disponibilidad y precios cada pocos minutos: lo que ves es lo que hay."],
     ["Precio claro", "Sin sorpresas: todos los precios están en dólares (USD)."],
-    ["Atención directa", "Hablás con una persona por WhatsApp, no con un bot."],
+    ["Atención directa", "Nos escribís por WhatsApp desde cualquier pantalla y te responde el equipo."],
   ],
   faqs: [
     [
@@ -538,14 +563,6 @@ const es: typeof en = {
   msgConsultarRank: (evento, link) =>
     `Hola! Consulto por ${evento}. ¿Se puede conseguir?\n${link}`,
   msgBuscoEvento: "Hola! Busco un evento que no aparece en la web.",
-
-  waTitle: "Hablá con el equipo",
-  waSubtitle: "Personas reales, respuesta en minutos",
-  waDisponible: "Disponible ahora",
-  waOcupado: "Con un cliente",
-  waChat: "Chatear",
-  waAgenteNombre: "Agente",
-  waAgenteMsg: (agente) => `Hola ${agente}! Quiero consultar por entradas.`,
 
   fCategoria: "Categoría",
   fLugar: "Lugar",
@@ -638,18 +655,34 @@ const es: typeof en = {
 
   lp: {
     navIngresar: "Ingresar",
-    heroEyebrow: "Acceso por solicitud",
-    heroTitle1: "Los eventos donde",
-    heroTitle2: "todos quieren estar",
+    heroEyebrow: "Acceso agencias",
+    heroTitle1: "Vendé entradas a los eventos",
+    heroTitle2: "que tus pasajeros quieren",
     heroP:
-      "Pedí acceso para explorar los eventos — Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados. El acceso es por aprobación.",
-    ctaSolicitar: "Solicitar acceso",
-    ctaIngresar: "Ya tengo acceso",
+      "Entrás, mirás disponibilidad y precio, y armás el pedido. Nosotros conseguimos la entrada y te la entregamos.",
     irEntradas: "Entrar →",
+    logueadoH: "Ya ingresaste",
+    irPanel: "Ir al panel →",
+    copiarLink: "Copiar link de solicitud",
+    linkCopiado: "Link copiado",
+    copiarError: "No se pudo copiar. Probá de nuevo.",
+    sesionComo: "Entraste como",
+    sumarAgenciaH: "Sumar una agencia",
+    sumarAgenciaP: "Mandale el link de solicitud: abre esta home con el formulario listo.",
+    nuevoH: "¿Nuevo usuario?",
+    // El texto del ticket (TKT-7) dice "Sitio exclusivo…"; va "solo para"
+    // porque TKT-8, que fija el tono, saca "exclusivo" de todos los copys.
+    cartelPre: "Sitio solo para agencias y agentes de viajes. Completá nuestro ",
+    cartelLink: "formulario",
+    cartelPost: " y te enviamos tu acceso.",
+    nuevoBtn: "Nuevo usuario",
+    cerrar: "Cerrar",
+    // Registro de operador mayorista (TKT-8): a quién está dirigido el sitio,
+    // sin exclusividad, sin precios y sin prometer lo que el flujo no cumple.
     bullets: [
-      "Eventos seleccionados de todo el mundo",
-      "Una persona real por WhatsApp, nunca un bot",
-      "Acceso exclusivo para miembros, por aprobación",
+      "Fútbol europeo, Fórmula 1, Champions, Mundial 2026 y shows",
+      "Pedidos y seguimiento en un solo lugar",
+      "Acceso para agencias, operadores, hoteles y vendedores de turismo",
     ],
     comoEyebrow: "Simple",
     comoH2: "Cómo funciona",
@@ -678,6 +711,12 @@ const es: typeof en = {
     okOtra: "Enviar otra solicitud",
     errGeneric: "No pudimos enviar tu solicitud. Probá de nuevo.",
     footTagline: "Acceso a los eventos que importan.",
+    carruselEyebrow: "En agenda",
+    carruselH2: "Eventos que podés vender",
+    carruselAnterior: "Eventos anteriores",
+    carruselSiguiente: "Eventos siguientes",
+    carruselCierre: "Hay más adentro. Pedí tu acceso y mirá el catálogo completo.",
+    carruselTocar: "Pedí acceso para ver más.",
     navCuenta: "Mi cuenta",
     navPedidos: "Mis pedidos",
     cuentaPassH: "Cambiar contraseña",
@@ -731,6 +770,7 @@ const es: typeof en = {
     pagoSinTexto: "Escribinos por WhatsApp y te pasamos los datos para pagar.",
     waPagar: "¡Hola! Quiero pagar mi pedido",
     escribinos: "Escribinos por WhatsApp ↗",
+    consultarWa: "Consultar por WhatsApp ↗",
     cancelarPedido: "Cancelar pedido",
     cancelarConsulta: "Cancelar consulta",
     cancelando: "Cancelando…",
@@ -829,7 +869,17 @@ const es: typeof en = {
     enter: "Ingresar",
     entering: "Ingresando…",
     badCreds: "Email o contraseña incorrectos.",
+    errRevision: "Tu solicitud está en revisión. Te avisamos por WhatsApp apenas esté lista.",
+    errInactiva: "Esta cuenta no está activa. Escribinos por WhatsApp.",
+    errRed: "No pudimos conectarnos. Probá de nuevo en un momento.",
+    errEmailVacio: "Ingresá tu email.",
+    errPassVacia: "Ingresá tu contraseña.",
+    mostrarPass: "Mostrar",
+    ocultarPass: "Ocultar",
+    mostrarPassAria: "Mostrar contraseña",
+    ocultarPassAria: "Ocultar contraseña",
     forgot: "Olvidé mi contraseña",
+    remember: "Recordar mi email",
     requestAccess: "Solicitar acceso",
     resetTitle: "Recuperar contraseña",
     resetSub: "Te mandamos un link para crear una nueva.",

@@ -7,7 +7,6 @@
 // regla vive acá, pura y con tests, y el middleware solo la aplica.
 
 import type { Rol } from "@/lib/auth";
-import { esStaff } from "@/lib/auth";
 
 export type Zona = "landing" | "login" | "tienda" | "panel" | "otra";
 
@@ -65,11 +64,10 @@ export function decidirRuteo(
   // Ya logueado entrando a cualquier login -> a su lugar.
   if (zona === "login") return { accion: "redirigir", a: inicioDe(rol) };
 
-  // El staff no tiene nada que hacer en la página de captación; el cliente sí
-  // la puede ver.
-  if (zona === "landing") {
-    return esStaff(rol) ? { accion: "redirigir", a: inicioDe(rol) } : { accion: "seguir" };
-  }
+  // La landing la ve cualquiera con rol. El staff también: el admin la abre
+  // desde el panel para copiar el link de solicitud y mandárselo a alguien
+  // (antes lo mandaba a su panel y tenía que editar la URL a mano).
+  if (zona === "landing") return { accion: "seguir" };
 
   // Cliente: solo la tienda.
   if (rol === "cliente") {
@@ -83,4 +81,41 @@ export function decidirRuteo(
   }
 
   return { accion: "seguir" };
+}
+
+// --- volver al link profundo después del login ------------------------------
+// El que abre /buscar?q=… sin sesión pasa por /ingresar y, al entrar, tiene
+// que volver a ese link, no a /entradas. El link viaja en ?next=.
+
+export const PARAM_RETORNO = "next";
+
+/** /ingresar con el link pedido para volver después del login. */
+export function loginConRetorno(pedido: string): string {
+  return `/ingresar?${PARAM_RETORNO}=${encodeURIComponent(pedido)}`;
+}
+
+/**
+ * El ?next= solo si es seguro seguirlo: una ruta propia (nada de
+ * "//otro.sitio" ni "https://…", que serían un redirect abierto) y una a la
+ * que ese rol puede entrar. Si no, null y va a su inicio.
+ */
+export function retornoSeguro(next: string | null | undefined, rol: Rol | null): string | null {
+  if (!next || next.length > 2000) return null;
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return null;
+  let url: URL;
+  try {
+    url = new URL(next, "http://x");
+  } catch {
+    return null;
+  }
+  if (url.origin !== "http://x") return null;
+  // Volver a un login no tiene sentido (y sería un loop).
+  if (zonaDe(url.pathname) === "login") return null;
+  if (decidirRuteo(url.pathname, rol, true).accion !== "seguir") return null;
+  return url.pathname + url.search + url.hash;
+}
+
+/** A dónde va alguien que acaba de ingresar. */
+export function destinoTrasLogin(rol: Rol | null, next?: string | null): string {
+  return retornoSeguro(next, rol) ?? inicioDe(rol);
 }

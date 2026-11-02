@@ -472,7 +472,7 @@
   border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
   font-weight: 700; font-size: 15px; transition: transform .12s, box-shadow .12s;
 }
-/* Más específico que .empty (gris y mono): mismo verde/tinta que .wa-float. */
+/* Más específico que .empty (gris y mono): mismo verde/tinta que el WhatsApp flotante. */
 .empty .empty-wa { color: #06310f; font-family: var(--font-body), sans-serif; font-weight: 800; }
 .empty-wa svg { width: 20px; height: 20px; }
 .empty-wa:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
@@ -581,66 +581,6 @@
 }
 .cta-band h2 { font-family: var(--font-body), sans-serif; font-weight: 900; text-transform: uppercase; font-size: 24px; margin: 0 0 4px; }
 .cta-band p { margin: 0; color: #c9ccd6; font-size: 14px; }
-
-/* WhatsApp flotante: botón + panel de agentes */
-.wa-widget {
-  /* bottom respeta el home indicator de iOS (safe area) */
-  position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 50;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
-}
-.wa-float {
-  background: #25d366; color: #06310f; cursor: pointer;
-  font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: .03em;
-  padding: 13px 18px; text-decoration: none; border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
-  transition: .12s;
-}
-.wa-float:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
-
-.wa-panel {
-  width: min(290px, calc(100vw - 36px));
-  background: var(--field); border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
-  animation: rise .25s cubic-bezier(.2,.7,.2,1) both;
-}
-.wa-panel-head { padding: 13px 15px 11px; border-bottom: 1px solid var(--hair); }
-.wa-panel-title {
-  margin: 0; font-family: var(--font-body), sans-serif; font-weight: 900;
-  text-transform: uppercase; font-size: 13px; letter-spacing: .02em;
-}
-.wa-panel-sub { margin: 3px 0 0; font-size: 11px; color: var(--mute); }
-.wa-agente {
-  display: flex; align-items: center; gap: 10px; padding: 11px 15px;
-  border-bottom: 1px solid var(--hair);
-}
-.wa-agente:last-child { border-bottom: none; }
-.wa-avatar {
-  width: 34px; height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-body), sans-serif; font-weight: 900; font-size: 14px; color: #fff;
-  border: 1.5px solid var(--ink);
-}
-.wa-avatar--a { background: var(--cobalt); }
-.wa-avatar--b { background: var(--flare); }
-.wa-agente-info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.wa-agente-nombre { font-family: var(--font-body), sans-serif; font-weight: 800; font-size: 13px; }
-.wa-agente-estado {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--font-mono), monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
-  transition: color .3s;
-}
-.wa-agente-estado i { width: 7px; height: 7px; border-radius: 50%; transition: background .3s; }
-.wa-agente-estado.on { color: var(--ok); }
-.wa-agente-estado.on i { background: var(--ok); animation: wa-pulso 1.6s ease-in-out infinite; }
-.wa-agente-estado.off { color: var(--mute); }
-.wa-agente-estado.off i { background: #b07a14; animation: none; }
-.wa-agente-btn {
-  flex-shrink: 0; background: #25d366; color: #06310f; border: 1px solid var(--ink);
-  font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700; text-transform: uppercase;
-  padding: 7px 12px; transition: .12s;
-}
-.wa-agente-btn:hover { background: #1fba58; }
-@keyframes wa-pulso {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(31, 138, 76, .45); }
-  50% { box-shadow: 0 0 0 4px rgba(31, 138, 76, 0); }
-}
 
 /* ============ admin ============ */
 .admin-login { max-width: 420px; margin: 60px auto; text-align: center; }
@@ -817,13 +757,16 @@
 }
 
 .lp-field { display: grid; gap: 6px; }
-.lp-field > span {
+.lp-field > span,
+.lp-field > label {
   font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .1em; color: var(--mute);
 }
+/* 16px como mínimo en todo lo que se tipea: con menos, iOS hace zoom al tocar
+   el campo. */
 .lp-field input,
 .lp-field textarea {
-  font-family: var(--font-spline), system-ui, sans-serif; font-size: 15px; color: var(--ink);
+  font-family: var(--font-spline), system-ui, sans-serif; font-size: 16px; color: var(--ink);
   background: #fff; border: 1.5px solid var(--ink); padding: 11px 12px; width: 100%;
   transition: .12s; resize: vertical;
 }
@@ -831,11 +774,25 @@
 .lp-field textarea:focus {
   outline: none; border-color: var(--cobalt); box-shadow: 0 0 0 3px #1f33e022;
 }
+.lp-field input[aria-invalid="true"] { border-color: var(--flare); }
+.lp-field-err { font-size: 13px; font-weight: 600; color: var(--flare); }
+
+/* Contraseña con "Mostrar / Ocultar" adentro del campo. */
+.lp-pass { position: relative; }
+.lp-pass input { padding-right: 88px; }
+.lp-pass-ver {
+  position: absolute; top: 0; right: 0; bottom: 0; min-width: 80px; padding: 0 12px;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--cobalt);
+}
+.lp-pass-ver:hover { color: var(--cobalt-d); }
+.lp-pass-ver:focus-visible { outline: 2px solid var(--cobalt); outline-offset: -4px; }
 
 /* Teléfono: selector de código de país + número. */
 .lp-tel { display: grid; grid-template-columns: minmax(0, 44%) 1fr; gap: 8px; }
 .lp-tel-cod {
-  font-family: var(--font-spline), system-ui, sans-serif; font-size: 15px; color: var(--ink);
+  font-family: var(--font-spline), system-ui, sans-serif; font-size: 16px; color: var(--ink);
   background: #fff; border: 1.5px solid var(--ink); padding: 11px 8px 11px 12px; width: 100%;
   transition: .12s; text-overflow: ellipsis;
 }
@@ -878,7 +835,7 @@
   width: 100%; max-width: 420px; background: var(--field); border: 1.5px solid var(--ink);
   box-shadow: 6px 6px 0 var(--ink); padding: 26px 24px;
 }
-.lp-auth-card h1 {
+.lp-auth-title {
   font-family: var(--font-body), sans-serif; font-weight: 900; text-transform: uppercase;
   letter-spacing: -.01em; font-size: 26px; line-height: 1.02; margin: 8px 0 6px;
 }
@@ -896,6 +853,60 @@
 @media (max-width: 640px) {
   .lp-auth-card { box-shadow: 4px 4px 0 var(--ink); padding: 22px 18px; }
 }
+
+/* Bloque de acceso del hero de la home: login arriba, "Nuevo usuario" abajo. */
+.lp-acceso { max-width: 460px; }
+.lp-nuevo { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hair); }
+.lp-nuevo h3 {
+  font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--mute); margin: 0 0 10px;
+}
+/* Cartel: a quién está dirigido el sitio y cómo se pide el acceso. */
+.lp-cartel {
+  margin: 0 0 14px; font-size: 13.5px; line-height: 1.5; color: var(--ink);
+  background: #1f33e00d; border-left: 3px solid var(--cobalt); padding: 10px 12px;
+}
+.lp-cartel-link {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--cobalt); font-weight: 700; text-decoration: underline;
+}
+.lp-cartel-link:hover { color: var(--cobalt-d); }
+.lp-nuevo-btn { display: block; width: 100%; text-align: center; cursor: pointer; }
+
+/* El WhatsApp flotante (56px + margen) no tapa los links legales del pie. */
+.foot--legal { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+
+/* "Ya ingresaste": el bloque de acceso de quien ya tiene sesión. El botón es
+   un <a>: `.tienda a` le pisaba el color (texto oscuro sobre azul) y, inline,
+   no tomaba el ancho ni el margen (se montaba sobre el título). */
+.lp-sesion .lp-auth-sub { margin-bottom: 20px; }
+.lp-sesion-email { color: var(--ink); font-weight: 600; word-break: break-all; }
+.tienda a.lp-sesion-btn { display: block; text-align: center; color: #fff; margin-top: 0; }
+.lp-sesion-nota { margin: 0 0 14px; font-size: 13.5px; line-height: 1.5; color: var(--mute); }
+/* Staff: copiar el link de solicitud (la URL no se muestra, el botón avisa). */
+.lp-copiar-btn.is-ok { background: #1e8e4e14; border-color: var(--ok); color: var(--ok); }
+.lp-copiar-err { margin: 8px 0 0; font-size: 13px; color: var(--flare); }
+.lp-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* Solicitud de acceso en modal (<dialog> nativo). La tarjeta es el .lp-form. */
+.lp-modal {
+  padding: 0; border: none; background: transparent; overflow: visible;
+  width: min(560px, calc(100% - 32px)); max-height: calc(100dvh - 32px);
+}
+.lp-modal[open] { overflow-y: auto; }
+.lp-modal::backdrop { background: rgba(14, 14, 20, .55); }
+.lp-modal .lp-form, .lp-modal .lp-ok { max-width: none; margin: 0 8px 8px 0; }
+.lp-modal-cerrar {
+  position: absolute; top: 8px; right: 16px; z-index: 1;
+  width: 34px; height: 34px; background: none; border: none; cursor: pointer;
+  font-size: 26px; line-height: 1; color: var(--ink);
+}
+.lp-modal-cerrar:hover { color: var(--cobalt); }
+/* Sin scroll de la página de fondo mientras el modal está abierto. */
+html:has(.lp-modal[open]) { overflow: hidden; }
 
 /* Mi cuenta del cliente: perfil y contraseña en UNA línea (lado a lado en
    desktop, apiladas en mobile). */
@@ -1496,3 +1507,102 @@
 .campana-lista span { font-size: 12.5px; color: var(--mute); line-height: 1.45; }
 .campana-lista time { font-size: 11px; color: var(--mute); font-family: var(--font-mono), monospace; }
 .campana-lista li.is-nueva a { box-shadow: inset 3px 0 0 #d14d68; }
+
+/* ============ carrusel de eventos (home) ============ */
+/* Tarjeta tipo ticket: foto 4:3 arriba, talón perforado abajo. La pista hace
+   scroll-snap; en el celular una tarjeta al ~80% deja asomar la siguiente. */
+.lp-carrusel-h { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.lp-carrusel-flechas { display: flex; gap: 10px; flex: 0 0 auto; }
+.lp-carrusel-flechas button {
+  width: 44px; height: 44px; font-size: 18px; font-weight: 700; cursor: pointer;
+  background: var(--field); color: var(--ink); border: 1.5px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink); transition: transform .12s, box-shadow .12s;
+}
+.lp-carrusel-flechas button:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--cobalt); }
+.lp-carrusel-flechas button:disabled { opacity: .35; cursor: default; box-shadow: none; }
+
+.lp-carrusel-pista {
+  list-style: none; margin: 0; padding: 6px 10px 16px 2px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 3 * 26px) / 3.4); gap: 26px;
+  overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.lp-carrusel-pista::-webkit-scrollbar { display: none; }
+
+.lp-cc {
+  scroll-snap-align: start; display: flex; flex-direction: column; min-width: 0;
+  background: var(--field); border: 1.5px solid var(--ink); box-shadow: 5px 5px 0 var(--ink);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.lp-cc:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--cobalt); }
+/* La tarjeta entera es el botón que abre la solicitud (o el link, con sesión). */
+.lp-cc-accion {
+  flex: 1; display: flex; flex-direction: column; width: 100%; min-width: 0;
+  padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit;
+  text-align: left; text-decoration: none; cursor: pointer;
+}
+.lp-cc-accion:focus-visible { outline: 3px solid var(--cobalt); outline-offset: 3px; }
+
+/* Proporción fija, la misma para todas: la tarjeta cambia de tamaño pero no
+   de forma. Las fotos llegan encuadradas a 4:3 desde el panel; cover asegura
+   el mismo recorte aunque alguna no lo esté. */
+.lp-cc-foto { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; background: var(--ink); }
+.lp-cc-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* Fecha y competencia en una fila; el nombre abajo, a todo el ancho del
+   talón, así una palabra larga ("Libertadores") no se parte al medio. */
+.lp-cc-stub {
+  position: relative; flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr);
+  align-items: center; gap: 10px 12px;
+  padding: 18px 14px 16px; border-top: 2px dashed var(--ink);
+}
+/* Muescas: asoman ~8px por lado, así entre dos tarjetas queda aire (gap 26px). */
+.lp-cc-stub::before, .lp-cc-stub::after {
+  content: ""; position: absolute; top: -9px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--paper); border: 1.5px solid var(--ink);
+}
+.lp-cc-stub::before { left: -9px; }
+.lp-cc-stub::after { right: -9px; }
+.lp-cc-txt { display: contents; }
+.lp-cc-nombre { grid-column: 1 / -1; }
+.lp-cc-comp {
+  font-family: var(--font-mono), monospace; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--cobalt);
+}
+/* Los nombres hacen salto de línea: nunca "…". Cortan entre palabras (y
+   con guion si una sola no entra), no en cualquier letra. */
+.lp-cc-nombre {
+  margin: 0; font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase;
+  font-size: 17px; line-height: 1.08; overflow-wrap: break-word; hyphens: auto;
+}
+
+/* Cierre del funnel: la última tarjeta lleva a pedir acceso. */
+.lp-cc--cierre {
+  justify-content: center; align-items: flex-start; gap: 20px; padding: 28px 24px;
+  background: var(--cobalt); color: #fff;
+}
+.lp-cc--cierre p {
+  margin: 0; font-family: var(--font-body), sans-serif; font-weight: 800; text-transform: uppercase;
+  font-size: 21px; line-height: 1.05; text-wrap: balance;
+}
+/* flex: none le gana al "btn-primary a todo el ancho" del móvil, que en esta
+   columna lo estiraba a lo alto. */
+.lp-cc--cierre .btn-primary { flex: none; background: var(--field); color: var(--ink); }
+
+.lp-carrusel-puntos { display: none; justify-content: center; gap: 8px; padding-top: 4px; }
+.lp-carrusel-puntos span { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink); }
+.lp-carrusel-puntos span.on { background: var(--ink); }
+
+@media (max-width: 860px) {
+  .lp-carrusel-pista { grid-auto-columns: calc((100% - 26px) / 1.7); }
+}
+@media (max-width: 640px) {
+  .lp-carrusel-flechas { display: none; }
+  .lp-carrusel-pista { grid-auto-columns: 80%; gap: 22px; }
+  .lp-cc--cierre p { font-size: 24px; }
+  .lp-carrusel-puntos { display: flex; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-cc, .lp-carrusel-flechas button { transition: none; }
+  .lp-cc:hover { transform: none; }
+}

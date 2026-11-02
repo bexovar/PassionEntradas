@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Spline_Sans } from "next/font/google";
 import { CartProvider, CartBar } from "@/components/tienda/Cart";
+import { WhatsAppFlotante } from "@/components/WhatsAppFlotante";
 import "./tienda.css";
 
 const spline = Spline_Sans({
@@ -13,7 +14,7 @@ const spline = Spline_Sans({
 export const metadata: Metadata = {
   title: "TicketMirror — entradas para los eventos que importan",
   description:
-    "Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados, con disponibilidad real y precio claro.",
+    "Entradas para agencias y operadores de turismo: fútbol europeo, Fórmula 1, Champions, Mundial 2026 y shows.",
 };
 
 // Layout de la tienda pública. El wrapper .tienda scopea todos los estilos
@@ -24,6 +25,8 @@ export default function TiendaLayout({ children }: { children: React.ReactNode }
       <CartProvider>
         <div className="tienda-app">{children}</div>
         <CartBar />
+        {/* En todas las pantallas del agente, públicas y logueadas. */}
+        <WhatsAppFlotante />
       </CartProvider>
     </div>
   );

@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { TAG_CATALOGO } from "@/lib/refrescar-tienda";
 import { esProduccion, modoDemo } from "@/lib/entorno";
+import { tarjetasVisibles, type TarjetaCarrusel } from "@/lib/carrusel";
 import {
   DEFAULT_EUR_USD,
   hoyArgentina,
@@ -154,3 +155,32 @@ async function leerConfigTienda(): Promise<ConfigTienda> {
     };
   }
 }
+
+// Carrusel de la home (tabla carrusel_home, lo arma el admin a mano). Si no
+// se puede leer, el carrusel no se muestra: la home no se rompe por eso.
+// Devuelve solo lo que se muestra (lib/carrusel: con foto, sin vencidas, 8).
+export async function fetchCarrusel(): Promise<TarjetaCarrusel[]> {
+  if (modoDemo()) {
+    const { mockListCarrusel } = await import("@/lib/mock-db");
+    return tarjetasVisibles(mockListCarrusel(), hoyArgentina(), true);
+  }
+  try {
+    return tarjetasVisibles(await carruselCacheado());
+  } catch (err) {
+    console.warn("[tienda] carrusel no disponible:", err);
+    return [];
+  }
+}
+
+// Misma caché que el catálogo: cada cambio del panel llama a refrescarTienda().
+const carruselCacheado = unstable_cache(
+  async (): Promise<TarjetaCarrusel[]> => {
+    const { data, error } = await createPublicSupabase()
+      .from("carrusel_home")
+      .select("id, nombre, categoria, mes, imagen_url, orden");
+    if (error) throw new Error(error.message);
+    return (data ?? []) as TarjetaCarrusel[];
+  },
+  ["carrusel-home-v1"],
+  { revalidate: 300, tags: [TAG_CATALOGO] }
+);
