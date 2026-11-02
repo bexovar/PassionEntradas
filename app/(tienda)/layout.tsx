@@ -13,7 +13,7 @@ const spline = Spline_Sans({
 export const metadata: Metadata = {
   title: "TicketMirror — entradas para los eventos que importan",
   description:
-    "Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados, con disponibilidad real y precio claro.",
+    "Entradas para agencias y operadores de turismo: fútbol europeo, Fórmula 1, Champions, Mundial 2026 y shows.",
 };
 
 // Layout de la tienda pública. El wrapper .tienda scopea todos los estilos
