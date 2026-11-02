@@ -36,7 +36,9 @@ export default async function AdminConfiguracionPage() {
   return (
     <main className="min-h-svh pb-16 md:pb-10">
       <AppHeader subtitle="Configuración" email={email} nav />
-      <div className="mx-auto w-full max-w-5xl px-4 pb-6">
+      {/* py-6 como el resto del admin (TicketsPanel): sin eso el primer
+          panel quedaba pegado al header. */}
+      <div className="mx-auto w-full max-w-5xl px-4 py-6">
         <MargenesPanel />
         <TextosPagoPanel />
         <CarruselHomePanel eventos={eventos} competiciones={competiciones} />
