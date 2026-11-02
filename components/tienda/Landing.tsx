@@ -21,16 +21,18 @@ import type { TarjetaCarrusel } from "@/lib/carrusel";
 // La landing es estática, pero si el visitante ya tiene sesión mostramos
 // accesos de logueado (Mi cuenta / Ver entradas) en vez de "Ingresar". Se
 // chequea en el cliente para no volver dinámica toda la página. Devuelve el
-// rol (null = visitante): el staff ve el acceso a su panel y el link de
-// solicitud para copiar.
-function useRolSesion(): Rol | null {
-  const [rol, setRol] = useState<Rol | null>(null);
+// rol (null = visitante) y el email de la sesión: el staff ve el acceso a su
+// panel y el botón para copiar el link de solicitud.
+function useRolSesion(): { rol: Rol | null; email: string | null } {
+  const [sesion, setSesion] = useState<{ rol: Rol | null; email: string | null }>({ rol: null, email: null });
   useEffect(() => {
     let vivo = true;
     (async () => {
       try {
         const { data } = await createClient().auth.getSession();
-        if (vivo && data.session) setRol(getRol(data.session.user));
+        if (vivo && data.session) {
+          setSesion({ rol: getRol(data.session.user), email: data.session.user.email ?? null });
+        }
       } catch {
         /* sin cliente / sin sesión: se queda como visitante */
       }
@@ -39,36 +41,58 @@ function useRolSesion(): Rol | null {
       vivo = false;
     };
   }, []);
-  return rol;
+  return sesion;
+}
+
+// Copia al portapapeles. Sin la API (http que no es localhost, navegador
+// viejo) prueba con execCommand sobre un textarea temporal.
+async function copiarTexto(texto: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(texto);
+    return true;
+  } catch {
+    try {
+      const t = document.createElement("textarea");
+      t.value = texto;
+      t.setAttribute("readonly", "");
+      t.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(t);
+      t.select();
+      const ok = document.execCommand("copy");
+      t.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
 }
 
 // "Copiar link de solicitud": el admin se lo manda a quien quiere sumar. El
-// link abre la home con el formulario ya abierto (/#solicitar).
+// link abre la home con el formulario ya abierto (/#solicitar). No se muestra
+// la URL: el botón la copia y avisa.
 function CopiarLinkSolicitud({ lang }: { lang: Lang }) {
   const lp = TX[lang].lp;
-  const [copiado, setCopiado] = useState(false);
-  const link = typeof window === "undefined" ? "/#solicitar" : `${window.location.origin}/#solicitar`;
+  const [estado, setEstado] = useState<"idle" | "ok" | "error">("idle");
   async function copiar() {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2500);
-    } catch {
-      /* sin portapapeles: queda el link visible para copiarlo a mano */
-    }
+    const ok = await copiarTexto(`${window.location.origin}/#solicitar`);
+    setEstado(ok ? "ok" : "error");
+    setTimeout(() => setEstado("idle"), 2500);
   }
   return (
-    <div className="lp-copiar">
-      <button type="button" className="btn-ghost lp-nuevo-btn" onClick={copiar}>
-        {copiado ? lp.linkCopiado : lp.copiarLink}
+    <>
+      <button
+        type="button"
+        className={`btn-ghost lp-nuevo-btn lp-copiar-btn${estado === "ok" ? " is-ok" : ""}`}
+        onClick={copiar}
+        data-sin-wa
+      >
+        {estado === "ok" ? `✓ ${lp.linkCopiado}` : lp.copiarLink}
       </button>
-      <a className="lp-copiar-link" href="/#solicitar">
-        {link}
-      </a>
+      {estado === "error" && <p className="lp-copiar-err">{lp.copiarError}</p>}
       <span className="lp-sr" role="status">
-        {copiado ? lp.linkCopiado : ""}
+        {estado === "ok" ? lp.linkCopiado : estado === "error" ? lp.copiarError : ""}
       </span>
-    </div>
+    </>
   );
 }
 
@@ -107,7 +131,7 @@ type Estado = "idle" | "sending" | "ok" | "error";
 export function Landing({ carrusel = [] }: { carrusel?: TarjetaCarrusel[] }) {
   const [lang, setLang] = useLang();
   const lp = TX[lang].lp;
-  const rol = useRolSesion();
+  const { rol, email: emailSesion } = useRolSesion();
   const logueado = rol != null;
 
   const emailRef = useRef<HTMLInputElement>(null);
@@ -187,18 +211,29 @@ export function Landing({ carrusel = [] }: { carrusel?: TarjetaCarrusel[] }) {
               camino del que todavía no tiene usuario. */}
           <div className="lp-hero-form" id="acceso">
             {logueado ? (
-              <div className="lp-auth-card">
+              // Mismo armado que el de visitante: arriba lo principal (entrar),
+              // y el staff abajo, separado, el link para sumar una agencia.
+              <div className="lp-auth-card lp-acceso lp-sesion">
                 <h2 className="lp-auth-title">{lp.logueadoH}</h2>
+                {emailSesion && (
+                  <p className="lp-auth-sub">
+                    {lp.sesionComo} <b className="lp-sesion-email">{emailSesion}</b>
+                  </p>
+                )}
                 {esStaff(rol) ? (
                   <>
                     {/* Carga completa: el panel trae su propio CSS. */}
-                    <a className="btn-primary lp-submit" href={inicioDe(rol)} data-sin-wa>
+                    <a className="btn-primary lp-submit lp-sesion-btn" href={inicioDe(rol)} data-sin-wa>
                       {lp.irPanel}
                     </a>
-                    <CopiarLinkSolicitud lang={lang} />
+                    <div className="lp-nuevo">
+                      <h3>{lp.sumarAgenciaH}</h3>
+                      <p className="lp-sesion-nota">{lp.sumarAgenciaP}</p>
+                      <CopiarLinkSolicitud lang={lang} />
+                    </div>
                   </>
                 ) : (
-                  <Link className="btn-primary lp-submit" href="/entradas" data-sin-wa>
+                  <Link className="btn-primary lp-submit lp-sesion-btn" href="/entradas" data-sin-wa>
                     {lp.irEntradas}
                   </Link>
                 )}

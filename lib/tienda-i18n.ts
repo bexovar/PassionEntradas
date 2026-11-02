@@ -220,6 +220,10 @@ const en = {
     irPanel: "Go to the panel →",
     copiarLink: "Copy the request link",
     linkCopiado: "Link copied",
+    copiarError: "Couldn't copy it. Try again.",
+    sesionComo: "Signed in as",
+    sumarAgenciaH: "Bring in an agency",
+    sumarAgenciaP: "Send them the request link: it opens this home with the form ready.",
     nuevoH: "New user?",
     cartelPre: "Site only for travel agencies and agents. Fill in our ",
     cartelLink: "form",
@@ -661,6 +665,10 @@ const es: typeof en = {
     irPanel: "Ir al panel →",
     copiarLink: "Copiar link de solicitud",
     linkCopiado: "Link copiado",
+    copiarError: "No se pudo copiar. Probá de nuevo.",
+    sesionComo: "Entraste como",
+    sumarAgenciaH: "Sumar una agencia",
+    sumarAgenciaP: "Mandale el link de solicitud: abre esta home con el formulario listo.",
     nuevoH: "¿Nuevo usuario?",
     // El texto del ticket (TKT-7) dice "Sitio exclusivo…"; va "solo para"
     // porque TKT-8, que fija el tono, saca "exclusivo" de todos los copys.

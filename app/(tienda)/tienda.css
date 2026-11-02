@@ -876,12 +876,16 @@
 /* El WhatsApp flotante (56px + margen) no tapa los links legales del pie. */
 .foot--legal { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 
-/* Staff en la home: el link de solicitud, para copiarlo y mandarlo. */
-.lp-copiar { margin-top: 14px; display: grid; gap: 8px; }
-.lp-copiar-link {
-  font-family: var(--font-mono), monospace; font-size: 12px; color: var(--mute);
-  word-break: break-all; text-align: center;
-}
+/* "Ya ingresaste": el bloque de acceso de quien ya tiene sesión. El botón es
+   un <a>: `.tienda a` le pisaba el color (texto oscuro sobre azul) y, inline,
+   no tomaba el ancho ni el margen (se montaba sobre el título). */
+.lp-sesion .lp-auth-sub { margin-bottom: 20px; }
+.lp-sesion-email { color: var(--ink); font-weight: 600; word-break: break-all; }
+.tienda a.lp-sesion-btn { display: block; text-align: center; color: #fff; margin-top: 0; }
+.lp-sesion-nota { margin: 0 0 14px; font-size: 13.5px; line-height: 1.5; color: var(--mute); }
+/* Staff: copiar el link de solicitud (la URL no se muestra, el botón avisa). */
+.lp-copiar-btn.is-ok { background: #1e8e4e14; border-color: var(--ok); color: var(--ok); }
+.lp-copiar-err { margin: 8px 0 0; font-size: 13px; color: var(--flare); }
 .lp-sr {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap;
