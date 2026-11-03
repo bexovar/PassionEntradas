@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { SolicitudAcceso } from "@/lib/acceso";
+import { ETIQUETA_TIPO_ORGANIZACION, organizacionLegible, type SolicitudAcceso } from "@/lib/acceso";
 import { fechaHora } from "@/lib/fechas";
 import ConfirmarBoton from "@/components/ConfirmarBoton";
 
@@ -275,16 +275,37 @@ export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcces
                 <div key={s.id} className="rounded-xl border border-line p-3.5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold">{s.nombre}</p>
+                      {/* Desde TKT-11, primero la organización: es lo que hay
+                          que saber para aprobar. Las solicitudes anteriores no
+                          la tienen y arrancan por la persona. */}
+                      {s.organizacion && (
+                        <>
+                          {s.tipo_organizacion && (
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-cobalt">
+                              {ETIQUETA_TIPO_ORGANIZACION[s.tipo_organizacion]}
+                            </p>
+                          )}
+                          <p className="text-sm font-semibold [overflow-wrap:anywhere]">{s.organizacion}</p>
+                        </>
+                      )}
+                      <p
+                        className={
+                          s.organizacion ? "text-sm [overflow-wrap:anywhere]" : "text-sm font-semibold [overflow-wrap:anywhere]"
+                        }
+                      >
+                        {s.nombre}
+                      </p>
                       <p className="break-all text-xs text-muted">{s.email}</p>
                       {s.telefono && (
                         <p className="text-xs text-muted">{s.telefono}</p>
                       )}
-                      {/* Legajo/CUIL/CUIT en las solicitudes nuevas; las
-                          viejas solo tienen dirección. Se muestra lo que haya. */}
+                      {/* CUIT validado en las solicitudes desde TKT-11; antes,
+                          legajo/CUIL/CUIT libre, y las más viejas solo tienen
+                          dirección. Se muestra lo que haya. */}
                       {s.legajo && (
                         <p className="text-xs text-muted">
-                          <span className="text-[#8A8FA3]">Legajo/CUIT:</span> {s.legajo}
+                          <span className="text-[#8A8FA3]">{s.tipo_organizacion ? "CUIT:" : "Legajo/CUIT:"}</span>{" "}
+                          {s.legajo}
                         </p>
                       )}
                       {s.direccion && (
@@ -421,7 +442,10 @@ export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcces
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-canvas px-3 py-2.5"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium [overflow-wrap:anywhere]">{s.nombre}</p>
+                      <p className="text-sm font-medium [overflow-wrap:anywhere]">
+                        {s.nombre}
+                        {s.organizacion && <span className="font-normal text-muted"> · {organizacionLegible(s)}</span>}
+                      </p>
                       <p className="break-all text-xs text-muted">{s.email}</p>
                       {/* Auditoría: quién decidió/revocó y cuándo. */}
                       <p className="text-[11px] text-muted">

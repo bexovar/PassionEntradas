@@ -13,6 +13,14 @@ import { esStaff, getRol, type Rol } from "@/lib/auth";
 import { inicioDe } from "@/lib/ruteo";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { PAISES, PAIS_DEFAULT, dialDe, nombrePais } from "@/lib/paises";
+import {
+  MAX_ORGANIZACION,
+  TIPOS_ORGANIZACION,
+  validarSolicitud,
+  type CodigoErrorSolicitud,
+  type TipoOrganizacion,
+} from "@/lib/acceso";
+import { validarCuit } from "@/lib/cuit";
 import { LegalLinks } from "@/components/tienda/LegalLinks";
 import { LoginForm } from "@/components/tienda/LoginForm";
 import { CarruselEventos } from "@/components/tienda/CarruselEventos";
@@ -314,46 +322,105 @@ export function Landing({ carrusel = [] }: { carrusel?: TarjetaCarrusel[] }) {
   );
 }
 
-// Formulario de solicitud de acceso (va dentro del modal).
+// Formulario de solicitud de acceso (va dentro del modal). Campos de TKT-11:
+// primero la organización, después la persona, y el CUIT validado. Se valida
+// con lo mismo que la API (validarSolicitud) antes de enviar.
+
+// El campo del form que marca cada error de validarSolicitud.
+type CampoForm = "tipoOrganizacion" | "organizacion" | "nombre" | "email" | "telefono" | "cuit" | "acepto";
+const CAMPO_DE: Record<CodigoErrorSolicitud, CampoForm> = {
+  tipo: "tipoOrganizacion",
+  organizacion: "organizacion",
+  nombre: "nombre",
+  email: "email",
+  telefono: "telefono",
+  cuit_formato: "cuit",
+  cuit_invalido: "cuit",
+  acepto: "acepto",
+};
+
 function SolicitudForm({ lang }: { lang: Lang }) {
   const t = TX[lang];
   const lp = t.lp;
+  const formRef = useRef<HTMLFormElement>(null);
 
+  const [tipo, setTipo] = useState<TipoOrganizacion | "">("");
+  const [organizacion, setOrganizacion] = useState("");
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   // Teléfono en dos partes: país (código) + número. Se combinan al enviar.
   const [pais, setPais] = useState(PAIS_DEFAULT);
   const [telefono, setTelefono] = useState("");
-  const [legajo, setLegajo] = useState("");
-  const [mensaje, setMensaje] = useState("");
+  const [cuit, setCuit] = useState("");
   // Consentimiento de términos: obligatorio para poder enviar la solicitud.
   const [acepto, setAcepto] = useState(false);
-  // Honeypot: un bot rellena todo; un humano no ve este campo.
-  const [empresa, setEmpresa] = useState("");
+  // Honeypot: un bot rellena todo; un humano no ve este campo. NO se llama
+  // "empresa" ni nada parecido: al lado del campo de organización, el
+  // autocompletar del navegador lo llenaba y la solicitud se descartaba.
+  const [trampa, setTrampa] = useState("");
   const [estado, setEstado] = useState<Estado>("idle");
+  // Error general (red, servidor): arriba del botón.
   const [error, setError] = useState<string | null>(null);
+  // Error de un campo: debajo de ese campo.
+  const [errorCampo, setErrorCampo] = useState<{ campo: CampoForm; codigo: CodigoErrorSolicitud } | null>(null);
+
+  const datos = () => ({
+    tipoOrganizacion: tipo,
+    organizacion,
+    nombre,
+    email,
+    // El número se manda con el prefijo del país elegido.
+    telefono: telefono.trim() ? `${dialDe(pais)} ${telefono.trim()}` : "",
+    cuit,
+    acepto,
+  });
+
+  // Marca el campo que falló y lo enfoca, para corregirlo sin buscarlo.
+  function marcar(codigo: CodigoErrorSolicitud) {
+    const campo = CAMPO_DE[codigo];
+    setErrorCampo({ campo, codigo });
+    setEstado("idle");
+    formRef.current?.querySelector<HTMLElement>(`[name="${campo}"]`)?.focus();
+  }
+
+  // El campo que se está corrigiendo deja de marcarse.
+  const limpiar = (campo: CampoForm) => {
+    if (errorCampo?.campo === campo) setErrorCampo(null);
+  };
+
+  // CUIT: al salir del campo se valida; si está bien, queda con guiones.
+  function onCuitBlur() {
+    if (!cuit.trim()) return;
+    const r = validarCuit(cuit);
+    if (r.ok) setCuit(r.cuit);
+    else setErrorCampo({ campo: "cuit", codigo: r.motivo === "formato" ? "cuit_formato" : "cuit_invalido" });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (estado === "sending") return;
-    // Sin consentimiento no se envía (además la API lo revalida).
-    if (!acepto) {
-      setError(lp.consentError);
-      setEstado("error");
+    setError(null);
+    // Mismo criterio que la API: con un campo mal, no se envía.
+    const v = validarSolicitud(datos());
+    if (!v.ok) {
+      marcar(v.codigo);
       return;
     }
+    setErrorCampo(null);
     setEstado("sending");
-    setError(null);
     try {
-      // El número se manda con el prefijo del país elegido.
-      const telefonoCompleto = telefono.trim() ? `${dialDe(pais)} ${telefono.trim()}` : "";
       const res = await fetch("/api/acceso/solicitar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, email, telefono: telefonoCompleto, legajo, mensaje, empresa, acepto }),
+        body: JSON.stringify({ ...datos(), hp_campo: trampa }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const codigo = data?.codigo as CodigoErrorSolicitud | undefined;
+        if (codigo && codigo in CAMPO_DE) {
+          marcar(codigo);
+          return;
+        }
         setError(typeof data?.error === "string" ? data.error : lp.errGeneric);
         setEstado("error");
         return;
@@ -366,16 +433,29 @@ function SolicitudForm({ lang }: { lang: Lang }) {
   }
 
   function reset() {
+    setTipo("");
+    setOrganizacion("");
     setNombre("");
     setEmail("");
     setPais(PAIS_DEFAULT);
     setTelefono("");
-    setLegajo("");
-    setMensaje("");
+    setCuit("");
     setAcepto(false);
     setEstado("idle");
     setError(null);
+    setErrorCampo(null);
   }
+
+  const invalido = (c: CampoForm) => errorCampo?.campo === c;
+  const errId = (c: CampoForm) => `sol-${c}-err`;
+  const aria = (c: CampoForm) =>
+    invalido(c) ? { "aria-invalid": true as const, "aria-describedby": errId(c) } : {};
+  const errorDe = (c: CampoForm) =>
+    invalido(c) && errorCampo ? (
+      <small className="lp-field-err" id={errId(c)}>
+        {lp.erroresSolicitud[errorCampo.codigo]}
+      </small>
+    ) : null;
 
   return estado === "ok" ? (
     <div className="lp-ok" role="status">
@@ -389,11 +469,55 @@ function SolicitudForm({ lang }: { lang: Lang }) {
       </button>
     </div>
   ) : (
-    <form className="lp-form" onSubmit={onSubmit} noValidate>
+    <form ref={formRef} className="lp-form" onSubmit={onSubmit} noValidate>
       <div className="lp-form-head">
         <span className="sh-eyebrow">{lp.formEyebrow}</span>
         <h2>{lp.formTitle}</h2>
       </div>
+      <label className="lp-field">
+        <span>{lp.fTipo}</span>
+        <select
+          name="tipoOrganizacion"
+          required
+          value={tipo}
+          onChange={(e) => {
+            setTipo(e.target.value as TipoOrganizacion | "");
+            limpiar("tipoOrganizacion");
+          }}
+          {...aria("tipoOrganizacion")}
+        >
+          <option value="" disabled>
+            {lp.fTipoPh}
+          </option>
+          {TIPOS_ORGANIZACION.map((k) => (
+            <option key={k} value={k}>
+              {lp.tiposOrg[k]}
+            </option>
+          ))}
+        </select>
+        {errorDe("tipoOrganizacion")}
+      </label>
+      <label className="lp-field">
+        <span>{lp.fOrganizacion}</span>
+        <input
+          type="text"
+          name="organizacion"
+          autoComplete="organization"
+          required
+          maxLength={MAX_ORGANIZACION}
+          placeholder={lp.fOrganizacionPh}
+          value={organizacion}
+          onChange={(e) => {
+            setOrganizacion(e.target.value);
+            limpiar("organizacion");
+          }}
+          {...aria("organizacion")}
+        />
+        {tipo === "freelance" && !invalido("organizacion") && (
+          <small className="lp-field-hint">{lp.fOrganizacionFreelance}</small>
+        )}
+        {errorDe("organizacion")}
+      </label>
       <label className="lp-field">
         <span>{lp.fNombre}</span>
         <input
@@ -402,8 +526,13 @@ function SolicitudForm({ lang }: { lang: Lang }) {
           autoComplete="name"
           required
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => {
+            setNombre(e.target.value);
+            limpiar("nombre");
+          }}
+          {...aria("nombre")}
         />
+        {errorDe("nombre")}
       </label>
       <label className="lp-field">
         <span>{lp.fEmail}</span>
@@ -413,11 +542,16 @@ function SolicitudForm({ lang }: { lang: Lang }) {
           autoComplete="email"
           required
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            limpiar("email");
+          }}
+          {...aria("email")}
         />
+        {errorDe("email")}
       </label>
       <label className="lp-field">
-        <span>{lp.fTelefono}</span>
+        <span>{lp.fWhatsapp}</span>
         <div className="lp-tel">
           <select
             className="lp-tel-cod"
@@ -439,45 +573,48 @@ function SolicitudForm({ lang }: { lang: Lang }) {
             autoComplete="tel-national"
             required
             value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
+            onChange={(e) => {
+              setTelefono(e.target.value);
+              limpiar("telefono");
+            }}
+            {...aria("telefono")}
           />
         </div>
+        {errorDe("telefono")}
       </label>
       <label className="lp-field">
-        <span>{lp.fLegajo}</span>
+        <span>{lp.fCuit}</span>
         <input
           type="text"
-          name="legajo"
-          inputMode="text"
+          name="cuit"
+          // Teclado numérico: el CUIT entra igual sin guiones.
+          inputMode="numeric"
           autoComplete="off"
-          placeholder={lp.fLegajoPh}
+          maxLength={20}
+          placeholder={lp.fCuitPh}
           required
-          value={legajo}
-          onChange={(e) => setLegajo(e.target.value)}
+          value={cuit}
+          onChange={(e) => {
+            setCuit(e.target.value);
+            limpiar("cuit");
+          }}
+          onBlur={onCuitBlur}
+          {...aria("cuit")}
         />
-      </label>
-      <label className="lp-field">
-        <span>{lp.fMensaje}</span>
-        <textarea
-          name="mensaje"
-          rows={2}
-          placeholder={lp.fMensajePh}
-          value={mensaje}
-          onChange={(e) => setMensaje(e.target.value)}
-        />
+        {errorDe("cuit")}
       </label>
 
       {/* Honeypot anti-spam: oculto para personas, tentador para bots. */}
       <div className="lp-hp" aria-hidden>
         <label>
-          Empresa
+          No completar
           <input
             type="text"
-            name="empresa"
+            name="hp_campo"
             tabIndex={-1}
             autoComplete="off"
-            value={empresa}
-            onChange={(e) => setEmpresa(e.target.value)}
+            value={trampa}
+            onChange={(e) => setTrampa(e.target.value)}
           />
         </label>
       </div>
@@ -488,8 +625,12 @@ function SolicitudForm({ lang }: { lang: Lang }) {
           type="checkbox"
           name="acepto"
           checked={acepto}
-          onChange={(e) => setAcepto(e.target.checked)}
+          onChange={(e) => {
+            setAcepto(e.target.checked);
+            limpiar("acepto");
+          }}
           required
+          {...aria("acepto")}
         />
         <span>
           {lp.consentPre}
@@ -503,6 +644,7 @@ function SolicitudForm({ lang }: { lang: Lang }) {
           .
         </span>
       </label>
+      {errorDe("acepto")}
 
       {estado === "error" && error && <p className="lp-err">{error}</p>}
 

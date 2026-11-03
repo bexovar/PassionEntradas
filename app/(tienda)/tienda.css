@@ -765,17 +765,22 @@
 /* 16px como mínimo en todo lo que se tipea: con menos, iOS hace zoom al tocar
    el campo. */
 .lp-field input,
+.lp-field select,
 .lp-field textarea {
   font-family: var(--font-spline), system-ui, sans-serif; font-size: 16px; color: var(--ink);
   background: #fff; border: 1.5px solid var(--ink); padding: 11px 12px; width: 100%;
   transition: .12s; resize: vertical;
 }
 .lp-field input:focus,
+.lp-field select:focus,
 .lp-field textarea:focus {
   outline: none; border-color: var(--cobalt); box-shadow: 0 0 0 3px #1f33e022;
 }
-.lp-field input[aria-invalid="true"] { border-color: var(--flare); }
+.lp-field input[aria-invalid="true"],
+.lp-field select[aria-invalid="true"] { border-color: var(--flare); }
 .lp-field-err { font-size: 13px; font-weight: 600; color: var(--flare); }
+.lp-field-hint { font-size: 13px; color: var(--mute); }
+.lp-consent + .lp-field-err { margin-top: -6px; }
 
 /* Contraseña con "Mostrar / Ocultar" adentro del campo. */
 .lp-pass { position: relative; }

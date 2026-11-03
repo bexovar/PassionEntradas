@@ -2,6 +2,8 @@
 // aprobación del admin → usuario cliente). Sin dependencias de servidor:
 // tipos, validación y generación/armado de credenciales.
 
+import { validarCuit } from "@/lib/cuit";
+
 export type EstadoSolicitud = "pendiente" | "aprobada" | "rechazada";
 
 export type SolicitudAcceso = {
@@ -9,10 +11,16 @@ export type SolicitudAcceso = {
   nombre: string;
   email: string;
   telefono: string | null;
-  // Dato fiscal/identificatorio del agente. Reemplaza a `direccion` en el
-  // formulario; `direccion` queda solo en las solicitudes viejas.
+  // CUIT validado ("20-12345678-6") en las solicitudes desde TKT-11; en las
+  // anteriores, el legajo/CUIL/CUIT en texto libre. Reemplazó a `direccion`,
+  // que queda solo en las solicitudes más viejas.
   legajo: string | null;
+  // Organización (TKT-11). null en las solicitudes anteriores.
+  tipo_organizacion: TipoOrganizacion | null;
+  organizacion: string | null;
   direccion: string | null;
+  // "¿Buscás algo en particular?": salió del formulario con TKT-11; queda en
+  // las solicitudes viejas.
   mensaje: string | null;
   estado: EstadoSolicitud;
   user_id: string | null;
@@ -31,47 +39,110 @@ export type SolicitudAcceso = {
   equipo?: "administrador" | "moderador" | null;
 };
 
-// Lo que entra desde el formulario público, ya saneado. Nombre, email,
-// teléfono y legajo son obligatorios; el mensaje es lo único opcional.
+// Tipo de organización del que pide acceso (TKT-11): lista cerrada para poder
+// segmentar después. "otro" cubre las bocas de venta que no entran en las
+// demás (tanguerías, restaurantes, lugares que venden a turistas).
+export const TIPOS_ORGANIZACION = ["agencia", "operador", "freelance", "hoteleria", "otro"] as const;
+export type TipoOrganizacion = (typeof TIPOS_ORGANIZACION)[number];
+
+export const MAX_ORGANIZACION = 120;
+
+// Cómo se lee cada tipo en el panel y en los avisos al equipo (en la landing
+// van traducidos, ver tienda-i18n).
+export const ETIQUETA_TIPO_ORGANIZACION: Record<TipoOrganizacion, string> = {
+  agencia: "Agencia de viajes",
+  operador: "Operador",
+  freelance: "Freelance",
+  hoteleria: "Hotelería",
+  otro: "Otro",
+};
+
+/** "Viajes del Sur (Agencia de viajes)", o null si la solicitud es anterior a TKT-11. */
+export function organizacionLegible(s: {
+  tipo_organizacion?: TipoOrganizacion | null;
+  organizacion?: string | null;
+}): string | null {
+  if (!s.organizacion) return null;
+  return s.tipo_organizacion ? `${s.organizacion} (${ETIQUETA_TIPO_ORGANIZACION[s.tipo_organizacion]})` : s.organizacion;
+}
+
+// Lo que entra desde el formulario público, ya saneado. Todo es obligatorio.
+// El CUIT viaja con guiones ("20-12345678-6") y se guarda en la columna
+// `legajo`, que es la que llega a la cuenta y a la factura.
 export type SolicitudInput = {
+  tipoOrganizacion: TipoOrganizacion;
+  organizacion: string;
   nombre: string;
   email: string;
   telefono: string;
-  legajo: string;
-  mensaje: string | null;
+  cuit: string;
   // Consentimiento de términos y condiciones (obligatorio para solicitar).
   acepto: boolean;
 };
 
+// Qué campo falló: la landing lo traduce y lo marca en el campo. `error` es
+// el mismo mensaje en español, que es lo que devuelve la API.
+export type CodigoErrorSolicitud =
+  | "tipo"
+  | "organizacion"
+  | "nombre"
+  | "email"
+  | "telefono"
+  | "cuit_formato"
+  | "cuit_invalido"
+  | "acepto";
+
+export const ERRORES_SOLICITUD: Record<CodigoErrorSolicitud, string> = {
+  tipo: "Elegí el tipo de organización",
+  organizacion: "Ingresá el nombre de la organización",
+  nombre: "Ingresá tu nombre",
+  email: "Ingresá un email válido",
+  telefono: "Ingresá un teléfono válido",
+  cuit_formato: "Ingresá el CUIT: 11 números, con o sin guiones (ej. 20-12345678-6)",
+  cuit_invalido: "Ese CUIT no es válido. Revisá los números (ej. 20-12345678-6)",
+  acepto: "Tenés que aceptar los términos y condiciones para continuar",
+};
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+const esTipo = (v: unknown): v is TipoOrganizacion =>
+  typeof v === "string" && (TIPOS_ORGANIZACION as readonly string[]).includes(v);
+
 // Valida y normaliza el input del formulario. Devuelve el error del PRIMER
-// campo inválido (mismo criterio en la landing y en la API).
+// campo inválido, en el orden del formulario (mismo criterio en la landing y
+// en la API).
 export function validarSolicitud(raw: {
+  tipoOrganizacion?: unknown;
+  organizacion?: unknown;
   nombre?: unknown;
   email?: unknown;
   telefono?: unknown;
-  legajo?: unknown;
-  mensaje?: unknown;
+  cuit?: unknown;
   acepto?: unknown;
-}): { ok: true; value: SolicitudInput } | { ok: false; error: string } {
+}):
+  | { ok: true; value: SolicitudInput }
+  | { ok: false; error: string; codigo: CodigoErrorSolicitud } {
+  const falla = (codigo: CodigoErrorSolicitud) => ({ ok: false as const, error: ERRORES_SOLICITUD[codigo], codigo });
+
+  const organizacion = String(raw.organizacion ?? "").trim().replace(/\s+/g, " ").slice(0, MAX_ORGANIZACION);
   const nombre = String(raw.nombre ?? "").trim().slice(0, 120);
   const email = String(raw.email ?? "").trim().toLowerCase().slice(0, 160);
   const telefono = String(raw.telefono ?? "").trim().slice(0, 40);
-  // Texto libre: un CUIT/CUIL puede venir con guiones o sin ellos, y "legajo"
-  // depende de cada empresa. Se valida que haya algo razonable, no el formato.
-  const legajo = String(raw.legajo ?? "").trim().slice(0, 40);
-  const mensaje = String(raw.mensaje ?? "").trim().slice(0, 1000) || null;
   const acepto = raw.acepto === true;
 
-  if (nombre.length < 2) return { ok: false, error: "Ingresá tu nombre" };
-  if (!EMAIL_RE.test(email)) return { ok: false, error: "Ingresá un email válido" };
-  if (telefono.length < 6) return { ok: false, error: "Ingresá un teléfono válido" };
-  if (legajo.length < 4) return { ok: false, error: "Ingresá tu legajo, CUIL o CUIT" };
+  if (!esTipo(raw.tipoOrganizacion)) return falla("tipo");
+  if (organizacion.length < 2) return falla("organizacion");
+  if (nombre.length < 2) return falla("nombre");
+  if (!EMAIL_RE.test(email)) return falla("email");
+  if (telefono.length < 6) return falla("telefono");
+  const cuit = validarCuit(raw.cuit);
+  if (!cuit.ok) return falla(cuit.motivo === "formato" ? "cuit_formato" : "cuit_invalido");
   // El consentimiento es obligatorio: sin aceptar los términos no hay solicitud.
-  if (!acepto)
-    return { ok: false, error: "Tenés que aceptar los términos y condiciones para continuar" };
-  return { ok: true, value: { nombre, email, telefono, legajo, mensaje, acepto } };
+  if (!acepto) return falla("acepto");
+  return {
+    ok: true,
+    value: { tipoOrganizacion: raw.tipoOrganizacion, organizacion, nombre, email, telefono, cuit: cuit.cuit, acepto },
+  };
 }
 
 // --- límite de solicitudes ----------------------------------------------------

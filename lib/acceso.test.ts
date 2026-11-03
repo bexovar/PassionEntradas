@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { evaluarLimiteSolicitud, ipDe, SOL_AVISOS_POR_HORA, SOL_MAX_POR_IP, validarSolicitud } from "./acceso";
+import {
+  evaluarLimiteSolicitud,
+  ipDe,
+  SOL_AVISOS_POR_HORA,
+  SOL_MAX_POR_IP,
+  TIPOS_ORGANIZACION,
+  validarSolicitud,
+} from "./acceso";
 
 describe("evaluarLimiteSolicitud", () => {
   it("acepta hasta el tope por IP y después no", () => {
@@ -29,74 +36,102 @@ describe("ipDe", () => {
 // input hostil. Estos tests fijan qué se acepta y qué mensaje se devuelve.
 
 const base = {
+  tipoOrganizacion: "agencia",
+  organizacion: "Viajes del Sur",
   nombre: "Lucía Fernández",
   email: "lucia@example.com",
   telefono: "+54 9 11 5555 1234",
-  legajo: "27-35123456-4",
-  mensaje: "Busco la final del Mundial",
+  cuit: "27-35123456-9",
   acepto: true,
 };
 
-describe("validarSolicitud — legajo", () => {
-  it("acepta un CUIT con guiones", () => {
-    const r = validarSolicitud(base);
+const error = (raw: Record<string, unknown>) => {
+  const r = validarSolicitud(raw);
+  return r.ok ? null : r;
+};
+
+describe("validarSolicitud — organización (TKT-11)", () => {
+  it("acepta la solicitud completa y devuelve los datos limpios", () => {
+    const r = validarSolicitud({ ...base, organizacion: "  Viajes   del Sur " });
+    expect(r).toEqual({
+      ok: true,
+      value: {
+        tipoOrganizacion: "agencia",
+        organizacion: "Viajes del Sur",
+        nombre: "Lucía Fernández",
+        email: "lucia@example.com",
+        telefono: "+54 9 11 5555 1234",
+        cuit: "27-35123456-9",
+        acepto: true,
+      },
+    });
+  });
+
+  it("acepta los cinco tipos del dropdown", () => {
+    for (const t of TIPOS_ORGANIZACION) expect(validarSolicitud({ ...base, tipoOrganizacion: t }).ok).toBe(true);
+    expect(TIPOS_ORGANIZACION).toEqual(["agencia", "operador", "freelance", "hoteleria", "otro"]);
+  });
+
+  it("no se puede enviar sin tipo de organización, ni con uno inventado", () => {
+    expect(error({ ...base, tipoOrganizacion: "" })?.codigo).toBe("tipo");
+    expect(error({ ...base, tipoOrganizacion: "aerolinea" })?.codigo).toBe("tipo");
+    expect(error({ ...base, tipoOrganizacion: undefined })?.codigo).toBe("tipo");
+  });
+
+  it("no se puede enviar sin nombre de organización", () => {
+    expect(error({ ...base, organizacion: "" })?.codigo).toBe("organizacion");
+    expect(error({ ...base, organizacion: " x " })?.codigo).toBe("organizacion");
+  });
+
+  it("acota un nombre de organización absurdamente largo", () => {
+    const r = validarSolicitud({ ...base, organizacion: "A".repeat(500) });
+    expect(r.ok && r.value.organizacion.length).toBe(120);
+  });
+
+  it("el freelance pone su propio nombre como organización", () => {
+    const r = validarSolicitud({ ...base, tipoOrganizacion: "freelance", organizacion: "Lucía Fernández" });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.legajo).toBe("27-35123456-4");
   });
 
-  // "Legajo" depende de cada empresa: puede ser un número interno corto,
-  // un CUIL sin guiones, o un alfanumérico. No se valida el formato.
-  it("acepta un legajo interno sin formato de CUIT", () => {
-    const r = validarSolicitud({ ...base, legajo: "A-4471" });
-    expect(r.ok).toBe(true);
+  it("valida primero la organización: es lo primero del form", () => {
+    expect(error({ ...base, tipoOrganizacion: "", nombre: "", cuit: "" })?.codigo).toBe("tipo");
+  });
+});
+
+describe("validarSolicitud — CUIT (TKT-11)", () => {
+  it("lo guarda siempre con guiones, venga como venga", () => {
+    const r = validarSolicitud({ ...base, cuit: "27351234569" });
+    expect(r.ok && r.value.cuit).toBe("27-35123456-9");
   });
 
-  it("acepta un CUIL sin guiones", () => {
-    const r = validarSolicitud({ ...base, legajo: "20123456789" });
-    expect(r.ok).toBe(true);
+  it("sin CUIT o con formato inválido, el error dice qué formato se espera", () => {
+    for (const cuit of ["", "A-4471", "2735123456"]) {
+      const e = error({ ...base, cuit });
+      expect(e?.codigo).toBe("cuit_formato");
+      expect(e?.error).toMatch(/11 números/);
+      expect(e?.error).toMatch(/20-12345678-6/);
+    }
   });
 
-  it("lo rechaza si está vacío", () => {
-    const r = validarSolicitud({ ...base, legajo: "" });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/legajo/i);
+  it("con números que no forman un CUIT real, lo rechaza y muestra el formato", () => {
+    const e = error({ ...base, cuit: "27-35123456-4" });
+    expect(e?.codigo).toBe("cuit_invalido");
+    expect(e?.error).toMatch(/20-12345678-6/);
   });
 
-  it("lo rechaza si es demasiado corto para ser real", () => {
-    const r = validarSolicitud({ ...base, legajo: "12" });
-    expect(r.ok).toBe(false);
-  });
-
-  it("recorta espacios sobrantes", () => {
-    const r = validarSolicitud({ ...base, legajo: "   20-12345678-9   " });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.legajo).toBe("20-12345678-9");
-  });
-
-  // Tope de 40: la columna es texto libre, pero no hay por qué guardar un
-  // párrafo en un campo de legajo.
-  it("acota un valor absurdamente largo", () => {
-    const r = validarSolicitud({ ...base, legajo: "9".repeat(500) });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.legajo.length).toBe(40);
-  });
-
-  it("no lo confunde con la dirección vieja", () => {
-    // El formulario viejo mandaba `direccion`. Ese payload ya no alcanza:
-    // sin legajo la solicitud se rechaza, venga o no la dirección.
-    const { legajo: _fuera, ...sinLegajo } = base;
-    const r = validarSolicitud({ ...sinLegajo, direccion: "Av. Corrientes 1234" } as Record<string, unknown>);
-    expect(r.ok).toBe(false);
+  it("ya no acepta un legajo interno en lugar del CUIT", () => {
+    const { cuit: _c, ...sinCuit } = base;
+    expect(error({ ...sinCuit, legajo: "A-4471" })?.codigo).toBe("cuit_formato");
   });
 });
 
 describe("validarSolicitud — el resto de los campos sigue igual", () => {
   it("exige nombre", () => {
-    expect(validarSolicitud({ ...base, nombre: "L" }).ok).toBe(false);
+    expect(error({ ...base, nombre: "L" })?.codigo).toBe("nombre");
   });
 
   it("exige un email con forma de email", () => {
-    expect(validarSolicitud({ ...base, email: "lucia@" }).ok).toBe(false);
+    expect(error({ ...base, email: "lucia@" })?.codigo).toBe("email");
     expect(validarSolicitud({ ...base, email: "lucia.example.com" }).ok).toBe(false);
   });
 
@@ -107,21 +142,20 @@ describe("validarSolicitud — el resto de los campos sigue igual", () => {
   });
 
   it("exige un teléfono plausible", () => {
-    expect(validarSolicitud({ ...base, telefono: "123" }).ok).toBe(false);
+    expect(error({ ...base, telefono: "123" })?.codigo).toBe("telefono");
   });
 
-  it("deja el mensaje opcional", () => {
-    const r = validarSolicitud({ ...base, mensaje: "" });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.mensaje).toBeNull();
+  it("ignora el mensaje: el campo salió del formulario", () => {
+    const r = validarSolicitud({ ...base, mensaje: "Busco la final del Mundial" } as Record<string, unknown>);
+    expect(r.ok && "mensaje" in r.value).toBe(false);
   });
 
   // Sin consentimiento no hay solicitud: lo revalida la API aunque la landing
   // ya lo bloquee.
   it("exige aceptar los términos", () => {
-    const r = validarSolicitud({ ...base, acepto: false });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/términos/i);
+    const e = error({ ...base, acepto: false });
+    expect(e?.codigo).toBe("acepto");
+    expect(e?.error).toMatch(/términos/i);
   });
 
   it("no acepta un 'acepto' que no sea exactamente true", () => {

@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { createAdminSupabase } from "@/lib/supabase/server";
-import { evaluarLimiteSolicitud, ipDe, SOL_VENTANA_MS, validarSolicitud } from "@/lib/acceso";
+import {
+  evaluarLimiteSolicitud,
+  ipDe,
+  organizacionLegible,
+  SOL_VENTANA_MS,
+  validarSolicitud,
+} from "@/lib/acceso";
 import { isMock, mockCrearSolicitud, mockListSolicitudes } from "@/lib/mock-db";
 import { notificarSolicitudAcceso } from "@/lib/whatsapp";
 import { notificarVendedoresEmail } from "@/lib/email";
@@ -25,15 +31,21 @@ export async function POST(request: Request) {
 
   // Honeypot: campo oculto que sólo un bot completa. Fingimos éxito para no
   // darle señal de que fue detectado.
-  if (typeof body?.empresa === "string" && body.empresa.trim() !== "") {
+  // `hp_campo` desde TKT-11; antes se llamaba `empresa` (al lado del campo de
+  // organización, el autocompletar del navegador lo llenaba). Se siguen
+  // mirando los dos por si queda una landing vieja en caché.
+  const trampa = [body?.hp_campo, body?.empresa].some((v) => typeof v === "string" && v.trim() !== "");
+  if (trampa) {
     return NextResponse.json({ ok: true });
   }
 
   const parsed = validarSolicitud(body ?? {});
   if (!parsed.ok) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+    // `codigo`: la landing lo traduce y marca el campo.
+    return NextResponse.json({ error: parsed.error, codigo: parsed.codigo }, { status: 400 });
   }
-  const { nombre, email, telefono, legajo, mensaje, acepto } = parsed.value;
+  const { tipoOrganizacion, organizacion, nombre, email, telefono, cuit, acepto } = parsed.value;
+  const orgLegible = organizacionLegible({ tipo_organizacion: tipoOrganizacion, organizacion });
 
   // Aviso al staff. Best-effort y DESPUÉS de guardar: una solicitud no se
   // pierde porque WhatsApp o el mail estén caídos. Sin esto la solicitud
@@ -43,11 +55,11 @@ export async function POST(request: Request) {
   const avisar = async (afuera: boolean) => {
     const texto =
       `Nueva solicitud de acceso\n` +
+      `Organización: ${orgLegible}\n` +
       `Nombre: ${nombre}\n` +
       `Email: ${email}\n` +
       `Teléfono: ${telefono}\n` +
-      `Legajo/CUIT: ${legajo}` +
-      (mensaje ? `\nMensaje: ${mensaje}` : "") +
+      `CUIT: ${cuit}` +
       `\n\nAprobala desde el panel.`;
     const [res, mail] = await Promise.all([
       // Campana de los admins + WhatsApp (lib/avisos-equipo).
@@ -55,7 +67,14 @@ export async function POST(request: Request) {
         isMock() ? null : createAdminSupabase(),
         { tipo: "nuevo_acceso", ref: crypto.randomUUID(), datos: { nombre, email }, url: "/admin/solicitudes" },
         afuera
-          ? (para, url) => notificarSolicitudAcceso({ nombre, email, telefono, legajo, texto, link: `${baseUrlDe(request)}${url}` }, para)
+          ? (para, url) =>
+              notificarSolicitudAcceso(
+                // La plantilla de Meta tiene cuatro parámetros fijos (sumar
+                // uno es aprobar otra plantilla): la organización va junto al
+                // nombre, que es lo primero que lee el equipo.
+                { nombre: `${nombre} — ${orgLegible}`, email, telefono, legajo: cuit, texto, link: `${baseUrlDe(request)}${url}` },
+                para
+              )
           : null
       ),
       afuera ? notificarVendedoresEmail(`Nueva solicitud de acceso — ${nombre}`, texto) : null,
@@ -81,8 +100,16 @@ export async function POST(request: Request) {
       accion: "acceso.solicitar",
       entidad: "solicitud",
       entidad_id: solicitudId,
-      resumen: `${nombre} (${email}) pidió acceso a la tienda`,
-      detalle: { nombre, email, telefono, legajo, mensaje, acepto_terminos: acepto },
+      resumen: `${nombre} (${email}, ${orgLegible}) pidió acceso a la tienda`,
+      detalle: {
+        tipo_organizacion: tipoOrganizacion,
+        organizacion,
+        nombre,
+        email,
+        telefono,
+        legajo: cuit,
+        acepto_terminos: acepto,
+      },
       origen: "landing",
     });
 
@@ -119,14 +146,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const fila = { nombre, email, telefono, legajo, mensaje, acepto_terminos: acepto };
-  let { data: creada, error } = await admin
-    .from("solicitudes_acceso")
-    .insert({ ...fila, ip_hash: ipHash })
-    .select("id");
-  // 42703 = columna inexistente: la migración 0050 todavía no se aplicó.
-  if (error && (error as { code?: string }).code === "42703") {
-    ({ data: creada, error } = await admin.from("solicitudes_acceso").insert(fila).select("id"));
+  // El CUIT va en `legajo`: es la columna que llega a la cuenta y a la factura.
+  const fila = {
+    tipo_organizacion: tipoOrganizacion,
+    organizacion,
+    nombre,
+    email,
+    telefono,
+    legajo: cuit,
+    acepto_terminos: acepto,
+  };
+  // Sin la migración 0052 (columnas de organización) la solicitud no se
+  // pierde: la organización queda escrita en `mensaje`, que el panel muestra.
+  const { tipo_organizacion: _tipo, organizacion: _org, ...sinOrganizacion } = fila;
+  const filaVieja = { ...sinOrganizacion, mensaje: `Organización: ${orgLegible}` };
+  // 42703 = columna inexistente (0052, o 0050 la de ip_hash, sin aplicar):
+  // se prueba con la fila siguiente.
+  const intentos: Record<string, unknown>[] = [
+    { ...fila, ip_hash: ipHash },
+    { ...filaVieja, ip_hash: ipHash },
+    filaVieja,
+  ];
+  let creada: { id: string }[] | null = null;
+  let error: { code?: string; message?: string } | null = null;
+  for (const intento of intentos) {
+    ({ data: creada, error } = await admin.from("solicitudes_acceso").insert(intento).select("id"));
+    if (error?.code !== "42703") break;
+    console.warn(`[acceso] falta una columna en solicitudes_acceso (¿migración sin aplicar?): ${error.message ?? ""}`);
   }
 
   if (error) {

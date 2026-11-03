@@ -33,17 +33,24 @@ export default async function SolicitudesPage() {
     email = user.email;
 
     // Lectura con service role (tabla RLS deny-all). El rol ya fue validado.
-    const { data } = await createAdminSupabase()
-      .from("solicitudes_acceso")
-      .select(
-        "id, nombre, email, telefono, legajo, direccion, mensaje, estado, user_id, decidida_por, decidida_at, revocada_at, revocada_por, created_at, updated_at"
-      )
-      .order("created_at", { ascending: false })
-      .limit(500);
+    const COLUMNAS =
+      "id, nombre, email, telefono, legajo, direccion, mensaje, estado, user_id, decidida_por, decidida_at, revocada_at, revocada_por, created_at, updated_at";
+    const leer = (columnas: string) =>
+      createAdminSupabase()
+        .from("solicitudes_acceso")
+        .select(columnas)
+        .order("created_at", { ascending: false })
+        .limit(500);
+    let { data, error } = await leer(`${COLUMNAS}, tipo_organizacion, organizacion`);
+    // 42703 = columna inexistente: sin la migración 0052 (organización), se
+    // leen las de antes en vez de mostrar la lista vacía.
+    if (error?.code === "42703") ({ data, error } = await leer(COLUMNAS));
     // Si no se puede leer Auth, la página igual carga; la API vuelve a chequear
     // antes de revocar o reenviar.
     const equipo = await leerEquipo(createAdminSupabase()).catch(() => new Map<string, RolEquipo>());
-    solicitudes = conEquipo((data ?? []) as SolicitudAcceso[], equipo);
+    // Las columnas van en un string armado, así que el cliente no infiere el
+    // tipo de fila. Sin 0052, tipo_organizacion y organizacion no vienen.
+    solicitudes = conEquipo((data ?? []) as unknown as SolicitudAcceso[], equipo);
   }
 
   return (
