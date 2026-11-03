@@ -299,12 +299,12 @@ export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcces
                       {s.telefono && (
                         <p className="text-xs text-muted">{s.telefono}</p>
                       )}
-                      {/* CUIT validado en las solicitudes desde TKT-11; antes,
+                      {/* CUIT o CUIL validado en las solicitudes desde TKT-11; antes,
                           legajo/CUIL/CUIT libre, y las más viejas solo tienen
                           dirección. Se muestra lo que haya. */}
                       {s.legajo && (
                         <p className="text-xs text-muted">
-                          <span className="text-[#8A8FA3]">{s.tipo_organizacion ? "CUIT:" : "Legajo/CUIT:"}</span>{" "}
+                          <span className="text-[#8A8FA3]">{s.tipo_organizacion ? "CUIT/CUIL:" : "Legajo/CUIT:"}</span>{" "}
                           {s.legajo}
                         </p>
                       )}

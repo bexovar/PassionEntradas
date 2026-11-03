@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       `Nombre: ${nombre}\n` +
       `Email: ${email}\n` +
       `Teléfono: ${telefono}\n` +
-      `CUIT: ${cuit}` +
+      `CUIT/CUIL: ${cuit}` +
       `\n\nAprobala desde el panel.`;
     const [res, mail] = await Promise.all([
       // Campana de los admins + WhatsApp (lib/avisos-equipo).

@@ -21,6 +21,12 @@ describe("validarCuit", () => {
     expect(validarCuit("23-99999999-9").ok).toBe(true);
   });
 
+  it("acepta un CUIL: mismo formato y verificador que el CUIT de una persona", () => {
+    // Un CUIL de trabajador (20) y uno de trabajadora (27).
+    expect(validarCuit("20-31222333-4")).toEqual({ ok: true, cuit: "20-31222333-4" });
+    expect(validarCuit("27351234569")).toEqual({ ok: true, cuit: "27-35123456-9" });
+  });
+
   it("acepta un verificador 0 (cuando el cálculo da 11)", () => {
     expect(validarCuit("20-10000013-0").ok).toBe(true);
   });

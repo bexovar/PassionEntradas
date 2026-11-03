@@ -1,4 +1,6 @@
-// CUIT argentino: 11 números (tipo, documento, verificador), "20-12345678-6".
+// CUIT o CUIL argentino: 11 números (tipo, documento, verificador),
+// "20-12345678-6". Los dos tienen el mismo formato y el mismo verificador, así
+// que se validan igual: el formulario acepta uno u otro.
 // Se valida el formato, el tipo y el dígito verificador (módulo 11), que es lo
 // que separa un CUIT real de uno tipeado mal o inventado. NO se consulta a
 // ARCA: que el número exista no se puede saber desde acá.
@@ -9,7 +11,7 @@ const PESOS = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
 
 export type ResultadoCuit = { ok: true; cuit: string } | { ok: false; motivo: "formato" | "invalido" };
 
-/** Valida un CUIT tipeado con o sin guiones, espacios o puntos; lo devuelve como "20-12345678-6". */
+/** Valida un CUIT o CUIL tipeado con o sin guiones, espacios o puntos; lo devuelve como "20-12345678-6". */
 export function validarCuit(raw: unknown): ResultadoCuit {
   if (typeof raw !== "string") return { ok: false, motivo: "formato" };
   const digitos = raw.replace(/[\s.-]/g, "");

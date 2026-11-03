@@ -67,7 +67,7 @@ export function organizacionLegible(s: {
 }
 
 // Lo que entra desde el formulario público, ya saneado. Todo es obligatorio.
-// El CUIT viaja con guiones ("20-12345678-6") y se guarda en la columna
+// `cuit` es CUIT o CUIL (mismo formato y verificador). Viaja con guiones ("20-12345678-6") y se guarda en la columna
 // `legajo`, que es la que llega a la cuenta y a la factura.
 export type SolicitudInput = {
   tipoOrganizacion: TipoOrganizacion;
@@ -98,8 +98,8 @@ export const ERRORES_SOLICITUD: Record<CodigoErrorSolicitud, string> = {
   nombre: "Ingresá tu nombre",
   email: "Ingresá un email válido",
   telefono: "Ingresá un teléfono válido",
-  cuit_formato: "Ingresá el CUIT: 11 números, con o sin guiones (ej. 20-12345678-6)",
-  cuit_invalido: "Ese CUIT no es válido. Revisá los números (ej. 20-12345678-6)",
+  cuit_formato: "Ingresá tu CUIT o CUIL: 11 números, con o sin guiones (ej. 20-12345678-6)",
+  cuit_invalido: "Ese CUIT o CUIL no es válido. Revisá los números (ej. 20-12345678-6)",
   acepto: "Tenés que aceptar los términos y condiciones para continuar",
 };
 

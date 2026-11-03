@@ -266,7 +266,7 @@ const en = {
     fOrganizacionPh: "e.g. Southern Travel",
     fOrganizacionFreelance: "Freelance? Use your own name.",
     fWhatsapp: "WhatsApp number",
-    fCuit: "CUIT (Argentine tax ID)",
+    fCuit: "CUIT / CUIL (Argentine tax ID)",
     fCuitPh: "20-12345678-6",
     // Lo que devuelve validarSolicitud (lib/acceso), por campo.
     erroresSolicitud: {
@@ -275,8 +275,8 @@ const en = {
       nombre: "Enter your name.",
       email: "Enter a valid email.",
       telefono: "Enter a valid WhatsApp number.",
-      cuit_formato: "Enter the CUIT: 11 digits, with or without dashes (e.g. 20-12345678-6).",
-      cuit_invalido: "That CUIT isn't valid. Check the numbers (e.g. 20-12345678-6).",
+      cuit_formato: "Enter your CUIT or CUIL: 11 digits, with or without dashes (e.g. 20-12345678-6).",
+      cuit_invalido: "That CUIT or CUIL isn't valid. Check the numbers (e.g. 20-12345678-6).",
       acepto: "You must accept the terms and conditions to continue.",
     },
     enviar: "Send request",
@@ -737,7 +737,7 @@ const es: typeof en = {
     fOrganizacionPh: "Ej. Viajes del Sur",
     fOrganizacionFreelance: "¿Sos freelance? Poné tu nombre.",
     fWhatsapp: "Teléfono de WhatsApp",
-    fCuit: "CUIT",
+    fCuit: "CUIT / CUIL",
     fCuitPh: "20-12345678-6",
     // Lo que devuelve validarSolicitud (lib/acceso), por campo.
     erroresSolicitud: {
@@ -746,8 +746,8 @@ const es: typeof en = {
       nombre: "Ingresá tu nombre.",
       email: "Ingresá un email válido.",
       telefono: "Ingresá un teléfono de WhatsApp válido.",
-      cuit_formato: "Ingresá el CUIT: 11 números, con o sin guiones (ej. 20-12345678-6).",
-      cuit_invalido: "Ese CUIT no es válido. Revisá los números (ej. 20-12345678-6).",
+      cuit_formato: "Ingresá tu CUIT o CUIL: 11 números, con o sin guiones (ej. 20-12345678-6).",
+      cuit_invalido: "Ese CUIT o CUIL no es válido. Revisá los números (ej. 20-12345678-6).",
       acepto: "Tenés que aceptar los términos y condiciones para continuar.",
     },
     enviar: "Enviar solicitud",

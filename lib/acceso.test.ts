@@ -113,6 +113,11 @@ describe("validarSolicitud — CUIT (TKT-11)", () => {
     }
   });
 
+  it("el error nombra CUIT y CUIL: el campo acepta cualquiera de los dos", () => {
+    expect(error({ ...base, cuit: "" })?.error).toMatch(/CUIT o CUIL/);
+    expect(error({ ...base, cuit: "27-35123456-4" })?.error).toMatch(/CUIT o CUIL/);
+  });
+
   it("con números que no forman un CUIT real, lo rechaza y muestra el formato", () => {
     const e = error({ ...base, cuit: "27-35123456-4" });
     expect(e?.codigo).toBe("cuit_invalido");
