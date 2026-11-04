@@ -4,9 +4,8 @@ import {
   estadoPublicoDe,
   formatMonto,
   formatFecha,
-  type ItemPublico,
-  type OperacionPublica,
 } from "@/lib/operaciones";
+import type { ItemSeguimiento, OperacionSeguimiento } from "@/lib/seguimiento-publico";
 import ProgressSteps from "./ProgressSteps";
 import { waLink } from "@/lib/tickets";
 
@@ -51,8 +50,9 @@ export default function StatusStub({
   items = [],
   textoPago = null,
 }: {
-  op: OperacionPublica;
-  items?: ItemPublico[];
+  // Sin importes (null) en la vista pública: ver lib/seguimiento-publico.ts.
+  op: OperacionSeguimiento;
+  items?: ItemSeguimiento[];
   // Cómo pagar (texto del panel para la moneda del pedido). Solo en "Para pagar".
   textoPago?: string | null;
 }) {
@@ -140,9 +140,11 @@ export default function StatusStub({
                         {i.fecha_evento ? ` · ${formatFecha(i.fecha_evento)}` : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 whitespace-nowrap font-mono text-xs text-white/70">
-                      {formatMonto(i.cantidad * i.precio_unitario, op.moneda)}
-                    </span>
+                    {i.precio_unitario !== null && (
+                      <span className="shrink-0 whitespace-nowrap font-mono text-xs text-white/70">
+                        {formatMonto(i.cantidad * i.precio_unitario, op.moneda)}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -182,14 +184,16 @@ export default function StatusStub({
             <ProgressSteps estado={estado} />
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
-              <div className="col-span-2">
-                <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
-                  Monto
-                </dt>
-                <dd className="mt-0.5 font-display text-3xl font-bold tabular-nums tracking-tight">
-                  {formatMonto(op.monto, op.moneda)}
-                </dd>
-              </div>
+              {op.monto !== null && (
+                <div className="col-span-2">
+                  <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
+                    Monto
+                  </dt>
+                  <dd className="mt-0.5 font-display text-3xl font-bold tabular-nums tracking-tight">
+                    {formatMonto(op.monto, op.moneda)}
+                  </dd>
+                </div>
+              )}
               {op.comprador_alias && (
                 <div>
                   <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
