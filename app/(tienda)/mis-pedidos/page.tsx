@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { getRol, puedeVerTienda } from "@/lib/auth";
-import { clientePuedeCancelar, estadoPublicoDe, type EstadoConsulta, type Moneda } from "@/lib/operaciones";
+import { clientePuedeCancelar, clientePuedePedirCancelacion, estadoPublicoDe, type EstadoConsulta, type Moneda } from "@/lib/operaciones";
 import { estadoCotizacion } from "@/lib/cotizaciones";
 import { textoPagoDe } from "@/lib/textos";
 import { MisPedidos, type PedidoView } from "@/components/tienda/MisPedidos";
@@ -80,6 +80,7 @@ function toView(
     monto: Number(o.monto) || null,
     moneda: o.moneda ?? null,
     puedeCancelar: clientePuedeCancelar(o as any),
+    puedePedirCancelacion: clientePuedePedirCancelacion(o as any),
     canceladaPorCliente: o.cancelada_por === "cliente",
     // Las instrucciones de pago aparecen recién cuando le pedimos que pague.
     textoPago: estado === "listo_para_pagar" ? textoPagoDe(textos, o.moneda) : null,
@@ -120,6 +121,7 @@ function consultaToView(c: ConsultaRow): PedidoView {
     moneda: cotizada ? c.moneda ?? "USD" : null,
     cotizacion: cotizada ? { version: c.cotizacion_version ?? 1, venceAt: c.vence_at } : null,
     puedeCancelar: c.estado === "pendiente",
+    puedePedirCancelacion: false,
     canceladaPorCliente: c.estado === "cancelada",
     textoPago: null,
     facturaId: null,

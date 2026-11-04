@@ -298,7 +298,7 @@ const en = {
   // "Mis pedidos": el cliente sigue el estado de sus pedidos/consultas.
   misPedidos: {
     title: "My orders",
-    sub: "Track your orders and inquiries. You can cancel an order until we ask you to pay.",
+    sub: "Track your orders and inquiries. You can cancel until we let you know we've processed your payment and your ticket is on its way.",
     volver: "← Back to tickets",
     vacioTitle: "No orders yet",
     vacioP: "Browse the catalogue and tap Order or Ask on any ticket — it shows up here.",
@@ -333,6 +333,9 @@ const en = {
     consultarWa: "Ask about it on WhatsApp ↗",
     cancelarPedido: "Cancel order",
     cancelarConsulta: "Cancel enquiry",
+    // Pasado el pago procesado: no se cancela solo, se pide (TKT-19).
+    pedirCancelacion: "Request cancellation",
+    waPedirCancelacion: (code: string) => `Hi! I'd like to request the cancellation of order ${code}.`,
     cancelando: "Cancelling…",
     confirmarCancelarPedido: "Cancel this order? This can't be undone.",
     confirmarCancelarConsulta: "Cancel this enquiry? This can't be undone.",
@@ -741,7 +744,7 @@ const es: typeof en = {
   },
   misPedidos: {
     title: "Mis pedidos",
-    sub: "Seguí el estado de tus pedidos y consultas. Podés cancelar un pedido hasta que te pidamos el pago.",
+    sub: "Seguí el estado de tus pedidos y consultas. Podés cancelar hasta que te avisemos que procesamos el pago y que tu entrada está en camino.",
     volver: "← Volver a las entradas",
     vacioTitle: "Todavía no tenés pedidos",
     vacioP: "Mirá el catálogo y tocá Pedir o Consultar en cualquier entrada — aparece acá.",
@@ -773,6 +776,8 @@ const es: typeof en = {
     consultarWa: "Consultar por WhatsApp ↗",
     cancelarPedido: "Cancelar pedido",
     cancelarConsulta: "Cancelar consulta",
+    pedirCancelacion: "Pedir cancelación",
+    waPedirCancelacion: (code: string) => `¡Hola! Quiero pedir la cancelación del pedido ${code}.`,
     cancelando: "Cancelando…",
     confirmarCancelarPedido: "¿Cancelar este pedido? No se puede deshacer.",
     confirmarCancelarConsulta: "¿Cancelar esta consulta? No se puede deshacer.",

@@ -41,6 +41,9 @@ export type PedidoView = {
   moneda: Moneda | null;
   // Puede cancelarlo él mismo: pedido en pasos 1–2 o consulta pendiente.
   puedeCancelar: boolean;
+  // Pasado el pago procesado ya no cancela solo: pide la cancelación por
+  // WhatsApp y la resuelve el equipo (TKT-19).
+  puedePedirCancelacion: boolean;
   canceladaPorCliente: boolean;
   // Instrucciones de pago de su moneda, solo en "listo para pagar".
   textoPago: string | null;
@@ -385,6 +388,16 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
                             ? mp.cancelarPedido
                             : mp.cancelarConsulta}
                       </ConfirmarBoton>
+                    )}
+                    {p.puedePedirCancelacion && (
+                      <a
+                        className="mp-link mp-link--cancelar"
+                        href={waLink(mp.waPedirCancelacion(p.code))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {mp.pedirCancelacion}
+                      </a>
                     )}
                     {/* Consulta por ESTE pedido: con varios pedidos, el
                         flotante no sabe cuál; acá sale con su número. */}
