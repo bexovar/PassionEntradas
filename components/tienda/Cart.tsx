@@ -145,27 +145,26 @@ export function CartBar() {
   const [open, setOpen] = useState(false);
   const [estado, setEstado] = useState<Estado>("idle");
   const [error, setError] = useState("");
-  // "Enviar pedido" no manda nada todavía: abre la revisión (qué es pedido,
-  // qué es consulta, el total y qué pasa después). Recién "Confirmar y
-  // enviar" hace el POST.
-  const [revisando, setRevisando] = useState(false);
-  // Cuándo se abrió la revisión. "Confirmar y enviar" queda donde estaba
-  // "Enviar pedido" (en el celular es la misma fila de abajo): sin esto, el
-  // segundo toque de un doble toque mandaba el pedido sin que el cliente
-  // llegara a ver la revisión. Mismo margen que ConfirmarBoton.
-  const revisionAbiertaAt = useRef(0);
+  // Un solo paso (TKT-17): el modal "Tu pedido" ya muestra las entradas, el
+  // total y qué pasa después, y "Enviar pedido" hace el POST. Mandar el
+  // pedido es una consulta de disponibilidad: no cobra ni reserva, así que no
+  // lleva doble confirmación.
+  // Cuándo se abrió el modal. "Enviar pedido" cae en la fila de abajo, donde
+  // en el celular estaba la barra que lo abre: sin esto, el segundo toque de
+  // un doble toque mandaba el pedido sin que el cliente lo llegara a ver.
+  // Mismo margen que ConfirmarBoton.
+  const abiertoAt = useRef(0);
   const barraRef = useRef<HTMLDivElement>(null);
   // Entradas que no tenían stock y el server pasó a consulta (ver partirPorStock).
   const [aConsulta, setAConsulta] = useState(0);
 
   // Un total POR MONEDA: pesos y dólares nunca se suman. Cada moneda termina
   // siendo una operación aparte al enviar (ver /api/pedidos).
-  const { pedidos, consultas, totales } = resumenCarrito(items);
+  const { totales } = resumenCarrito(items);
   const totalTexto = totales.map((t) => fmtPrice(t.total, lang, t.moneda)).join(" + ");
 
   function cerrar() {
     setOpen(false);
-    setRevisando(false);
     if (estado === "done" || estado === "err") {
       setEstado("idle");
       setError("");
@@ -174,7 +173,7 @@ export function CartBar() {
 
   async function enviar() {
     if (estado === "sending" || items.length === 0) return;
-    if (Date.now() - revisionAbiertaAt.current < 400) return;
+    if (Date.now() - abiertoAt.current < 400) return;
     setEstado("sending");
     setError("");
     try {
@@ -201,7 +200,6 @@ export function CartBar() {
         return;
       }
       clear();
-      setRevisando(false);
       setAConsulta(Number(data.aConsultaPorStock) || 0);
       setEstado("done");
     } catch {
@@ -246,6 +244,7 @@ export function CartBar() {
               // tapar el carrito nuevo con su "Pedido enviado".
               if (estado === "done") setEstado("idle");
               releerLang();
+              abiertoAt.current = Date.now();
               setOpen(true);
             }}
           >
@@ -273,98 +272,6 @@ export function CartBar() {
                   </button>
                 </div>
               </div>
-            ) : revisando ? (
-              <>
-                <div className="cart-h">
-                  <div>
-                    <h2>{c.revTitulo}</h2>
-                    <p>{c.revSub}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="cart-x"
-                    onClick={cerrar}
-                    aria-label={c.cerrar}
-                    // Mientras sale el pedido no se cierra: si no, el aviso de
-                    // "Pedido enviado" (y el de entradas sin stock) no se veía.
-                    disabled={estado === "sending"}
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {[
-                  { tipo: "pedido" as const, lineas: pedidos, titulo: c.revPedidos, nota: c.revPedidosNota },
-                  { tipo: "consulta" as const, lineas: consultas, titulo: c.revConsultas, nota: c.revConsultasNota },
-                ]
-                  .filter((g) => g.lineas.length > 0)
-                  .map((g) => (
-                    <section className="cart-rev-grupo" key={g.tipo}>
-                      <h3>
-                        <span className={`cart-it-tag ${g.tipo}`}>{g.titulo}</span>
-                        <span className="cart-rev-nota">{g.nota}</span>
-                      </h3>
-                      <ul className="cart-rev-list">
-                        {g.lineas.map((i) => (
-                          <li key={i.key}>
-                            <span className="cart-rev-desc">
-                              <span className="cart-it-ev">{i.evento}</span>
-                              <span className="cart-it-meta">
-                                {i.sector}
-                                {i.cantidad > 1 ? ` ×${i.cantidad}` : ""}
-                              </span>
-                            </span>
-                            <span className="cart-it-price">
-                              {i.monto > 0
-                                ? fmtPrice(i.monto * i.cantidad, lang, i.moneda ?? "USD")
-                                : c.aConsultar}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
-
-                {totales.map((t) => (
-                  <div className="cart-total" key={t.moneda}>
-                    <span>{totales.length > 1 ? `${c.total} (${t.moneda})` : c.total}</span>
-                    <span>{fmtPrice(t.total, lang, t.moneda)}</span>
-                  </div>
-                ))}
-                {totales.length > 0 && <p className="cart-nota-monedas">{c.totalNota}</p>}
-                {totales.length > 1 && <p className="cart-nota-monedas">{c.dosMonedas}</p>}
-
-                <div className="cart-rev-sigue">
-                  <strong>{c.revQueSigue}</strong>
-                  <p>{c.revQueSigueP}</p>
-                </div>
-
-                {estado === "err" && <p className="cart-err">{error}</p>}
-
-                <div className="cart-actions">
-                  <button
-                    type="button"
-                    className="cart-keep"
-                    onClick={() => {
-                      setRevisando(false);
-                      if (estado === "err") setEstado("idle");
-                    }}
-                    disabled={estado === "sending"}
-                  >
-                    {c.revVolver}
-                  </button>
-                  {/* Deshabilitado mientras sale: un doble toque no manda dos
-                      veces (y el server igual deduplica el envío). */}
-                  <button
-                    type="button"
-                    className="cart-send"
-                    onClick={enviar}
-                    disabled={estado === "sending" || items.length === 0}
-                  >
-                    {estado === "sending" ? c.enviando : c.revConfirmar}
-                  </button>
-                </div>
-              </>
             ) : (
               <>
                 <div className="cart-h">
@@ -404,6 +311,7 @@ export function CartBar() {
                             <button
                               type="button"
                               onClick={() => setQty(i.key, i.cantidad - 1)}
+                              disabled={estado === "sending"}
                               aria-label={c.menos}
                             >
                               −
@@ -414,7 +322,9 @@ export function CartBar() {
                             <button
                               type="button"
                               onClick={() => setQty(i.key, i.cantidad + 1)}
-                              disabled={i.maxStock > 0 && i.cantidad >= i.maxStock}
+                              disabled={
+                                estado === "sending" || (i.maxStock > 0 && i.cantidad >= i.maxStock)
+                              }
                               aria-label={c.mas}
                             >
                               +
@@ -434,6 +344,8 @@ export function CartBar() {
                         type="button"
                         className="cart-rm"
                         onClick={() => remove(i.key)}
+                        // Mientras sale el pedido, lo que se ve es lo que se manda.
+                        disabled={estado === "sending"}
                         aria-label={`${c.quitar}: ${i.evento}`}
                       >
                         {c.quitar}
@@ -451,23 +363,31 @@ export function CartBar() {
                 {totales.length > 0 && <p className="cart-nota-monedas">{c.totalNota}</p>}
                 {totales.length > 1 && <p className="cart-nota-monedas">{c.dosMonedas}</p>}
 
+                <div className="cart-sigue">
+                  <strong>{c.queSigue}</strong>
+                  <p>{c.queSigueP}</p>
+                </div>
+
                 {estado === "err" && <p className="cart-err">{error}</p>}
 
                 <div className="cart-actions">
-                  <button type="button" className="cart-keep" onClick={cerrar}>
+                  <button
+                    type="button"
+                    className="cart-keep"
+                    onClick={cerrar}
+                    disabled={estado === "sending"}
+                  >
                     {c.seguir}
                   </button>
+                  {/* Deshabilitado mientras sale: un doble toque no manda dos
+                      veces (y el server igual deduplica el envío). */}
                   <button
                     type="button"
                     className="cart-send"
-                    onClick={() => {
-                      revisionAbiertaAt.current = Date.now();
-                      setRevisando(true);
-                      if (estado === "err") setEstado("idle");
-                    }}
-                    disabled={items.length === 0}
+                    onClick={enviar}
+                    disabled={estado === "sending" || items.length === 0}
                   >
-                    {c.enviar}
+                    {estado === "sending" ? c.enviando : c.enviar}
                   </button>
                 </div>
               </>
