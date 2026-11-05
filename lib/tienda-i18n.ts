@@ -132,7 +132,7 @@ const en = {
   carrito: {
     revisar: "Review order",
     titulo: "Your order",
-    sub: "Review your tickets and send them for review. A seller reaches out to close each one.",
+    sub: "Review your tickets and send the order. A seller reaches out to close each one.",
     quitar: "Remove",
     aConsultar: "Ask",
     dosMonedas: "Tickets in pesos and in dollars are separate orders: one total per currency.",
@@ -150,7 +150,7 @@ const en = {
     consultaTag: "Inquiry",
     // Qué pasa después, dentro del mismo modal (TKT-17: un solo paso).
     queSigue: "What happens next",
-    queSigueP: "We confirm each ticket and tell you how to pay.",
+    queSigueP: "We confirm each ticket (and the price of inquiries) and tell you how to pay.",
     okTitulo: "Order sent ✓",
     okStock: (n: number) =>
       `${n === 1 ? "1 ticket" : `${n} tickets`} didn't have stock left and went as an inquiry: we'll check and send you a price.`,
@@ -593,7 +593,7 @@ const es: typeof en = {
     pedidoTag: "Pedido",
     consultaTag: "Consulta",
     queSigue: "Qué pasa después",
-    queSigueP: "Te confirmamos cada entrada y te pasamos cómo pagar.",
+    queSigueP: "Te confirmamos cada entrada (y el precio de las consultas) y te pasamos cómo pagar.",
     okTitulo: "Pedido enviado ✓",
     okStock: (n: number) =>
       `${n === 1 ? "1 entrada no tenía" : `${n} entradas no tenían`} stock y ${n === 1 ? "quedó" : "quedaron"} como consulta: la chequeamos y te pasamos precio.`,

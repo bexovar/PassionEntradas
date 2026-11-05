@@ -152,7 +152,7 @@ export function CartBar() {
   // Cuándo se abrió el modal. "Enviar pedido" cae en la fila de abajo, donde
   // en el celular estaba la barra que lo abre: sin esto, el segundo toque de
   // un doble toque mandaba el pedido sin que el cliente lo llegara a ver.
-  // Mismo margen que ConfirmarBoton.
+  // Del mismo orden que el de ConfirmarBoton.
   const abiertoAt = useRef(0);
   const barraRef = useRef<HTMLDivElement>(null);
   // Entradas que no tenían stock y el server pasó a consulta (ver partirPorStock).
@@ -170,6 +170,19 @@ export function CartBar() {
       setError("");
     }
   }
+
+  // Si el agente vacía el carrito a mano (por ejemplo, después de un envío
+  // que falló), el modal se cierra y el error viejo se olvida: si no, al
+  // agregar otra entrada el modal reaparecía solo con ese error.
+  useEffect(() => {
+    if (count === 0 && estado !== "done" && estado !== "sending") {
+      setOpen(false);
+      if (estado === "err") {
+        setEstado("idle");
+        setError("");
+      }
+    }
+  }, [count, estado]);
 
   async function enviar() {
     if (estado === "sending" || items.length === 0) return;

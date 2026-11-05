@@ -1310,7 +1310,8 @@ html:has(.lp-modal[open]) { overflow: hidden; }
   flex: 0 0 auto; background: none; border: 1px solid var(--ink); font-size: 11px;
   padding: 3px 8px; cursor: pointer; transition: .12s;
 }
-.cart-rm:hover { background: var(--flare); border-color: var(--flare); color: #fff; }
+.cart-rm:hover:not(:disabled) { background: var(--flare); border-color: var(--flare); color: #fff; }
+.cart-rm:disabled { opacity: .4; cursor: default; }
 /* Celular angosto: etiqueta, evento, precio y "Quitar" en una fila no entran
    (en 320px "Quitar" quedaba cortado contra el borde). Arriba la etiqueta y
    el precio, el evento a lo ancho, y "Quitar" abajo a la derecha. */

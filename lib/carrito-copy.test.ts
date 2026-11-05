@@ -28,5 +28,12 @@ describe("copy del carrito", () => {
     expect(c.enviar).toBe("Enviar pedido");
     expect(c.queSigue).toBe("Qué pasa después");
     expect(c.queSigueP).toMatch(/confirmamos cada entrada/);
+    // Sin el paso de revisión, acá se explica que la consulta trae su precio después.
+    expect(c.queSigueP).toMatch(/precio de las consultas/);
+  });
+
+  it("en: the button and the subtitle talk about sending the order, not a review", () => {
+    expect(TX.en.carrito.enviar).toBe("Send order");
+    expect(TX.en.carrito.sub).not.toMatch(/for review/i);
   });
 });
