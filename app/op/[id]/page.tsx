@@ -39,8 +39,10 @@ export default async function OperacionPublicaPage({
     notFound();
   }
 
-  let op: OperacionPublica;
-  let items: ItemPublico[] = [];
+  // Lo que devuelve el RPC público (o el mock): sin importes después de 0053,
+  // con importes antes. recortarParaPublico los descarta en los dos casos.
+  let op: OperacionPublica & { monto?: unknown };
+  let items: (ItemPublico & { precio_unitario?: unknown })[] = [];
 
   if (isMock()) {
     const mock = mockOpPublica(params.id);
@@ -51,7 +53,6 @@ export default async function OperacionPublicaPage({
       sector: i.sector,
       fecha_evento: i.fecha_evento,
       cantidad: i.cantidad,
-      precio_unitario: i.precio_unitario,
     }));
   } else {
     const supabase = createServerSupabase();
@@ -93,17 +94,24 @@ export default async function OperacionPublicaPage({
         priv &&
         vistaSeguimiento({ id: user.id, rol: getRol(user) }, priv.cliente_id) === "completa"
       ) {
-        const { data: lineas } = await admin
+        const { data: lineas, error: errLineas } = await admin
           .from("operacion_items")
           .select("evento, sector, fecha_evento, cantidad, precio_unitario")
           .eq("operacion_id", params.id)
           .order("created_at", { ascending: true });
         vista = {
-          op: { ...op, monto: Number(priv.monto), comprador_alias: priv.comprador_alias },
-          items: ((lineas ?? []) as ItemPublico[]).map((i) => ({
-            ...i,
-            precio_unitario: Number(i.precio_unitario),
-          })),
+          op: { ...vista.op, monto: Number(priv.monto), comprador_alias: priv.comprador_alias },
+          // Si falla la lectura de las líneas, el dueño no se queda sin ellas:
+          // ve las públicas (sin precio), igual que cualquiera con el link.
+          items: errLineas
+            ? vista.items
+            : ((lineas ?? []) as (ItemPublico & { precio_unitario: number })[]).map((i) => ({
+                evento: i.evento,
+                sector: i.sector,
+                fecha_evento: i.fecha_evento,
+                cantidad: i.cantidad,
+                precio_unitario: Number(i.precio_unitario),
+              })),
         };
       }
     }

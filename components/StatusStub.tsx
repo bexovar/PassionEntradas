@@ -183,6 +183,7 @@ export default function StatusStub({
             {/* Los tres pasos del proceso: entrada → pago → entrega */}
             <ProgressSteps estado={estado} />
 
+            {(op.monto !== null || op.comprador_alias || op.vendedor_alias) && (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
               {op.monto !== null && (
                 <div className="col-span-2">
@@ -211,6 +212,7 @@ export default function StatusStub({
                 </div>
               )}
             </dl>
+            )}
 
             {aviso && (
               <div

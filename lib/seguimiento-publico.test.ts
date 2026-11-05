@@ -10,7 +10,7 @@ import type { ItemPublico, OperacionPublica } from "./operaciones";
 const CLIENTE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const OTRO = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
-const op: OperacionPublica = {
+const op: OperacionPublica & { monto: number } = {
   code: "BX-GD5JHH78",
   evento: "River vs Boca",
   comprador_alias: "María Emilia Gallo",
@@ -27,7 +27,7 @@ const op: OperacionPublica = {
   confirmada_at: null,
 };
 
-const items: ItemPublico[] = [
+const items: (ItemPublico & { precio_unitario: number })[] = [
   { evento: "River vs Boca", sector: "Platea", fecha_evento: "2026-11-20", cantidad: 2, precio_unitario: 300 },
   { evento: "River vs Boca", sector: "Popular", fecha_evento: "2026-11-20", cantidad: 1, precio_unitario: 297 },
 ];
@@ -90,6 +90,13 @@ describe("recortarParaPublico", () => {
   it("no deja ningún importe en lo que llega a la pantalla", () => {
     const r = recortarParaPublico(op, items);
     expect(JSON.stringify(r)).not.toMatch(/897|300|297/);
+  });
+
+  it("solo copia campos públicos: nada que no se haya decidido mostrar", () => {
+    const conExtra = { ...op, cliente_id: "x", cuenta_debitar: "y" } as typeof op;
+    const r = recortarParaPublico(conExtra, items);
+    expect(Object.keys(r.op)).not.toContain("cliente_id");
+    expect(Object.keys(r.op)).not.toContain("cuenta_debitar");
   });
 
   it("el resto de la operación queda igual: estado, evento, código, fechas", () => {

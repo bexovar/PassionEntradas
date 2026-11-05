@@ -9,8 +9,12 @@
 -- con el nombre de pila (y nada si es un email).
 --
 -- El agente dueño y el staff ven los importes igual: la página los lee con
--- service role de las tablas, no de estos RPC. Por eso esta migración se
--- puede aplicar antes o después de deployar el código de TKT-24.
+-- service role de las tablas, no de estos RPC.
+--
+-- ORDEN: aplicar DESPUÉS de que el código de TKT-24 esté en producción, y no
+-- volver ese código atrás con 0053 aplicada. El código anterior lee `monto`
+-- de este RPC y, sin la columna, mostraría "US$ NaN" en todos los links. El
+-- código nuevo funciona con o sin 0053 (con la base vieja, recorta en la página).
 --
 -- Sacar columnas del RETURNS TABLE no se puede con create or replace: hay que
 -- recrear las funciones. Los grants van acá mismo (README, regla 3).

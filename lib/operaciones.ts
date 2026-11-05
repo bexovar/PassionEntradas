@@ -111,15 +111,15 @@ export const TIPO_LABEL: Record<TipoOperacion, string> = {
   consulta: "Consulta",
 };
 
-// Vista pública: subconjunto seguro de campos (sin datos de contacto y sin
-// la comisión, que es un dato interno entre el admin y las partes).
+// Vista pública: subconjunto seguro de campos (sin datos de contacto, sin la
+// comisión y sin importes: el monto es lo que la agencia nos paga y el link
+// lo ve su pasajero — TKT-24, migración 0053).
 export type OperacionPublica = Pick<
   Operacion,
   | "code"
   | "evento"
   | "comprador_alias"
   | "vendedor_alias"
-  | "monto"
   // El comprador tiene que ver en qué moneda está su operación.
   | "moneda"
   | "status"
@@ -607,11 +607,10 @@ export const ESTADO_CONSULTA_LABEL: Record<EstadoConsulta, string> = {
 };
 
 // Línea tal como la ve el comprador en el link público: sin ticket_id ni ids
-// internos, que no le dicen nada y son del catálogo.
+// internos, que no le dicen nada y son del catálogo, y sin precio (TKT-24).
 export type ItemPublico = {
   evento: string;
   sector: string | null;
   fecha_evento: string | null;
   cantidad: number;
-  precio_unitario: number;
 };

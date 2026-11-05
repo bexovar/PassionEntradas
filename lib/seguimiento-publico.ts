@@ -35,19 +35,42 @@ export function nombreDePila(alias: string | null): string | null {
   return limpio.split(/\s+/)[0];
 }
 
-// Lo que llega a la tarjeta del seguimiento. Igual que la vista pública de la
-// base, pero con los importes opcionales: en la vista pública no existen.
-export type OperacionSeguimiento = Omit<OperacionPublica, "monto"> & { monto: number | null };
-export type ItemSeguimiento = Omit<ItemPublico, "precio_unitario"> & { precio_unitario: number | null };
+// Lo que llega a la tarjeta del seguimiento: la vista pública de la base más
+// los importes, que solo existen en la vista completa (null en la pública).
+export type OperacionSeguimiento = OperacionPublica & { monto: number | null };
+export type ItemSeguimiento = ItemPublico & { precio_unitario: number | null };
 
 // Recorta en el servidor, antes de renderizar: lo que no se muestra tampoco
-// viaja en el HTML ni en el payload de React.
+// viaja en el HTML ni en el payload de React. Acepta filas con importes (una
+// base sin 0053, o el modo demo) y los descarta: se copian solo los campos
+// públicos, así un campo nuevo del RPC no se cuela sin que nadie lo decida.
 export function recortarParaPublico(
-  op: OperacionPublica,
-  items: ItemPublico[]
+  op: OperacionPublica & { monto?: unknown },
+  items: (ItemPublico & { precio_unitario?: unknown })[]
 ): { op: OperacionSeguimiento; items: ItemSeguimiento[] } {
   return {
-    op: { ...op, monto: null, comprador_alias: nombreDePila(op.comprador_alias) },
-    items: items.map((i) => ({ ...i, precio_unitario: null })),
+    op: {
+      code: op.code,
+      evento: op.evento,
+      comprador_alias: nombreDePila(op.comprador_alias),
+      vendedor_alias: op.vendedor_alias,
+      moneda: op.moneda,
+      status: op.status,
+      entrada_recibida_at: op.entrada_recibida_at,
+      pago_confirmado_at: op.pago_confirmado_at,
+      cerrada_at: op.cerrada_at,
+      fecha_evento: op.fecha_evento,
+      updated_at: op.updated_at,
+      tipo: op.tipo,
+      confirmada_at: op.confirmada_at,
+      monto: null,
+    },
+    items: items.map((i) => ({
+      evento: i.evento,
+      sector: i.sector,
+      fecha_evento: i.fecha_evento,
+      cantidad: i.cantidad,
+      precio_unitario: null,
+    })),
   };
 }
