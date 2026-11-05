@@ -485,7 +485,7 @@ const es: typeof en = {
 
   proximosEyebrow: "Próximos",
   proximosH2: "Eventos más cercanos",
-  proximosP: "Los que están a la vuelta de la esquina, con stock o a pedido.",
+  proximosP: "Los que están a la vuelta de la esquina, con stock o a consultar.",
   exploraEyebrow: "Explorá",
   exploraH2: "Entrá por categoría",
   verTodo: "Ver todo",

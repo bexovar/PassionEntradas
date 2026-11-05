@@ -719,14 +719,13 @@ export function StorefrontHome({ resumen }: { resumen: ResumenHome }) {
                   </span>
                 </div>
                 <div className="rank-aside">
-                  <span className="rank-stock">
-                    {/* Sin stock el badge ya dice "a consultar": no se repite acá. */}
-                    {ev.bookStock > 0 && (
-                      <>
-                        {ev.bookStock} <small>{t.entradasRank}</small>
-                      </>
-                    )}
-                  </span>
+                  {/* Sin stock el badge ya dice "a consultar": no se repite acá,
+                      y sin el span vacío no queda un hueco en el celular. */}
+                  {ev.bookStock > 0 && (
+                    <span className="rank-stock">
+                      {ev.bookStock} <small>{t.entradasRank}</small>
+                    </span>
+                  )}
                   <span className="rank-price">
                     {ev.minPrice != null
                       ? t.desdeMayus + " " + fmtPrice(ev.minPrice, lang, ev.minMoneda)

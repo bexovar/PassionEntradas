@@ -39,6 +39,6 @@ describe("textos del badge", () => {
   it("no queda ningún 'Reservá ya' ni 'a pedido' en la tienda", () => {
     const todo = JSON.stringify(TX);
     expect(todo).not.toMatch(/reserv[aá] ya|book now/i);
-    expect(todo).not.toMatch(/"a pedido"/);
+    expect(todo).not.toMatch(/\ba pedido\b/i);
   });
 });
