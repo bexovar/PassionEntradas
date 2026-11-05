@@ -34,4 +34,25 @@ describe("marca del link de seguimiento", () => {
       expect(sinComentarios, f).not.toMatch(AJENA);
     }
   });
+
+  const leer = (f: string) => readFileSync(fileURLToPath(new URL(f, import.meta.url)), "utf8");
+
+  it("la tarjeta usa las tres constantes y la franja se repite seis veces", () => {
+    const stub = leer("../components/StatusStub.tsx");
+    expect(stub).toMatch(/MARCA_SEGUIMIENTO\.encabezado/);
+    expect(stub).toMatch(/MARCA_SEGUIMIENTO\.franja\.repeat\(6\)/);
+    const pagina = leer("../app/op/[id]/page.tsx");
+    expect(pagina).toMatch(/MARCA_SEGUIMIENTO\.pie/);
+  });
+
+  it("el texto más largo de la franja no rompe el layout: una sola línea, recortada", () => {
+    const css = leer("../app/globals.css");
+    const regla = css.slice(css.indexOf(".microtext {"), css.indexOf("}", css.indexOf(".microtext {")));
+    expect(regla).toMatch(/white-space:\s*nowrap/);
+    expect(regla).toMatch(/overflow:\s*hidden/);
+  });
+
+  it("el título de la pestaña tampoco nombra a la marca ajena", () => {
+    expect(leer("../app/layout.tsx")).not.toMatch(AJENA);
+  });
 });
