@@ -14,6 +14,12 @@ describe("copy de cancelación en Mis pedidos", () => {
       /podés cancelar hasta que te avisemos que procesamos el pago y que tu entrada está en camino/i
     );
     expect(en.sub).not.toMatch(/until we ask you to pay/);
+    expect(en.sub).toMatch(/until we let you know we've processed your payment and your ticket is on its way/);
+  });
+
+  it("si el pedido ya avanzó, el error lleva al pedido de cancelación", () => {
+    expect(es.noSePuedeCancelar).toMatch(/Pedir cancelación/);
+    expect(en.noSePuedeCancelar).toMatch(/Request cancellation/);
   });
 
   it("después de ese punto hay un pedido de cancelación con su mensaje", () => {
