@@ -39,12 +39,12 @@ const en = {
   ctaBandBtn: "Ask on WhatsApp",
 
   pasos: [
-    ["Search", "Filter by event, venue or date and see real prices and stock, updated live."],
+    ["Search", "Filter by event, venue or date and see up-to-date availability and prices."],
     ["Ask", "Tap Book or Ask and message us directly on WhatsApp with the event pre-filled."],
     ["Secure", "We coordinate payment and confirm your ticket. Simple, no runaround."],
   ] as [string, string][],
   porque: [
-    ["Real stock", "Tickets in stock show availability and price as of now. The ones on request, we confirm for you."],
+    ["Real stock", "In-stock tickets show current availability and price. We confirm on-request tickets for you."],
     ["Prices in dollars", "No surprises: all prices are in US dollars (USD)."],
     ["Direct service", "Message us on WhatsApp from any screen and our team answers."],
   ] as [string, string][],
@@ -500,7 +500,7 @@ const es: typeof en = {
   ctaBandBtn: "Consultar por WhatsApp",
 
   pasos: [
-    ["Buscás", "Filtrá por evento, lugar o fecha y mirá precios y stock reales, actualizados al momento."],
+    ["Buscás", "Filtrá por evento, lugar o fecha y mirá disponibilidad y precios actualizados."],
     ["Consultás", "Tocá Reservar o Consultar y nos escribís directo por WhatsApp con el evento ya cargado."],
     ["Asegurás", "Coordinamos pago y te confirmamos la entrada. Simple, sin vueltas."],
   ],
