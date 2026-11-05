@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { badgeEvento } from "./badge-stock";
 import { TX } from "./tienda-i18n";
@@ -14,6 +16,46 @@ describe("badgeEvento", () => {
 
   it("sin ninguna ubicación con stock: a consultar", () => {
     expect(badgeEvento({ bookable: 0 })).toBe("a_consultar");
+  });
+
+  it("si el evento no trae dato de stock: a consultar (nunca queda sin badge)", () => {
+    for (const sinDato of [undefined, null, Number.NaN]) {
+      expect(badgeEvento({ bookable: sinDato as unknown as number })).toBe("a_consultar");
+    }
+  });
+});
+
+// Los tests corren sin DOM: cómo se renderiza se verifica sobre el código.
+const fuente = (rel: string) =>
+  readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+describe("TKT-16: el badge en las dos pantallas", () => {
+  const store = fuente("../components/tienda/Storefront.tsx");
+  const BADGE = /<span className=\{`flag flag--\$\{badgeEvento\(ev\)\}`\}>\{t\.badge\[badgeEvento\(ev\)\]\}<\/span>/g;
+
+  it("/buscar (la card) y /entradas (próximos) usan el mismo badge", () => {
+    expect(store.match(BADGE)).toHaveLength(2);
+  });
+
+  it("todo evento lleva badge: ninguno de los dos está detrás de una condición", () => {
+    for (const m of store.matchAll(BADGE)) {
+      const antes = store.slice(Math.max(0, m.index! - 40), m.index!);
+      expect(antes).not.toMatch(/&&\s*\(?\s*$|\?\s*\(?\s*$/);
+    }
+  });
+
+  it("no queda el badge viejo en el código", () => {
+    expect(store).not.toMatch(/t\.bookNow/);
+    const sitio = [store, fuente("../components/tienda/Cart.tsx")].join("\n");
+    expect(sitio).not.toMatch(/reserv[aá] ya/i);
+  });
+
+  it("los dos estados tienen estilo propio (relleno contra contorno)", () => {
+    const css = fuente("../app/(tienda)/tienda.css");
+    expect(css).toMatch(/\.flag--a_consultar\s*\{[^}]*background:\s*transparent/);
   });
 });
 
