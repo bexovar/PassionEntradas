@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { MARCA_SEGUIMIENTO } from "./marca-seguimiento";
 import { whatsappMessage } from "./operaciones";
@@ -22,8 +23,15 @@ describe("marca del link de seguimiento", () => {
   });
 
   it("la página /op y su tarjeta no tienen la marca ajena escrita a mano", () => {
-    for (const f of ["app/op/[id]/page.tsx", "components/StatusStub.tsx"]) {
-      expect(readFileSync(f, "utf8"), f).not.toMatch(AJENA);
+    // Rutas desde este archivo (no desde donde se corre vitest), y sin los
+    // comentarios: "custodia" es vocabulario del dominio y puede aparecer en
+    // un comentario; lo que importa es lo que se renderiza.
+    for (const f of ["../app/op/[id]/page.tsx", "../components/StatusStub.tsx"]) {
+      const fuente = readFileSync(fileURLToPath(new URL(f, import.meta.url)), "utf8");
+      const sinComentarios = fuente
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+      expect(sinComentarios, f).not.toMatch(AJENA);
     }
   });
 });
