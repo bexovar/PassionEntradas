@@ -41,7 +41,7 @@ describe("TKT-16: el badge en las dos pantallas", () => {
   });
 
   it("todo evento lleva badge: ninguno de los dos está detrás de una condición", () => {
-    for (const m of store.matchAll(BADGE)) {
+    for (const m of Array.from(store.matchAll(BADGE))) {
       const antes = store.slice(Math.max(0, m.index! - 40), m.index!);
       expect(antes).not.toMatch(/&&\s*\(?\s*$|\?\s*\(?\s*$/);
     }
