@@ -32,6 +32,13 @@ describe("claims de precio y stock en la tienda", () => {
     expect(cuerpo("en", /stock/i)).not.toMatch(/what you see is what there is/i);
   });
 
+  it("el paso 'Buscás' tampoco promete precios ni stock reales", () => {
+    const paso = (lang: "es" | "en") => TX[lang].pasos[0][1];
+    expect(paso("es")).not.toMatch(/reales|al momento/i);
+    expect(paso("es")).toMatch(/disponibilidad y precios actualizados\.$/);
+    expect(paso("en")).not.toMatch(/real prices|updated live/i);
+  });
+
   it("el total sigue siendo estimado y dice por qué", () => {
     expect(es.carrito.total).toBe("Total estimado");
     expect(es.carrito.totalNota).toBe("Se confirma al verificar disponibilidad con el proveedor.");
