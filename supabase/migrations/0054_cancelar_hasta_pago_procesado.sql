@@ -8,8 +8,10 @@
 -- (cancelada no se cierra, cancelada no edita hitos, completa no se edita)
 -- queda igual.
 --
--- Orden de deploy: si el código va antes que esta migración, cancelar un
--- pedido "para pagar" da el 409 de siempre ("escribinos"); no rompe nada.
+-- ORDEN: aplicar ANTES de deployar el código de TKT-19. Con el código nuevo y
+-- la base vieja, Mis pedidos ofrece "Cancelar pedido" en "para pagar" pero el
+-- trigger de 0040 lo rechaza: el copy y el botón no coincidirían. Aplicarla
+-- antes es seguro: la ruta vieja igual rechaza cancelar en "para pagar".
 --
 -- Los permisos van acá mismo (README, regla 3), igual que 0046.
 -- 0052 y 0053 quedan para TKT-11 y TKT-24, que van en sus propias ramas.

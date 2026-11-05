@@ -39,7 +39,8 @@ export type PedidoView = {
   // Total del pedido en su moneda (null en consultas sin precio).
   monto: number | null;
   moneda: Moneda | null;
-  // Puede cancelarlo él mismo: pedido en pasos 1–2 o consulta pendiente.
+  // Puede cancelarlo él mismo: pedido hasta que procesamos el pago (TKT-19)
+  // o consulta pendiente.
   puedeCancelar: boolean;
   // Pasado el pago procesado ya no cancela solo: pide la cancelación por
   // WhatsApp y la resuelve el equipo (TKT-19).

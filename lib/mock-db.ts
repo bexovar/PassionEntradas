@@ -1135,7 +1135,7 @@ export function mockSetTextoPago(key: string, value: string): void {
 }
 
 // El cliente cancela su pedido: espejo de /api/mis-pedidos/[id]/cancelar y
-// del trigger (solo antes de que se le pida pagar).
+// del trigger (hasta que procesamos el pago, TKT-19).
 export function mockClienteCancelarOp(
   id: string,
   clienteId: string
