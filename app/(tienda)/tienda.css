@@ -1313,7 +1313,8 @@ html:has(.lp-modal[open]) { overflow: hidden; }
   flex: 0 0 auto; background: none; border: 1px solid var(--ink); font-size: 11px;
   padding: 3px 8px; cursor: pointer; transition: .12s;
 }
-.cart-rm:hover { background: var(--flare); border-color: var(--flare); color: #fff; }
+.cart-rm:hover:not(:disabled) { background: var(--flare); border-color: var(--flare); color: #fff; }
+.cart-rm:disabled { opacity: .4; cursor: default; }
 /* Celular angosto: etiqueta, evento, precio y "Quitar" en una fila no entran
    (en 320px "Quitar" quedaba cortado contra el borde). Arriba la etiqueta y
    el precio, el evento a lo ancho, y "Quitar" abajo a la derecha. */
@@ -1452,16 +1453,9 @@ html:has(.lp-modal[open]) { overflow: hidden; }
    son pedidos separados. */
 .cart-total + .cart-total { border-top: 0; padding-top: 2px; margin-top: 0; }
 .cart-nota-monedas { font-size: 12px; color: var(--mute, #6a6e7e); margin: 4px 0 0; line-height: 1.4; }
-/* Paso de revisión antes de "Confirmar y enviar". */
-.cart-rev-grupo { margin: 14px 0 0; }
-.cart-rev-grupo h3 { margin: 0 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; font-weight: 600; }
-.cart-rev-nota { color: var(--mute); font-weight: 400; font-size: 12px; }
-.cart-rev-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.cart-rev-list li { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
-  padding-bottom: 8px; border-bottom: 1px dashed var(--line, #d6d3c8); }
-.cart-rev-desc { display: flex; flex-direction: column; min-width: 0; }
-.cart-rev-sigue { margin: 14px 0 0; padding: 10px 12px; border: 1.5px solid var(--ink); background: var(--field); font-size: 13px; line-height: 1.5; }
-.cart-rev-sigue p { margin: 4px 0 0; color: var(--mute); }
+/* "Qué pasa después", dentro del modal del pedido (TKT-17). */
+.cart-sigue { margin: 14px 0 0; padding: 10px 12px; border: 1.5px solid var(--ink); background: var(--field); font-size: 13px; line-height: 1.5; }
+.cart-sigue p { margin: 4px 0 0; color: var(--mute); }
 .cart-keep:disabled { opacity: .5; cursor: default; }
 
 /* Esqueleto de carga (components/Esqueletos.tsx). */
