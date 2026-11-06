@@ -257,10 +257,25 @@ export function estadoPublicoDe(op: HitosPublicos): EstadoPublico {
   return "pedido_confirmado";
 }
 
-/** El cliente puede cancelar solo antes de que se le pida pagar (pasos 1–2). */
+/**
+ * El cliente cancela él mismo hasta que le avisamos que procesamos el pago y
+ * que la entrada está en camino (TKT-19). Pedirle el pago no le corta la
+ * salida: es justo cuando tiene la plata en el aire y todavía no la mandó.
+ * La base lo vuelve a chequear (trigger validar_orden_hitos, 0054).
+ */
 export function clientePuedeCancelar(op: HitosPublicos): boolean {
   const e = estadoPublicoDe(op);
-  return e === "pedido_recibido" || e === "pedido_confirmado";
+  return e === "pedido_recibido" || e === "pedido_confirmado" || e === "listo_para_pagar";
+}
+
+/**
+ * Pasado ese punto el botón no desaparece: pasa a ser un pedido de
+ * cancelación que resuelve el equipo de TicketMirror. Así el cliente nunca se
+ * queda sin una vía de cancelación visible.
+ */
+export function clientePuedePedirCancelacion(op: HitosPublicos): boolean {
+  const e = estadoPublicoDe(op);
+  return e === "pago_recibido" || e === "entregada";
 }
 
 // Lo que ve el CLIENTE (link de seguimiento y Mis pedidos): 3 pasos, y cada
