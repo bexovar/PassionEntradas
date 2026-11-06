@@ -68,7 +68,9 @@ const en = {
   ] as [string, string][],
 
   // cards / filas
-  bookNow: "● Book now",
+  // Badge de stock por evento (TKT-16, lib/badge-stock.ts). Punto lleno contra
+  // punto vacío: se distinguen sin depender del color.
+  badge: { con_stock: "● In stock", a_consultar: "○ On request" },
   nuestra: "Ours",
   sedeTBC: "Venue TBC",
   fechaTBC: "Date TBC",
@@ -485,7 +487,7 @@ const es: typeof en = {
 
   proximosEyebrow: "Próximos",
   proximosH2: "Eventos más cercanos",
-  proximosP: "Los que están a la vuelta de la esquina, con stock o a pedido.",
+  proximosP: "Los que están a la vuelta de la esquina, con stock o a consultar.",
   exploraEyebrow: "Explorá",
   exploraH2: "Entrá por categoría",
   verTodo: "Ver todo",
@@ -528,7 +530,7 @@ const es: typeof en = {
     ],
   ],
 
-  bookNow: "● Reservá ya",
+  badge: { con_stock: "● Con stock", a_consultar: "○ A consultar" },
   nuestra: "Nuestra",
   sedeTBC: "Sede a confirmar",
   fechaTBC: "Fecha a confirmar",
@@ -548,7 +550,7 @@ const es: typeof en = {
   entradaGeneral: "Entrada general",
   quedan: (n) => `quedan ${n}`,
   lugares: (n) => `${n} lugares`,
-  aPedido: "a pedido",
+  aPedido: "a consultar",
   sinCupo: "sin cupo",
   ubicaciones: (n) => `${n} ubicaciones`,
   conStock: (n) => ` · ${n} con stock`,
