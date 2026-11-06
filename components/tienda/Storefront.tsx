@@ -31,6 +31,7 @@ import { empezarNavegacion } from "@/components/NavProgress";
 import type { ResumenHome } from "@/lib/resumen-home";
 import { desempacarCatalogo, type CatalogoCompacto } from "@/lib/catalogo-compacto";
 import { useContextoWhatsApp } from "@/components/WhatsAppFlotante";
+import { badgeEvento } from "@/lib/badge-stock";
 
 // Idioma elegido: default español; se recuerda entre visitas.
 function useLang() {
@@ -522,7 +523,7 @@ function TicketCardBase({
       <div className="ticket-body">
         <div className="ticket-top">
           <div className="top-left">
-            {ev.bookable > 0 && <span className="flag">{t.bookNow}</span>}
+            <span className={`flag flag--${badgeEvento(ev)}`}>{t.badge[badgeEvento(ev)]}</span>
             {ev.propias && <span className="own">{t.nuestra}</span>}
             <WcLogo comp={ev.comp} />
             <span className="eyebrow">{context || ev.comp}</span>
@@ -707,6 +708,7 @@ export function StorefrontHome({ resumen }: { resumen: ResumenHome }) {
               >
                 <div className="rank-main">
                   <span className="rank-eyebrow">
+                    <span className={`flag flag--${badgeEvento(ev)}`}>{t.badge[badgeEvento(ev)]}</span>
                     <WcLogo comp={ev.comp} />
                     {ev.propias && <span className="own">{t.nuestra}</span>}
                     {ev.comp}
@@ -717,15 +719,13 @@ export function StorefrontHome({ resumen }: { resumen: ResumenHome }) {
                   </span>
                 </div>
                 <div className="rank-aside">
-                  <span className="rank-stock">
-                    {ev.bookStock > 0 ? (
-                      <>
-                        {ev.bookStock} <small>{t.entradasRank}</small>
-                      </>
-                    ) : (
-                      <small>{t.aPedido}</small>
-                    )}
-                  </span>
+                  {/* Sin stock el badge ya dice "a consultar": no se repite acá,
+                      y sin el span vacío no queda un hueco en el celular. */}
+                  {ev.bookStock > 0 && (
+                    <span className="rank-stock">
+                      {ev.bookStock} <small>{t.entradasRank}</small>
+                    </span>
+                  )}
                   <span className="rank-price">
                     {ev.minPrice != null
                       ? t.desdeMayus + " " + fmtPrice(ev.minPrice, lang, ev.minMoneda)

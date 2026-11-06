@@ -4,11 +4,11 @@ import {
   estadoPublicoDe,
   formatMonto,
   formatFecha,
-  type ItemPublico,
-  type OperacionPublica,
 } from "@/lib/operaciones";
+import type { ItemSeguimiento, OperacionSeguimiento } from "@/lib/seguimiento-publico";
 import ProgressSteps from "./ProgressSteps";
 import { waLink } from "@/lib/tickets";
+import { MARCA_SEGUIMIENTO } from "@/lib/marca-seguimiento";
 
 // Código de barras decorativo, derivado determinísticamente del code de la
 // operación (cada char define anchos de barra). Refuerza el motivo "entrada".
@@ -38,7 +38,7 @@ function Microtext({ dark = false }: { dark?: boolean }) {
       className={`microtext text-center ${dark ? "text-white/25" : "text-ink/20"}`}
       aria-hidden
     >
-      {"ADMINTICKETS·CUSTODIA·VERIFICADO·".repeat(6)}
+      {MARCA_SEGUIMIENTO.franja.repeat(6)}
     </p>
   );
 }
@@ -51,8 +51,9 @@ export default function StatusStub({
   items = [],
   textoPago = null,
 }: {
-  op: OperacionPublica;
-  items?: ItemPublico[];
+  // Sin importes (null) en la vista pública: ver lib/seguimiento-publico.ts.
+  op: OperacionSeguimiento;
+  items?: ItemSeguimiento[];
   // Cómo pagar (texto del panel para la moneda del pedido). Solo en "Para pagar".
   textoPago?: string | null;
 }) {
@@ -112,7 +113,7 @@ export default function StatusStub({
                   className="inline-block h-2 w-2 rounded-full bg-brand"
                   aria-hidden
                 />
-                AdminTickets · Custodia
+                {MARCA_SEGUIMIENTO.encabezado}
               </div>
               <span className="whitespace-nowrap rounded-md border border-white/15 bg-white/5 px-2 py-0.5 font-mono text-[11px] text-white/75">
                 {op.code}
@@ -140,9 +141,11 @@ export default function StatusStub({
                         {i.fecha_evento ? ` · ${formatFecha(i.fecha_evento)}` : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 whitespace-nowrap font-mono text-xs text-white/70">
-                      {formatMonto(i.cantidad * i.precio_unitario, op.moneda)}
-                    </span>
+                    {i.precio_unitario !== null && (
+                      <span className="shrink-0 whitespace-nowrap font-mono text-xs text-white/70">
+                        {formatMonto(i.cantidad * i.precio_unitario, op.moneda)}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -181,15 +184,18 @@ export default function StatusStub({
             {/* Los tres pasos del proceso: entrada → pago → entrega */}
             <ProgressSteps estado={estado} />
 
+            {(op.monto !== null || op.comprador_alias || op.vendedor_alias) && (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
-              <div className="col-span-2">
-                <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
-                  Monto
-                </dt>
-                <dd className="mt-0.5 font-display text-3xl font-bold tabular-nums tracking-tight">
-                  {formatMonto(op.monto, op.moneda)}
-                </dd>
-              </div>
+              {op.monto !== null && (
+                <div className="col-span-2">
+                  <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
+                    Monto
+                  </dt>
+                  <dd className="mt-0.5 font-display text-3xl font-bold tabular-nums tracking-tight">
+                    {formatMonto(op.monto, op.moneda)}
+                  </dd>
+                </div>
+              )}
               {op.comprador_alias && (
                 <div>
                   <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
@@ -207,6 +213,7 @@ export default function StatusStub({
                 </div>
               )}
             </dl>
+            )}
 
             {aviso && (
               <div

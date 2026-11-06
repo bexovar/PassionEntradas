@@ -3,6 +3,7 @@ import {
   estadoDe,
   estadoPublicoDe,
   clientePuedeCancelar,
+  clientePuedePedirCancelacion,
   necesitaConfirmar,
   pasosCliente,
   semaforoDe,
@@ -165,7 +166,10 @@ describe("estadoPublicoDe — los pasos del cliente", () => {
   });
 });
 
-describe("clientePuedeCancelar — solo antes de que se le pida pagar", () => {
+// TKT-19: el cliente cancela solo hasta que le avisamos que procesamos el
+// pago (y que la entrada está en camino). Pedirle el pago NO le corta la
+// salida: es justo cuando tiene la plata en el aire.
+describe("clientePuedeCancelar — hasta que procesamos el pago", () => {
   const base = {
     status: "esperando_entrada" as const,
     entrada_recibida_at: null,
@@ -173,15 +177,49 @@ describe("clientePuedeCancelar — solo antes de que se le pida pagar", () => {
     cerrada_at: null,
     tipo: "pedido" as const,
   };
-  it("pasos 1 y 2 sí", () => {
+  it("recibido, confirmado y para pagar sí", () => {
     expect(clientePuedeCancelar({ ...base, confirmada_at: null })).toBe(true);
     expect(clientePuedeCancelar({ ...base, confirmada_at: AYER })).toBe(true);
+    expect(clientePuedeCancelar({ ...base, confirmada_at: AYER, entrada_recibida_at: AYER })).toBe(true);
   });
-  it("listo para pagar, pagado, entregada o cancelada no", () => {
-    expect(clientePuedeCancelar({ ...base, entrada_recibida_at: AYER })).toBe(false);
+  it("pagado, entregada o cancelada no", () => {
     expect(clientePuedeCancelar({ ...base, pago_confirmado_at: AYER })).toBe(false);
     expect(clientePuedeCancelar({ ...base, cerrada_at: AYER })).toBe(false);
     expect(clientePuedeCancelar({ ...base, status: "cancelada" })).toBe(false);
+  });
+});
+
+describe("clientePuedePedirCancelacion — después de ese punto, la pide", () => {
+  const base = {
+    status: "esperando_entrada" as const,
+    entrada_recibida_at: AYER,
+    pago_confirmado_at: null,
+    cerrada_at: null,
+    confirmada_at: AYER,
+    tipo: "pedido" as const,
+  };
+  it("pagado o entregada: puede pedirla", () => {
+    expect(clientePuedePedirCancelacion({ ...base, pago_confirmado_at: AYER })).toBe(true);
+    expect(clientePuedePedirCancelacion({ ...base, pago_confirmado_at: AYER, cerrada_at: AYER })).toBe(true);
+  });
+  it("mientras puede cancelar solo, no hace falta pedirla", () => {
+    expect(clientePuedePedirCancelacion(base)).toBe(false);
+    expect(clientePuedePedirCancelacion({ ...base, entrada_recibida_at: null })).toBe(false);
+  });
+  it("cancelada: ya no hay nada que pedir", () => {
+    expect(clientePuedePedirCancelacion({ ...base, pago_confirmado_at: AYER, status: "cancelada" })).toBe(false);
+  });
+  it("en todo pedido vivo hay alguna vía de cancelación visible", () => {
+    const vivos = [
+      { ...base, confirmada_at: null, entrada_recibida_at: null },
+      { ...base, entrada_recibida_at: null },
+      base,
+      { ...base, pago_confirmado_at: AYER },
+      { ...base, pago_confirmado_at: AYER, cerrada_at: AYER },
+    ];
+    for (const op of vivos) {
+      expect(clientePuedeCancelar(op) || clientePuedePedirCancelacion(op)).toBe(true);
+    }
   });
 });
 

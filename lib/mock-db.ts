@@ -32,6 +32,7 @@ import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
 import type { DatosTarjeta, TarjetaCarrusel } from "@/lib/carrusel";
+import { nombreDePila } from "@/lib/seguimiento-publico";
 import { modoDemo } from "@/lib/entorno";
 
 export type MockFactura = Factura & { operacion_id: string };
@@ -420,8 +421,9 @@ export function mockListOps(limit?: number): Operacion[] {
 export function mockOpPublica(id: string): OperacionPublica | null {
   const op = db().ops.find((o) => o.id === id);
   if (!op) return null;
-  const { code, evento, comprador_alias, vendedor_alias, monto, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at } = op;
-  return { code, evento, comprador_alias, vendedor_alias, monto, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at: confirmada_at ?? null };
+  // Igual que el RPC después de 0053: sin monto y con el nombre de pila.
+  const { code, evento, comprador_alias, vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at } = op;
+  return { code, evento, comprador_alias: nombreDePila(comprador_alias), vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at: confirmada_at ?? null };
 }
 
 export function mockCreateOp(input: {
@@ -1135,7 +1137,7 @@ export function mockSetTextoPago(key: string, value: string): void {
 }
 
 // El cliente cancela su pedido: espejo de /api/mis-pedidos/[id]/cancelar y
-// del trigger (solo antes de que se le pida pagar).
+// del trigger (hasta que procesamos el pago, TKT-19).
 export function mockClienteCancelarOp(
   id: string,
   clienteId: string

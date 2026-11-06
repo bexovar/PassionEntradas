@@ -15,7 +15,7 @@ const en = {
   heroTitle1: "Tickets for the",
   heroTitle2: "events that matter",
   heroP:
-    "World Cup 2026, Euro 2028, Formula 1 and the most wanted matches, with real availability and clear pricing.",
+    "World Cup 2026, Euro 2028, Formula 1 and the most wanted matches, with up-to-date availability and prices.",
   ctaSearch: "Find tickets →",
   ctaWhatsapp: "Message us on WhatsApp",
   statEventos: "events",
@@ -39,13 +39,13 @@ const en = {
   ctaBandBtn: "Ask on WhatsApp",
 
   pasos: [
-    ["Search", "Filter by event, venue or date and see real prices and stock, updated live."],
+    ["Search", "Filter by event, venue or date and see up-to-date availability and prices."],
     ["Ask", "Tap Book or Ask and message us directly on WhatsApp with the event pre-filled."],
     ["Secure", "We coordinate payment and confirm your ticket. Simple, no runaround."],
   ] as [string, string][],
   porque: [
-    ["Real stock", "We sync availability and prices every few minutes: what you see is what there is."],
-    ["Clear pricing", "No surprises: all prices are in US dollars (USD)."],
+    ["Real stock", "In-stock tickets show current availability and price. We confirm on-request tickets for you."],
+    ["Prices in dollars", "No surprises: all prices are in US dollars (USD)."],
     ["Direct service", "Message us on WhatsApp from any screen and our team answers."],
   ] as [string, string][],
   faqs: [
@@ -68,7 +68,9 @@ const en = {
   ] as [string, string][],
 
   // cards / filas
-  bookNow: "● Book now",
+  // Badge de stock por evento (TKT-16, lib/badge-stock.ts). Punto lleno contra
+  // punto vacío: se distinguen sin depender del color.
+  badge: { con_stock: "● In stock", a_consultar: "○ On request" },
   nuestra: "Ours",
   sedeTBC: "Venue TBC",
   fechaTBC: "Date TBC",
@@ -132,7 +134,7 @@ const en = {
   carrito: {
     revisar: "Review order",
     titulo: "Your order",
-    sub: "Review your tickets and send them for review. A seller reaches out to close each one.",
+    sub: "Review your tickets and send the order. A seller reaches out to close each one.",
     quitar: "Remove",
     aConsultar: "Ask",
     dosMonedas: "Tickets in pesos and in dollars are separate orders: one total per currency.",
@@ -141,22 +143,16 @@ const en = {
     mas: "Increase",
     stock: (n: number) => `max ${n}`,
     total: "Estimated total",
+    // TKT-15: el total es estimado hasta confirmar con el proveedor; se dice por qué.
+    totalNota: "Confirmed once we check availability with the supplier.",
     seguir: "Keep browsing",
-    enviar: "Send for review",
+    enviar: "Send order",
     enviando: "Sending…",
     pedidoTag: "Order",
     consultaTag: "Inquiry",
-    // Paso de revisión antes de enviar.
-    revTitulo: "Check your order",
-    revSub: "Nothing is sent until you confirm.",
-    revPedidos: "Order",
-    revPedidosNota: "price shown, we confirm availability",
-    revConsultas: "Inquiry",
-    revConsultasNota: "we'll check and send you a price",
-    revQueSigue: "What happens next",
-    revQueSigueP: "Nothing is charged now. We'll confirm each ticket and tell you how to pay.",
-    revConfirmar: "Confirm and send",
-    revVolver: "Back",
+    // Qué pasa después, dentro del mismo modal (TKT-17: un solo paso).
+    queSigue: "What happens next",
+    queSigueP: "We confirm each ticket (and the price of inquiries) and tell you how to pay.",
     okTitulo: "Order sent ✓",
     okStock: (n: number) =>
       `${n === 1 ? "1 ticket" : `${n} tickets`} didn't have stock left and went as an inquiry: we'll check and send you a price.`,
@@ -298,7 +294,7 @@ const en = {
   // "Mis pedidos": el cliente sigue el estado de sus pedidos/consultas.
   misPedidos: {
     title: "My orders",
-    sub: "Track your orders and inquiries. You can cancel an order until we ask you to pay.",
+    sub: "Track your orders and inquiries. You can cancel until we let you know we've processed your payment and your ticket is on its way.",
     volver: "← Back to tickets",
     vacioTitle: "No orders yet",
     vacioP: "Browse the catalogue and tap Order or Ask on any ticket — it shows up here.",
@@ -333,10 +329,13 @@ const en = {
     consultarWa: "Ask about it on WhatsApp ↗",
     cancelarPedido: "Cancel order",
     cancelarConsulta: "Cancel enquiry",
+    // Pasado el pago procesado: no se cancela solo, se pide (TKT-19).
+    pedirCancelacion: "Request cancellation",
+    waPedirCancelacion: (code: string) => `Hi! I'd like to request the cancellation of order ${code}.`,
     cancelando: "Cancelling…",
     confirmarCancelarPedido: "Cancel this order? This can't be undone.",
     confirmarCancelarConsulta: "Cancel this enquiry? This can't be undone.",
-    noSePuedeCancelar: "This order has already moved forward and can't be cancelled here. Message us on WhatsApp.",
+    noSePuedeCancelar: "This order has already moved forward and can't be cancelled here. Use “Request cancellation” or message us on WhatsApp.",
     errorCancelar: "We couldn't cancel it. Please try again.",
     canceladoPorVos: "You cancelled this order.",
     canceladaConsultaPorVos: "You cancelled this enquiry.",
@@ -475,7 +474,7 @@ const es: typeof en = {
   heroTitle1: "Entradas para los",
   heroTitle2: "eventos que importan",
   heroP:
-    "Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados, con disponibilidad real y precio claro.",
+    "Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados, con disponibilidad y precios actualizados.",
   ctaSearch: "Buscar entradas →",
   ctaWhatsapp: "Escribinos por WhatsApp",
   statEventos: "eventos",
@@ -483,7 +482,7 @@ const es: typeof en = {
 
   proximosEyebrow: "Próximos",
   proximosH2: "Eventos más cercanos",
-  proximosP: "Los que están a la vuelta de la esquina, con stock o a pedido.",
+  proximosP: "Los que están a la vuelta de la esquina, con stock o a consultar.",
   exploraEyebrow: "Explorá",
   exploraH2: "Entrá por categoría",
   verTodo: "Ver todo",
@@ -498,13 +497,13 @@ const es: typeof en = {
   ctaBandBtn: "Consultar por WhatsApp",
 
   pasos: [
-    ["Buscás", "Filtrá por evento, lugar o fecha y mirá precios y stock reales, actualizados al momento."],
+    ["Buscás", "Filtrá por evento, lugar o fecha y mirá disponibilidad y precios actualizados."],
     ["Consultás", "Tocá Reservar o Consultar y nos escribís directo por WhatsApp con el evento ya cargado."],
     ["Asegurás", "Coordinamos pago y te confirmamos la entrada. Simple, sin vueltas."],
   ],
   porque: [
-    ["Stock real", "Sincronizamos disponibilidad y precios cada pocos minutos: lo que ves es lo que hay."],
-    ["Precio claro", "Sin sorpresas: todos los precios están en dólares (USD)."],
+    ["Stock real", "Las entradas con stock las ves con disponibilidad y precio al momento. Las que van a consulta te las confirmamos nosotros."],
+    ["Precios en dólares", "Sin sorpresas: todos los precios están en dólares (USD)."],
     ["Atención directa", "Nos escribís por WhatsApp desde cualquier pantalla y te responde el equipo."],
   ],
   faqs: [
@@ -526,7 +525,7 @@ const es: typeof en = {
     ],
   ],
 
-  bookNow: "● Reservá ya",
+  badge: { con_stock: "● Con stock", a_consultar: "○ A consultar" },
   nuestra: "Nuestra",
   sedeTBC: "Sede a confirmar",
   fechaTBC: "Fecha a confirmar",
@@ -546,7 +545,7 @@ const es: typeof en = {
   entradaGeneral: "Entrada general",
   quedan: (n) => `quedan ${n}`,
   lugares: (n) => `${n} lugares`,
-  aPedido: "a pedido",
+  aPedido: "a consultar",
   sinCupo: "sin cupo",
   ubicaciones: (n) => `${n} ubicaciones`,
   conStock: (n) => ` · ${n} con stock`,
@@ -592,21 +591,14 @@ const es: typeof en = {
     mas: "Sumar",
     stock: (n: number) => `máx ${n}`,
     total: "Total estimado",
+    totalNota: "Se confirma al verificar disponibilidad con el proveedor.",
     seguir: "Seguir viendo",
     enviar: "Enviar pedido",
     enviando: "Enviando…",
     pedidoTag: "Pedido",
     consultaTag: "Consulta",
-    revTitulo: "Revisá tu pedido",
-    revSub: "No se envía nada hasta que confirmes.",
-    revPedidos: "Pedido",
-    revPedidosNota: "con precio, confirmamos disponibilidad",
-    revConsultas: "Consulta",
-    revConsultasNota: "la chequeamos y te pasamos precio",
-    revQueSigue: "Qué pasa después",
-    revQueSigueP: "No se cobra nada ahora: te confirmamos cada entrada y te pasamos cómo pagar.",
-    revConfirmar: "Confirmar y enviar",
-    revVolver: "Volver",
+    queSigue: "Qué pasa después",
+    queSigueP: "Te confirmamos cada entrada (y el precio de las consultas) y te pasamos cómo pagar.",
     okTitulo: "Pedido enviado ✓",
     okStock: (n: number) =>
       `${n === 1 ? "1 entrada no tenía" : `${n} entradas no tenían`} stock y ${n === 1 ? "quedó" : "quedaron"} como consulta: la chequeamos y te pasamos precio.`,
@@ -741,7 +733,7 @@ const es: typeof en = {
   },
   misPedidos: {
     title: "Mis pedidos",
-    sub: "Seguí el estado de tus pedidos y consultas. Podés cancelar un pedido hasta que te pidamos el pago.",
+    sub: "Seguí el estado de tus pedidos y consultas. Podés cancelar hasta que te avisemos que procesamos el pago y que tu entrada está en camino.",
     volver: "← Volver a las entradas",
     vacioTitle: "Todavía no tenés pedidos",
     vacioP: "Mirá el catálogo y tocá Pedir o Consultar en cualquier entrada — aparece acá.",
@@ -773,10 +765,12 @@ const es: typeof en = {
     consultarWa: "Consultar por WhatsApp ↗",
     cancelarPedido: "Cancelar pedido",
     cancelarConsulta: "Cancelar consulta",
+    pedirCancelacion: "Pedir cancelación",
+    waPedirCancelacion: (code: string) => `¡Hola! Quiero pedir la cancelación del pedido ${code}.`,
     cancelando: "Cancelando…",
     confirmarCancelarPedido: "¿Cancelar este pedido? No se puede deshacer.",
     confirmarCancelarConsulta: "¿Cancelar esta consulta? No se puede deshacer.",
-    noSePuedeCancelar: "El pedido ya avanzó y no se puede cancelar desde acá. Escribinos por WhatsApp.",
+    noSePuedeCancelar: "El pedido ya avanzó y no se puede cancelar desde acá. Usá «Pedir cancelación» o escribinos por WhatsApp.",
     errorCancelar: "No pudimos cancelarlo. Probá de nuevo.",
     canceladoPorVos: "Cancelaste este pedido.",
     canceladaConsultaPorVos: "Cancelaste esta consulta.",

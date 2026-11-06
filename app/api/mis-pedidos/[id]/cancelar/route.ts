@@ -26,10 +26,11 @@ import { actorDe, registrarActividad, type Actor, type NuevaActividad } from "@/
 // Reglas:
 //   - solo lo suyo (cliente_id = su usuario; si no es suyo, 404 como si no
 //     existiera);
-//   - un pedido, solo antes de que se le pida pagar (pasos 1–2: recibido o
-//     confirmado). El trigger de la base lo vuelve a chequear, y el UPDATE va
-//     condicionado a que no haya hitos: dos clicks cruzados con el admin no
-//     pueden cancelar un pedido que ya avanzó;
+//   - un pedido, hasta que le avisamos que procesamos el pago (recibido,
+//     confirmado o para pagar; TKT-19). El trigger de la base lo vuelve a
+//     chequear, y el UPDATE va condicionado a que no esté pagado ni cerrado:
+//     dos clicks cruzados con el admin no pueden cancelar un pedido que ya
+//     avanzó. Pasado ese punto, Mis pedidos ofrece pedir la cancelación;
 //   - una consulta, solo si sigue pendiente.
 //
 // Stock: un pedido confirmado ya tomó el suyo (lib/stock.ts); cancelarlo lo
@@ -140,7 +141,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .eq("id", params.id)
     .eq("cliente_id", user.id)
     .neq("status", "cancelada")
-    .is("entrada_recibida_at", null)
     .is("pago_confirmado_at", null)
     .is("cerrada_at", null)
     .select("id")

@@ -111,15 +111,15 @@ export const TIPO_LABEL: Record<TipoOperacion, string> = {
   consulta: "Consulta",
 };
 
-// Vista pública: subconjunto seguro de campos (sin datos de contacto y sin
-// la comisión, que es un dato interno entre el admin y las partes).
+// Vista pública: subconjunto seguro de campos (sin datos de contacto, sin la
+// comisión y sin importes: el monto es lo que la agencia nos paga y el link
+// lo ve su pasajero — TKT-24, migración 0053).
 export type OperacionPublica = Pick<
   Operacion,
   | "code"
   | "evento"
   | "comprador_alias"
   | "vendedor_alias"
-  | "monto"
   // El comprador tiene que ver en qué moneda está su operación.
   | "moneda"
   | "status"
@@ -257,10 +257,25 @@ export function estadoPublicoDe(op: HitosPublicos): EstadoPublico {
   return "pedido_confirmado";
 }
 
-/** El cliente puede cancelar solo antes de que se le pida pagar (pasos 1–2). */
+/**
+ * El cliente cancela él mismo hasta que le avisamos que procesamos el pago y
+ * que la entrada está en camino (TKT-19). Pedirle el pago no le corta la
+ * salida: es justo cuando tiene la plata en el aire y todavía no la mandó.
+ * La base lo vuelve a chequear (trigger validar_orden_hitos, 0054).
+ */
 export function clientePuedeCancelar(op: HitosPublicos): boolean {
   const e = estadoPublicoDe(op);
-  return e === "pedido_recibido" || e === "pedido_confirmado";
+  return e === "pedido_recibido" || e === "pedido_confirmado" || e === "listo_para_pagar";
+}
+
+/**
+ * Pasado ese punto el botón no desaparece: pasa a ser un pedido de
+ * cancelación que resuelve el equipo de TicketMirror. Así el cliente nunca se
+ * queda sin una vía de cancelación visible.
+ */
+export function clientePuedePedirCancelacion(op: HitosPublicos): boolean {
+  const e = estadoPublicoDe(op);
+  return e === "pago_recibido" || e === "entregada";
 }
 
 // Lo que ve el CLIENTE (link de seguimiento y Mis pedidos): 3 pasos, y cada
@@ -518,7 +533,7 @@ export function formatUSD(n: number): string {
 
 // Mensaje de WhatsApp ya armado para pegar en el chat.
 export function whatsappMessage(evento: string, link: string): string {
-  return `Hola 👋 Soy del equipo de AdminTickets (${evento}). Seguí el estado de tu operación acá: ${link}. Se actualiza solo, no hace falta que preguntes.`;
+  return `Hola 👋 Soy del equipo de TicketMirror (${evento}). Seguí el estado de tu operación acá: ${link}. Se actualiza solo, no hace falta que preguntes.`;
 }
 
 // --- líneas de la operación --------------------------------------------------
@@ -607,11 +622,10 @@ export const ESTADO_CONSULTA_LABEL: Record<EstadoConsulta, string> = {
 };
 
 // Línea tal como la ve el comprador en el link público: sin ticket_id ni ids
-// internos, que no le dicen nada y son del catálogo.
+// internos, que no le dicen nada y son del catálogo, y sin precio (TKT-24).
 export type ItemPublico = {
   evento: string;
   sector: string | null;
   fecha_evento: string | null;
   cantidad: number;
-  precio_unitario: number;
 };
