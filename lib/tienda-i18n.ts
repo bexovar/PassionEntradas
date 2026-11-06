@@ -15,7 +15,7 @@ const en = {
   heroTitle1: "Tickets for the",
   heroTitle2: "events that matter",
   heroP:
-    "World Cup 2026, Euro 2028, Formula 1 and the most wanted matches, with real availability and clear pricing.",
+    "World Cup 2026, Euro 2028, Formula 1 and the most wanted matches, with up-to-date availability and prices.",
   ctaSearch: "Find tickets →",
   ctaWhatsapp: "Message us on WhatsApp",
   statEventos: "events",
@@ -39,13 +39,13 @@ const en = {
   ctaBandBtn: "Ask on WhatsApp",
 
   pasos: [
-    ["Search", "Filter by event, venue or date and see real prices and stock, updated live."],
+    ["Search", "Filter by event, venue or date and see up-to-date availability and prices."],
     ["Ask", "Tap Book or Ask and message us directly on WhatsApp with the event pre-filled."],
     ["Secure", "We coordinate payment and confirm your ticket. Simple, no runaround."],
   ] as [string, string][],
   porque: [
-    ["Real stock", "We sync availability and prices every few minutes: what you see is what there is."],
-    ["Clear pricing", "No surprises: all prices are in US dollars (USD)."],
+    ["Real stock", "In-stock tickets show current availability and price. We confirm on-request tickets for you."],
+    ["Prices in dollars", "No surprises: all prices are in US dollars (USD)."],
     ["Direct service", "Message us on WhatsApp from any screen and our team answers."],
   ] as [string, string][],
   faqs: [
@@ -141,6 +141,8 @@ const en = {
     mas: "Increase",
     stock: (n: number) => `max ${n}`,
     total: "Estimated total",
+    // TKT-15: el total es estimado hasta confirmar con el proveedor; se dice por qué.
+    totalNota: "Confirmed once we check availability with the supplier.",
     seguir: "Keep browsing",
     enviar: "Send for review",
     enviando: "Sending…",
@@ -475,7 +477,7 @@ const es: typeof en = {
   heroTitle1: "Entradas para los",
   heroTitle2: "eventos que importan",
   heroP:
-    "Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados, con disponibilidad real y precio claro.",
+    "Mundial 2026, Euro 2028, Fórmula 1 y los partidos más buscados, con disponibilidad y precios actualizados.",
   ctaSearch: "Buscar entradas →",
   ctaWhatsapp: "Escribinos por WhatsApp",
   statEventos: "eventos",
@@ -498,13 +500,13 @@ const es: typeof en = {
   ctaBandBtn: "Consultar por WhatsApp",
 
   pasos: [
-    ["Buscás", "Filtrá por evento, lugar o fecha y mirá precios y stock reales, actualizados al momento."],
+    ["Buscás", "Filtrá por evento, lugar o fecha y mirá disponibilidad y precios actualizados."],
     ["Consultás", "Tocá Reservar o Consultar y nos escribís directo por WhatsApp con el evento ya cargado."],
     ["Asegurás", "Coordinamos pago y te confirmamos la entrada. Simple, sin vueltas."],
   ],
   porque: [
-    ["Stock real", "Sincronizamos disponibilidad y precios cada pocos minutos: lo que ves es lo que hay."],
-    ["Precio claro", "Sin sorpresas: todos los precios están en dólares (USD)."],
+    ["Stock real", "Las entradas con stock las ves con disponibilidad y precio al momento. Las que van a consulta te las confirmamos nosotros."],
+    ["Precios en dólares", "Sin sorpresas: todos los precios están en dólares (USD)."],
     ["Atención directa", "Nos escribís por WhatsApp desde cualquier pantalla y te responde el equipo."],
   ],
   faqs: [
@@ -592,6 +594,7 @@ const es: typeof en = {
     mas: "Sumar",
     stock: (n: number) => `máx ${n}`,
     total: "Total estimado",
+    totalNota: "Se confirma al verificar disponibilidad con el proveedor.",
     seguir: "Seguir viendo",
     enviar: "Enviar pedido",
     enviando: "Enviando…",

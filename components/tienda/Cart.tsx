@@ -331,6 +331,7 @@ export function CartBar() {
                     <span>{fmtPrice(t.total, lang, t.moneda)}</span>
                   </div>
                 ))}
+                {totales.length > 0 && <p className="cart-nota-monedas">{c.totalNota}</p>}
                 {totales.length > 1 && <p className="cart-nota-monedas">{c.dosMonedas}</p>}
 
                 <div className="cart-rev-sigue">
@@ -447,6 +448,7 @@ export function CartBar() {
                     <span>{fmtPrice(t.total, lang, t.moneda)}</span>
                   </div>
                 ))}
+                {totales.length > 0 && <p className="cart-nota-monedas">{c.totalNota}</p>}
                 {totales.length > 1 && <p className="cart-nota-monedas">{c.dosMonedas}</p>}
 
                 {estado === "err" && <p className="cart-err">{error}</p>}
