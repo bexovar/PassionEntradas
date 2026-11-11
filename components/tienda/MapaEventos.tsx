@@ -21,6 +21,7 @@ import { ubicarCiudad } from "@/lib/geo";
 import { MAPA_H, MAPA_W, proyectar, WORLD_PATH } from "@/lib/mapa-mundo";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { desempacarCatalogo, type CatalogoCompacto } from "@/lib/catalogo-compacto";
+import TicketMark from "@/components/TicketMark";
 
 function useLang() {
   const [lang, setLang] = useState<Lang>("es");
@@ -209,7 +210,7 @@ export function MapaEventos({ catalogo }: { catalogo: CatalogoCompacto }) {
       <header className="masthead masthead--cat">
         <div className="toprow">
           <Link className="wm" href="/entradas">
-            <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
           </Link>
           <div className="mast-right">
             <LangToggle lang={lang} onChange={setLang} />

@@ -18,6 +18,7 @@ import { tiempoRestante } from "@/lib/cotizaciones";
 import { fechaDia, fechaHora } from "@/lib/fechas";
 import { useContextoWhatsApp } from "@/components/WhatsAppFlotante";
 import { mensajeWa } from "@/lib/whatsapp-flotante";
+import TicketMark from "@/components/TicketMark";
 
 export type PedidoView = {
   id: string;
@@ -191,7 +192,7 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
       <header className="masthead masthead--cat">
         <div className="toprow">
           <Link className="wm" href="/entradas">
-            <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
           </Link>
           <div className="mast-right">
             <div className="lang" role="group" aria-label="Language / Idioma">

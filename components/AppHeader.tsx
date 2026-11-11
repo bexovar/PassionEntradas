@@ -2,6 +2,7 @@ import Link from "next/link";
 import LogoutButton from "@/components/admin/LogoutButton";
 import TopNav from "@/components/TopNav";
 import CampanaEquipo from "@/components/admin/CampanaEquipo";
+import TicketMark from "@/components/TicketMark";
 
 type Props = {
   subtitle: string;
@@ -29,14 +30,9 @@ export default function AppHeader({ subtitle, email, nav = false }: Props) {
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 md:flex-nowrap">
         <div className="flex min-w-0 items-center gap-2.5 md:gap-6">
           <div className="flex items-center gap-2.5">
-            {/* Marca TicketMirror (la de la tienda): ▚ flare + MIRROR en cobalto
-                aclarado para que contraste sobre la tinta del header. */}
-            <span
-              className="shrink-0 text-base text-[#FF3B2E] [letter-spacing:-0.2em]"
-              aria-hidden
-            >
-              ▚
-            </span>
+            {/* Marca TicketMirror: isotipo TM (T en blanco por currentColor sobre
+                la tinta del header) + MIRROR en cobalto aclarado. */}
+            <TicketMark className="h-[1.15rem] w-auto" />
             {/* Misma fuente que el logo de la tienda: Archivo 900, 14px,
                 tracking .14em (el .wm de tienda.css). */}
             <span className="whitespace-nowrap font-body text-sm font-black uppercase tracking-[0.14em]">

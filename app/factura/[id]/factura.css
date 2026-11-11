@@ -42,7 +42,8 @@
   display: inline-flex; align-items: center; gap: 9px;
 }
 .fac-wm em { font-style: normal; color: var(--cobalt); }
-.fac-mark { color: var(--flare); letter-spacing: -0.2em; font-size: 17px; }
+.fac-mark { display: inline-block; height: 19px; width: auto; vertical-align: -3px; margin-right: 4px; color: var(--ink); }
+.fac-foot-mark { display: inline-block; height: 12px; width: auto; vertical-align: -1px; margin-right: 4px; color: #fbfaf6; }
 .fac-head-right { text-align: right; }
 .fac-doc-kind {
   font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 700;

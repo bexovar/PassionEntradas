@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { avisarActividad } from "@/lib/actividad-cliente";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { waLink } from "@/lib/tickets";
+import TicketMark from "@/components/TicketMark";
 
 export type PerfilInicial = {
   nombre: string;
@@ -167,7 +168,7 @@ export function CuentaCliente({ mock, perfil }: { mock: boolean; perfil: PerfilI
       <header className="masthead masthead--home">
         <div className="toprow">
           <Link className="wm" href="/entradas">
-            <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
           </Link>
           <Link className="back" href="/entradas">
             {lp.cuentaVolver}

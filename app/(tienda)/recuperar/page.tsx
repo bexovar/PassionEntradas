@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { avisarActividad } from "@/lib/actividad-cliente";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
+import TicketMark from "@/components/TicketMark";
 
 // Destino del link de recuperación (PKCE ?code=...): con esa sesión el usuario
 // setea una contraseña nueva y entra. Estética de la tienda.
@@ -106,7 +107,7 @@ export default function RecuperarPage() {
       <header className="masthead masthead--home">
         <div className="toprow">
           <Link className="wm" href="/">
-            <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
           </Link>
           <LangToggle lang={lang} onChange={setLang} />
         </div>

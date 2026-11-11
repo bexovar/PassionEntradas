@@ -10,6 +10,7 @@ import Link from "next/link";
 import { LANGS, TX, type Lang } from "@/lib/tienda-i18n";
 import { LegalLinks } from "./LegalLinks";
 import type { LegalSlug } from "@/lib/legal";
+import TicketMark from "@/components/TicketMark";
 
 function useLang(): [Lang, (l: Lang) => void] {
   const [lang, setLang] = useState<Lang>("es");
@@ -35,7 +36,7 @@ export function LegalDoc({ slug }: { slug: LegalSlug }) {
       <header className="masthead masthead--cat">
         <div className="toprow">
           <Link className="wm" href="/">
-            <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
           </Link>
           <div className="mast-right">
             <div className="lang" role="group" aria-label="Language / Idioma">

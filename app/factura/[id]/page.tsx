@@ -13,6 +13,7 @@ import {
 import { isMock, mockFacturaPorId } from "@/lib/mock-db";
 import BotonImprimir from "./BotonImprimir";
 import "./factura.css";
+import TicketMark from "@/components/TicketMark";
 
 // Factura/recibo público: se accede solo con el uuid exacto (impredecible),
 // mismo modelo que el link de seguimiento /op/[id]. Renderiza el snapshot
@@ -98,7 +99,7 @@ export default async function FacturaPage({ params }: { params: { id: string } }
       <div className="fac-sheet">
         <header className="fac-head">
           <div className="fac-wm">
-            <span className="fac-mark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="fac-mark" /> TICKET<em>MIRROR</em>
           </div>
           <div className="fac-head-right">
             <div className="fac-doc-kind">{t.docKind}</div>
@@ -289,7 +290,7 @@ export default async function FacturaPage({ params }: { params: { id: string } }
         </section>
 
         <footer className="fac-foot">
-          <span className="brand">▚ TicketMirror</span>
+          <span className="brand"><TicketMark className="fac-foot-mark" /> TicketMirror</span>
           <span className="terms">{t.terms}</span>
         </footer>
       </div>
