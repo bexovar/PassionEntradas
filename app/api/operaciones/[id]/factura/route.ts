@@ -234,7 +234,12 @@ export async function POST(
   const monedaOp = op.moneda ?? "USD";
   if (!metodoValido(metodo, monedaOp)) {
     return NextResponse.json(
-      { error: `El método de pago tiene que ser en la moneda de la operación (${monedaOp})` },
+      {
+        error:
+          monedaOp === "ARS"
+            ? "Una operación en pesos se cobra en pesos: elegí un método en ARS"
+            : "Método de pago no válido",
+      },
       { status: 400 }
     );
   }
