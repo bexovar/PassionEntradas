@@ -17,6 +17,7 @@ import { LegalLinks } from "@/components/tienda/LegalLinks";
 import { LoginForm } from "@/components/tienda/LoginForm";
 import { CarruselEventos } from "@/components/tienda/CarruselEventos";
 import type { TarjetaCarrusel } from "@/lib/carrusel";
+import TicketMark from "@/components/TicketMark";
 
 // La landing es estática, pero si el visitante ya tiene sesión mostramos
 // accesos de logueado (Mi cuenta / Ver entradas) en vez de "Ingresar". Se
@@ -169,7 +170,7 @@ export function Landing({ carrusel = [] }: { carrusel?: TarjetaCarrusel[] }) {
       <header className="masthead masthead--home">
         <div className="toprow">
           <span className="wm wm--static">
-            <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
           </span>
           <div className="mast-right">
             <LangToggle lang={lang} onChange={setLang} />

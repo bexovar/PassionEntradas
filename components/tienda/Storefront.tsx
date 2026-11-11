@@ -32,6 +32,7 @@ import type { ResumenHome } from "@/lib/resumen-home";
 import { desempacarCatalogo, type CatalogoCompacto } from "@/lib/catalogo-compacto";
 import { useContextoWhatsApp } from "@/components/WhatsAppFlotante";
 import { badgeEvento } from "@/lib/badge-stock";
+import TicketMark from "@/components/TicketMark";
 
 // Idioma elegido: default español; se recuerda entre visitas.
 function useLang() {
@@ -92,7 +93,7 @@ function Wordmark() {
   // La marca lleva al home de la tienda (zona logueada), no a la landing.
   return (
     <Link className="wm" href="/entradas">
-      <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+      <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
     </Link>
   );
 }

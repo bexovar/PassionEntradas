@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LANGS, type Lang } from "@/lib/tienda-i18n";
 import { LoginForm } from "@/components/tienda/LoginForm";
+import TicketMark from "@/components/TicketMark";
 
 // Login ÚNICO y público, con la estética de la tienda. Entran staff y clientes;
 // según el rol se redirige a su lugar. Incluye el reset de contraseña. El
@@ -47,7 +48,7 @@ export default function IngresarPage() {
       <header className="masthead masthead--home">
         <div className="toprow">
           <Link className="wm" href="/">
-            <span className="ticketmark">▚</span> TICKET<em>MIRROR</em>
+            <TicketMark className="ticketmark" /> TICKET<em>MIRROR</em>
           </Link>
           <LangToggle lang={lang} onChange={setLang} />
         </div>

@@ -31,7 +31,7 @@
   background: none; border: none; color: var(--ink); cursor: pointer; padding: 0;
 }
 .wm em { font-style: normal; color: var(--cobalt); }
-.ticketmark { color: var(--flare); letter-spacing: -.2em; font-size: 16px; }
+.ticketmark { display: block; height: 18px; width: auto; color: var(--ink); }
 .back {
   background: transparent; border: 1px solid var(--ink); color: var(--ink); cursor: pointer;
   font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 700; padding: 8px 14px;

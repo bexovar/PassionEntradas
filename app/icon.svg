@@ -1,5 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- La marca de TicketMirror: los dos cuadrados rojos en diagonal (▚) -->
-  <rect x="1" y="1" width="14" height="14" fill="#FF3B2E" />
-  <rect x="17" y="17" width="14" height="14" fill="#FF3B2E" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Isotipo de TicketMirror ("TM") sobre la tinta de la marca -->
+  <defs>
+    <linearGradient id="m" gradientUnits="userSpaceOnUse" x1="0" y1="173" x2="0" y2="364">
+      <stop offset="0" stop-color="#55A8DE"/><stop offset="0.3" stop-color="#3C7EC3"/>
+      <stop offset="0.46" stop-color="#2A62AF"/><stop offset="0.67" stop-color="#1B469E"/>
+      <stop offset="0.88" stop-color="#0B2E8D"/><stop offset="1" stop-color="#051A84"/>
+    </linearGradient>
+    <linearGradient id="f" gradientUnits="userSpaceOnUse" x1="363" y1="0" x2="448" y2="0">
+      <stop offset="0" stop-color="#57A8DA"/><stop offset="0.45" stop-color="#3B7FC0"/><stop offset="1" stop-color="#1B49A6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="#0A050B"/>
+  <g transform="translate(6 16.67) scale(0.16049) translate(-232 -173)">
+    <path fill="#FFFFFF" d="M232 173H393L438 233H333V364H232V303H240.5A31.5 31.5 0 0 0 240.5 240H232Z"/>
+    <path fill="url(#f)" d="M363 233H438L448 246L453 247L413 294L409 293Z"/>
+    <path fill="url(#m)" d="M510 173H556V364H494V281L443.5 338L409 293Z"/>
+  </g>
 </svg>
