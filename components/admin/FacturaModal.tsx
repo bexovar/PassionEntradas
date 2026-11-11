@@ -47,7 +47,8 @@ export default function FacturaModal({
   // La cantidad es la de la operación: no se tipea acá, así el unitario de la
   // factura siempre cierra con el total.
   const cantidad = Math.max(1, op.cantidad || 1);
-  // Solo los métodos de la moneda de la operación (ver METODOS_PAGO).
+  // Los métodos que admite la moneda de la operación: en pesos, solo pesos;
+  // en dólares, dólares y pesos (ver METODOS_PAGO).
   const metodos = METODOS_PAGO[op.moneda ?? "USD"];
   const [metodo, setMetodo] = useState(metodos[0]);
   const [idioma, setIdioma] = useState<"en" | "es">("en");

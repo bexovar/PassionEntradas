@@ -71,12 +71,15 @@ export function monedaFactura(d: Pick<FacturaDatos, "moneda">): "ARS" | "USD" {
   return d.moneda === "ARS" ? "ARS" : "USD";
 }
 
-// Métodos de pago por moneda: una factura en pesos se paga en pesos, una en
-// dólares en dólares. Antes la lista era una sola y un pedido en pesos podía
-// salir con "Bank transfer (USD)" (le pasó a la factura de Boca).
+// Métodos de pago por moneda. Una factura en pesos se paga solo en pesos: antes
+// la lista era una sola y un pedido en pesos podía salir con "Bank transfer
+// (USD)" (le pasó a la factura de Boca). Una en dólares se paga en dólares o
+// en pesos (al dólar del día), así que lleva también los métodos en pesos.
+const METODOS_ARS = ["Transferencia (ARS)", "Efectivo (ARS)", "Mercado Pago (ARS)"];
+const METODOS_USD = ["Bank transfer (USD)", "Transferencia (USD)", "Cash (USD)", "Efectivo (USD)", "Crypto (USDT)"];
 export const METODOS_PAGO: Record<"ARS" | "USD", string[]> = {
-  ARS: ["Transferencia (ARS)", "Efectivo (ARS)", "Mercado Pago (ARS)"],
-  USD: ["Bank transfer (USD)", "Transferencia (USD)", "Cash (USD)", "Efectivo (USD)", "Crypto (USDT)"],
+  ARS: METODOS_ARS,
+  USD: [...METODOS_USD, ...METODOS_ARS],
 };
 
 export function metodoValido(metodo: string, moneda: "ARS" | "USD"): boolean {
