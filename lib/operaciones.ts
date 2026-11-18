@@ -98,6 +98,16 @@ export type Operacion = {
   // Quién y cuándo canceló: 'cliente' o el nombre del admin. Reabrir limpia.
   cancelada_at?: string | null;
   cancelada_por?: string | null;
+  // Máquina de estados (TKT-21, ver lib/etapas.ts). Cuándo se le pidió el
+  // pago (corren las 24 h del vencido), el aviso del cliente de que pagó, y
+  // el reembolso cuando no se consiguió la entrada.
+  pago_pedido_at?: string | null;
+  pago_informado_at?: string | null;
+  pago_informado_por?: string | null;
+  reembolso_at?: string | null;
+  reembolso_por?: string | null;
+  reembolsado_at?: string | null;
+  reembolsado_por?: string | null;
   created_at: string;
   updated_at: string;
   // Idioma en que el cliente hizo el pedido (sus emails van en ese idioma).
@@ -455,6 +465,13 @@ export type StatusAction =
   | { action: "pago"; done: boolean }
   | { action: "proveedor"; done: boolean }
   | { action: "cerrar"; done: boolean }
+  // TKT-21: el cliente avisó que pagó (lo marca el admin si avisa por WhatsApp).
+  | { action: "informar"; done: boolean }
+  // Pedir (o volver a pedir, en un vencido) el pago: arranca las 24 h.
+  | { action: "pedir_pago" }
+  // No se consiguió la entrada: reembolso pendiente / hecho.
+  | { action: "reembolso"; done: boolean }
+  | { action: "reembolsado"; done: boolean }
   | { action: "confirmar" }
   | { action: "cancelar" }
   | { action: "reabrir" };

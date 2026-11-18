@@ -1,5 +1,21 @@
 "use client";
 
+import {
+  ETAPA_ACCION,
+  ETAPA_COLOR,
+  ETAPA_LABEL,
+  etapaDe,
+  motivoBloqueo,
+  NOMBRE_PASO,
+  pasoSiguiente,
+  puedeDesmarcar,
+  puedeMarcar,
+  puedePedirPago,
+  puedePedirReembolso,
+  SECUENCIA,
+  venceElPago,
+  type Hito,
+} from "@/lib/etapas";
 import { useState } from "react";
 import ConfirmarBoton from "@/components/ConfirmarBoton";
 import {
@@ -113,6 +129,10 @@ export default function OperacionCard({
   const enCurso = !cerrada && !cancelada;
   // Pedido de la tienda que todavía no confirmó un admin.
   const nuevo = necesitaConfirmar(op);
+  // Etapa de la máquina de estados (TKT-21) y el paso que la hace avanzar.
+  const etapa = etapaDe(op);
+  const siguiente = pasoSiguiente(op);
+  const vencePago = venceElPago(op);
 
   const [open, setOpen] = useState(defaultOpen);
   const [editingNotas, setEditingNotas] = useState(false);
@@ -245,7 +265,7 @@ export default function OperacionCard({
                   <span className="block text-[11px] font-normal text-muted">
                     {readOnly
                       ? "Espera la confirmación de un administrador."
-                      : "Revisalo y confirmalo: el cliente ve que su pedido fue confirmado."}
+                      : "Revisalo y confirmalo: se le pide el pago al cliente y tiene 24 h."}
                   </span>
                 </span>
                 {!readOnly && (
@@ -419,76 +439,136 @@ export default function OperacionCard({
               </div>
             )}
 
-            {/* Los cuatro hitos internos, SIN orden: en la práctica la
-                secuencia varía (a veces se le paga al proveedor antes de
-                tener la entrada). Ninguno bloquea a otro.
-                La grilla los ordena por con QUIÉN es cada uno: columna
-                izquierda el proveedor (le pagamos / nos manda la entrada),
-                columna derecha el cliente (nos paga / le entregamos). */}
-            {!readOnly && !cancelada && !cerrada && (
+            {/* Etapa de la operación (TKT-21): dónde está y qué falta. */}
+            {!cancelada && !nuevo && (
+              <div
+                className="mt-4 rounded-xl border px-3.5 py-2.5"
+                style={{ borderColor: `${ETAPA_COLOR[etapa]}55`, backgroundColor: `${ETAPA_COLOR[etapa]}0D` }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0 text-sm font-semibold" style={{ color: ETAPA_COLOR[etapa] }}>
+                    {ETAPA_LABEL[etapa]}
+                    <span className="block text-[11px] font-normal text-muted">
+                      {ETAPA_ACCION[etapa]}
+                      {etapa === "esperando_pago" && vencePago && ` Vence ${fechaHora(vencePago)}.`}
+                    </span>
+                  </span>
+                  {!readOnly && puedePedirPago(op) && (etapa === "vencido" || !op.pago_pedido_at) && (
+                    <button
+                      onClick={() =>
+                        onAction?.(
+                          op,
+                          { action: "pedir_pago" },
+                          op.pago_pedido_at ? "Pago pedido de nuevo: 24 h más" : "Pago pedido al cliente"
+                        )
+                      }
+                      disabled={busy}
+                      className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-ink/85 disabled:opacity-60"
+                    >
+                      {op.pago_pedido_at ? "Volver a pedir el pago" : "Pedir el pago"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Los pasos, EN ORDEN (TKT-21): se marca solo el siguiente y se
+                desmarca solo el último; los demás quedan bloqueados con el
+                motivo. "Pago informado" es opcional: el pago se puede
+                verificar en el banco sin que el cliente avise. */}
+            {!readOnly && !cancelada && !cerrada && !op.reembolso_at && (
               <>
               <p className="mt-4 h-4 text-right text-[10px] font-medium text-muted" aria-live="polite">
                 {guardando ? "Guardando…" : ""}
               </p>
-              <div className="mt-1 grid grid-cols-2 gap-2">
-                <HitoButton
-                  label="Pago a proveedor"
-                  done={proveedor}
-                  por={quienDe(op.pago_proveedor_por)}
-                  color={HITO_COLOR.pago}
-                  busy={busy}
-                  onClick={() =>
-                    onAction?.(
-                      op,
-                      { action: "proveedor", done: !proveedor },
-                      !proveedor ? "Pago al proveedor marcado" : "Pago al proveedor desmarcado"
-                    )
-                  }
-                />
-                <HitoButton
-                  label="Pago recibido"
-                  done={pago}
-                  por={quienDe(op.pago_confirmado_por)}
-                  color={HITO_COLOR.pago}
-                  busy={busy}
-                  onClick={() =>
-                    onAction?.(
-                      op,
-                      { action: "pago", done: !pago },
-                      !pago ? "Pago marcado como recibido" : "Pago desmarcado"
-                    )
-                  }
-                />
-                <HitoButton
-                  label="Entrada del proveedor"
-                  done={entrada}
-                  por={quienDe(op.entrada_recibida_por)}
-                  color={HITO_COLOR.entrada}
-                  busy={busy}
-                  onClick={() =>
-                    onAction?.(
-                      op,
-                      { action: "entrada", done: !entrada },
-                      !entrada ? "Entrada marcada como recibida" : "Entrada desmarcada"
-                    )
-                  }
-                />
-                <HitoButton
-                  label="Entrada entregada"
-                  done={entregada}
-                  por={quienDe(op.cerrada_por)}
-                  color={HITO_COLOR.listo}
-                  busy={busy}
-                  onClick={() =>
-                    onAction?.(
-                      op,
-                      { action: "cerrar", done: !entregada },
-                      !entregada ? "Entrega registrada" : "Entrega desmarcada"
-                    )
-                  }
-                />
-              </div>
+              <ol className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {SECUENCIA.map((h) => {
+                  const hecho = !!op[COLUMNA_AT[h]];
+                  const habilitado = hecho ? puedeDesmarcar(op, h) : puedeMarcar(op, h);
+                  return (
+                    <li key={h} className={h === siguiente ? "rounded-xl ring-2 ring-offset-1" : ""} style={h === siguiente ? ({ "--tw-ring-color": COLOR_PASO[h] } as React.CSSProperties) : undefined}>
+                      <HitoButton
+                        label={NOMBRE_PASO[h]}
+                        done={hecho}
+                        por={quienDe(op[COLUMNA_POR[h]] as string | null | undefined)}
+                        color={COLOR_PASO[h]}
+                        busy={busy}
+                        locked={!habilitado}
+                        lockedHint={motivoBloqueo(op, h, !hecho) ?? undefined}
+                        onClick={() =>
+                          onAction?.(
+                            op,
+                            { action: h, done: !hecho },
+                            !hecho ? `${NOMBRE_PASO[h]}: marcado` : `${NOMBRE_PASO[h]}: desmarcado`
+                          )
+                        }
+                      />
+                    </li>
+                  );
+                })}
+              </ol>
               </>
+            )}
+
+            {/* Reembolso: el cliente pagó y no se consiguió la entrada. */}
+            {!readOnly && !cancelada && puedePedirReembolso(op) && (
+              <div className="mt-3 flex justify-end">
+                <ConfirmarBoton
+                  onConfirm={() => onAction?.(op, { action: "reembolso", done: true }, "Reembolso pendiente")}
+                  disabled={busy}
+                  pregunta="¿No se consiguió la entrada?"
+                  si="Sí, reembolsar"
+                  className="rounded-lg border border-[#C2410C]/50 px-3 py-1.5 text-xs font-semibold text-[#C2410C] transition-colors hover:bg-[#C2410C]/5 disabled:opacity-60"
+                  armadoClassName="flex flex-wrap items-center justify-end gap-2"
+                  preguntaClassName="text-xs font-semibold text-ink"
+                  siClassName="rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-semibold text-white"
+                  noClassName="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-[#4A4E5E]"
+                >
+                  Sin disponibilidad: reembolsar
+                </ConfirmarBoton>
+              </div>
+            )}
+            {!readOnly && !cancelada && op.reembolso_at && (
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                {op.reembolsado_at ? (
+                  <ConfirmarBoton
+                    onConfirm={() => onAction?.(op, { action: "reembolsado", done: false }, "Reembolso desmarcado")}
+                    disabled={busy}
+                    pregunta="¿Desmarcar el reembolso?"
+                    si="Sí"
+                    className={secondaryBtn}
+                    armadoClassName="flex flex-wrap items-center justify-end gap-2"
+                    preguntaClassName="text-xs font-semibold text-ink"
+                    siClassName="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white"
+                    noClassName="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-[#4A4E5E]"
+                  >
+                    Desmarcar reembolso
+                  </ConfirmarBoton>
+                ) : (
+                  <>
+                    <ConfirmarBoton
+                      onConfirm={() => onAction?.(op, { action: "reembolso", done: false }, "Salió del reembolso")}
+                      disabled={busy}
+                      pregunta="¿Sacarla del reembolso?"
+                      si="Sí"
+                      className={secondaryBtn}
+                      armadoClassName="flex flex-wrap items-center justify-end gap-2"
+                      preguntaClassName="text-xs font-semibold text-ink"
+                      siClassName="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white"
+                      noClassName="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-[#4A4E5E]"
+                    >
+                      Sacar del reembolso
+                    </ConfirmarBoton>
+                    <button
+                      onClick={() => onAction?.(op, { action: "reembolsado", done: true }, "Reembolso hecho")}
+                      disabled={busy}
+                      className="rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      Ya devolví la plata
+                    </button>
+                  </>
+                )}
+              </div>
             )}
 
             {/* Completa (los cuatro hitos): resumen con opción de reabrir.
@@ -619,6 +699,42 @@ export default function OperacionCard({
       )}
     </article>
   );
+}
+
+// Columnas de cada paso y su color (TKT-21).
+const COLUMNA_AT: Record<Hito, keyof Operacion> = {
+  informar: "pago_informado_at",
+  pago: "pago_confirmado_at",
+  proveedor: "pago_proveedor_at",
+  entrada: "entrada_recibida_at",
+  cerrar: "cerrada_at",
+};
+const COLUMNA_POR: Record<Hito, keyof Operacion> = {
+  informar: "pago_informado_por",
+  pago: "pago_confirmado_por",
+  proveedor: "pago_proveedor_por",
+  entrada: "entrada_recibida_por",
+  cerrar: "cerrada_por",
+};
+const COLOR_PASO: Record<Hito, string> = {
+  informar: ETAPA_COLOR.pago_informado,
+  pago: HITO_COLOR.pago,
+  proveedor: ETAPA_COLOR.pendiente_pago_proveedor,
+  entrada: HITO_COLOR.entrada,
+  cerrar: HITO_COLOR.listo,
+};
+
+// "18 nov, 15:40" (hora argentina).
+function fechaHora(d: Date): string {
+  return d
+    .toLocaleString("es-AR", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "America/Argentina/Buenos_Aires",
+    })
+    .replace(/\./g, "");
 }
 
 // Botón de hito con dos estados: pendiente (delineado) y hecho (relleno con

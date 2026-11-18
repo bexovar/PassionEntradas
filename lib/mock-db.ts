@@ -33,6 +33,7 @@ import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
 import type { DatosTarjeta, TarjetaCarrusel } from "@/lib/carrusel";
 import type { DatosDestacado, Destacado } from "@/lib/destacados";
+import { COLUMNA_HITO, motivoBloqueo, puedePedirPago, puedePedirReembolso } from "@/lib/etapas";
 import { nombreDePila } from "@/lib/seguimiento-publico";
 import { modoDemo } from "@/lib/entorno";
 
@@ -510,51 +511,66 @@ export function mockApplyAction(
   const antes = { status: op.status, pago_confirmado_at: op.pago_confirmado_at, confirmada_at: op.confirmada_at ?? null };
 
   switch (action.action) {
+    case "informar":
     case "entrada":
     case "pago":
-    case "proveedor": {
-      if (cancelada) {
-        return { ok: false, status: 409, error: "La operación está cancelada; reabrila para editar hitos" };
-      }
-      // Espejo de la API: congela recién con los cuatro hechos.
-      if (operacionCompleta(op)) {
-        return {
-          ok: false,
-          status: 409,
-          error: "La operación está completa; desmarcá un hito para volver a editarla",
-        };
-      }
-      // Sin orden: espejo de la API y del trigger, que ya no lo imponen.
-      const COLS = {
-        entrada: ["entrada_recibida_at", "entrada_recibida_por"],
-        pago: ["pago_confirmado_at", "pago_confirmado_por"],
-        proveedor: ["pago_proveedor_at", "pago_proveedor_por"],
-      } as const;
-      const [col, colPor] = COLS[action.action];
-      op[col] = action.done ? new Date().toISOString() : null;
-      op[colPor] = action.done ? MOCK_USER.email : null;
+    case "proveedor":
+    case "cerrar": {
+      // Espejo de la API (TKT-21): en orden, solo el siguiente / el último.
+      const bloqueo = motivoBloqueo(op, action.action, action.done);
+      if (bloqueo) return { ok: false, status: 409, error: bloqueo };
+      const { at, por } = COLUMNA_HITO[action.action];
+      const fila = op as unknown as Record<string, string | null>;
+      fila[at] = action.done ? new Date().toISOString() : null;
+      fila[por] = action.done ? MOCK_USER.email : null;
       // Espejo de la API: trabajar un pedido nuevo es confirmarlo.
-      if (action.done && !op.confirmada_at) {
-        op.confirmada_at = new Date().toISOString();
-        op.confirmada_por = MOCK_USER.email;
-      }
-      break;
-    }
-    case "confirmar":
-      if (cancelada) return { ok: false, status: 409, error: "La operación está cancelada; reabrila para confirmarla" };
-      if (op.confirmada_at) return { ok: false, status: 409, error: "El pedido ya está confirmado" };
-      op.confirmada_at = new Date().toISOString();
-      op.confirmada_por = MOCK_USER.email;
-      break;
-    case "cerrar":
-      if (cancelada) return { ok: false, status: 409, error: "La operación está cancelada; no se puede cerrar" };
-      op.cerrada_at = action.done ? new Date().toISOString() : null;
-      op.cerrada_por = action.done ? MOCK_USER.email : null;
-      if (action.done && !op.confirmada_at) {
+      if (action.done && action.action !== "informar" && !op.confirmada_at) {
         op.confirmada_at = new Date().toISOString();
         op.confirmada_por = MOCK_USER.email;
       }
       // Entregar ya no mueve stock: se descuenta al pagar (ver lib/stock.ts).
+      break;
+    }
+    case "confirmar": {
+      if (cancelada) return { ok: false, status: 409, error: "La operación está cancelada; reabrila para confirmarla" };
+      if (op.confirmada_at) return { ok: false, status: 409, error: "El pedido ya está confirmado" };
+      const ahora = new Date().toISOString();
+      op.confirmada_at = ahora;
+      op.confirmada_por = MOCK_USER.email;
+      op.pago_pedido_at = ahora;
+      break;
+    }
+    case "pedir_pago":
+      if (!puedePedirPago(op)) {
+        return { ok: false, status: 409, error: "No hay un pago que pedir: confirmá el pedido o ya está pagado" };
+      }
+      op.pago_pedido_at = new Date().toISOString();
+      break;
+    case "reembolso":
+      if (action.done) {
+        if (!puedePedirReembolso(op)) {
+          return { ok: false, status: 409, error: "Solo se reembolsa algo que el cliente pagó y no se entregó" };
+        }
+        op.reembolso_at = new Date().toISOString();
+        op.reembolso_por = MOCK_USER.email;
+      } else {
+        if (!op.reembolso_at) return { ok: false, status: 409, error: "La operación no está en reembolso" };
+        if (op.reembolsado_at) return { ok: false, status: 409, error: "El reembolso ya está hecho; desmarcalo primero" };
+        op.reembolso_at = null;
+        op.reembolso_por = null;
+      }
+      break;
+    case "reembolsado":
+      if (action.done) {
+        if (!op.reembolso_at) return { ok: false, status: 409, error: "Primero marcá el reembolso como pendiente" };
+        if (op.reembolsado_at) return { ok: false, status: 409, error: "El reembolso ya está hecho" };
+        op.reembolsado_at = new Date().toISOString();
+        op.reembolsado_por = MOCK_USER.email;
+      } else {
+        if (!op.reembolsado_at) return { ok: false, status: 409, error: "El reembolso no está marcado como hecho" };
+        op.reembolsado_at = null;
+        op.reembolsado_por = null;
+      }
       break;
     case "cancelar":
       if (cancelada) return { ok: false, status: 409, error: "La operación ya está cancelada" };
