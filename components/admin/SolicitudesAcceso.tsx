@@ -35,8 +35,19 @@ function fmtFecha(iso: string): string {
   }
 }
 
-export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcceso[] }) {
+// TKT-10: organización existente con el mismo CUIT que la solicitud.
+export type Coincidencia = { id: string; nombre: string; usuarios: number };
+
+export default function SolicitudesAcceso({
+  initial,
+  coincidencias = {},
+}: {
+  initial: SolicitudAcceso[];
+  coincidencias?: Record<string, Coincidencia[]>;
+}) {
   const [items, setItems] = useState<SolicitudAcceso[]>(initial);
+  // Organización elegida por solicitud: id de una existente o "nueva".
+  const [orgElegida, setOrgElegida] = useState<Record<string, string>>({});
   // Lista viva: AutoRefresh vuelve a pedir la página cada tanto y `initial`
   // llega con los datos nuevos (solicitudes nuevas desde la landing). Sin
   // esto la lista quedaba congelada en lo que había al abrir la página.
@@ -83,7 +94,12 @@ export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcces
       const res = await fetch(`/api/acceso/${id}/decidir`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion }),
+        body: JSON.stringify({
+          accion,
+          ...(accion === "aprobar" && orgElegida[id]
+            ? { organizacion: orgElegida[id] === "nueva" ? { nueva: true } : { unirse: orgElegida[id] } }
+            : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -108,11 +124,14 @@ export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcces
             emailEnviado: Boolean(data.emailEnviado),
           },
         }));
+        const org = data.organizacion
+          ? ` Quedó en ${data.organizacion.nombre} como ${data.organizacion.rol === "admin" ? "administrador" : "vendedor"}.`
+          : "";
         avisar(
           "ok",
-          data.emailEnviado
+          (data.emailEnviado
             ? "Acceso creado y credenciales enviadas por email."
-            : "Acceso creado. Enviá las credenciales al cliente."
+            : "Acceso creado. Enviá las credenciales al cliente.") + org
         );
       } else {
         avisar("ok", "Solicitud rechazada.");
@@ -321,10 +340,43 @@ export default function SolicitudesAcceso({ initial }: { initial: SolicitudAcces
                       {s.mensaje}
                     </p>
                   )}
+                  {/* TKT-10: hay una organización con su CUIT. No se asocia
+                      sola (el CUIT es público): quien aprueba confirma. */}
+                  {coincidencias[s.id] && (
+                    <fieldset className="mt-3 rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2">
+                      <legend className="px-1 text-xs font-semibold text-amber-800">
+                        Ya hay una organización con este CUIT
+                      </legend>
+                      {coincidencias[s.id]!.map((c) => (
+                        <label key={c.id} className="flex items-center gap-2 py-0.5 text-sm text-body">
+                          <input
+                            type="radio"
+                            name={`org-${s.id}`}
+                            checked={orgElegida[s.id] === c.id}
+                            onChange={() => setOrgElegida((e) => ({ ...e, [s.id]: c.id }))}
+                          />
+                          Sumarlo a <b>{c.nombre}</b>
+                          <span className="text-xs text-muted">
+                            ({c.usuarios} {c.usuarios === 1 ? "usuario" : "usuarios"}; entra como vendedor)
+                          </span>
+                        </label>
+                      ))}
+                      <label className="flex items-center gap-2 py-0.5 text-sm text-body">
+                        <input
+                          type="radio"
+                          name={`org-${s.id}`}
+                          checked={orgElegida[s.id] === "nueva"}
+                          onChange={() => setOrgElegida((e) => ({ ...e, [s.id]: "nueva" }))}
+                        />
+                        Crear una organización nueva <span className="text-xs text-muted">(queda como administrador)</span>
+                      </label>
+                    </fieldset>
+                  )}
                   <div className="mt-3 flex items-center gap-2">
                     <button
                       onClick={() => decidir(s.id, "aprobar")}
-                      disabled={busy[s.id]}
+                      disabled={busy[s.id] || (!!coincidencias[s.id] && !orgElegida[s.id])}
+                      title={coincidencias[s.id] && !orgElegida[s.id] ? "Elegí la organización" : undefined}
                       className={btnPrimary}
                     >
                       {busy[s.id] ? "…" : "Aprobar y crear acceso"}

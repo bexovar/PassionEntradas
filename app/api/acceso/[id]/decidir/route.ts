@@ -4,6 +4,8 @@ import { getRol, nombreDe } from "@/lib/auth";
 import { generarPassword, mensajeCredenciales } from "@/lib/acceso";
 import { emailConfigurado, enviarEmail } from "@/lib/email";
 import { isMock, MOCK_USER, mockDecidirSolicitud } from "@/lib/mock-db";
+import { planAlAprobar, type EleccionOrganizacion } from "@/lib/organizaciones";
+import { asignarOrganizacion, coincidenciasDeCuit } from "@/lib/organizaciones-db";
 import { actorDe, actorDemo, registrarActividad, type Actor, type NuevaActividad } from "@/lib/actividad";
 
 // Aleatoriedad de calidad para la contraseña (no Math.random).
@@ -86,10 +88,15 @@ export async function POST(
   if (accion !== "aprobar" && accion !== "rechazar") {
     return NextResponse.json({ error: "Acción inválida" }, { status: 400 });
   }
+  // TKT-10: a qué organización va. { unirse: id } o { nueva: true }; sin
+  // nada, se crea una nueva salvo que haya otra con el mismo CUIT.
+  const o = body?.organizacion;
+  const eleccion: EleccionOrganizacion | null =
+    o && typeof o.unirse === "string" ? { unirse: o.unirse } : o && o.nueva === true ? { nueva: true } : null;
 
   // --- Mock -----------------------------------------------------------------
   if (isMock()) {
-    const r = mockDecidirSolicitud(id, accion, decididaPor);
+    const r = mockDecidirSolicitud(id, accion, decididaPor, eleccion);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
     await registrarActividad(
       null,
@@ -109,6 +116,7 @@ export async function POST(
       credenciales: r.credenciales,
       mensaje,
       emailConfigurado: emailConfigurado(),
+      organizacion: r.organizacion,
     });
   }
 
@@ -117,7 +125,7 @@ export async function POST(
 
   const { data: sol, error: solErr } = await admin
     .from("solicitudes_acceso")
-    .select("id, nombre, email, telefono, legajo, direccion, estado")
+    .select("id, nombre, email, telefono, legajo, direccion, estado, organizacion, tipo_organizacion")
     .eq("id", id)
     .single();
   if (solErr || !sol) {
@@ -144,7 +152,12 @@ export async function POST(
     return NextResponse.json({ estado: "rechazada" });
   }
 
-  // Aprobar: crear el usuario cliente.
+  // Aprobar: primero se decide la organización (TKT-10), así un error acá no
+  // deja un usuario creado a medias.
+  const plan = planAlAprobar(sol as any, await coincidenciasDeCuit(admin, sol.legajo), eleccion);
+  if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: 409 });
+
+  // Crear el usuario cliente.
   const password = generarPassword(randomCrypto);
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email: sol.email,
@@ -183,6 +196,19 @@ export async function POST(
     );
   }
 
+  const asignada = await asignarOrganizacion(admin, {
+    userId: created.user.id,
+    nombre: sol.nombre,
+    email: sol.email,
+    solicitudId: sol.id,
+    plan: plan.plan,
+  });
+  if (!asignada.ok) {
+    // El acceso ya existe: no se deshace. El usuario queda sin organización
+    // (ve solo sus pedidos, como hasta ahora) y el error queda en el log.
+    console.error("[decidir] organización:", asignada.error);
+  }
+
   const mensaje = mensajeCredenciales({
     nombre: sol.nombre,
     email: sol.email,
@@ -216,5 +242,6 @@ export async function POST(
     mensaje,
     emailConfigurado: emailConfigurado(),
     emailEnviado,
+    organizacion: asignada.ok ? { ...asignada.organizacion, rol: plan.plan.rol } : null,
   });
 }

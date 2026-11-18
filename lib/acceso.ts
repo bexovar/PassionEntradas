@@ -24,6 +24,8 @@ export type SolicitudAcceso = {
   mensaje: string | null;
   estado: EstadoSolicitud;
   user_id: string | null;
+  // Organización en la que quedó al aprobarse (TKT-10).
+  organizacion_id?: string | null;
   decidida_por: string | null;
   decidida_at: string | null;
   // Revocación (sub-estado de 'aprobada'): si revocada_at está seteado, el

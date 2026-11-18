@@ -6,12 +6,16 @@ import { estadoCotizacion } from "@/lib/cotizaciones";
 import { textoPagoDe } from "@/lib/textos";
 import { MisPedidos, type PedidoView } from "@/components/tienda/MisPedidos";
 import { usuarioVerificado } from "@/lib/usuario-verificado";
+import { miembroDe } from "@/lib/organizaciones-db";
+import { veElPedido, type Miembro } from "@/lib/organizaciones";
 import {
   isMock,
   mockFacturaDeOperacion,
   mockGetTextosPago,
   mockListConsultasCliente,
+  mockListMiembros,
   mockListPedidosCliente,
+  mockMiembroDe,
   MOCK_USER,
 } from "@/lib/mock-db";
 
@@ -28,6 +32,7 @@ export const dynamic = "force-dynamic";
 
 type OpRow = {
   id: string;
+  cliente_id?: string | null;
   code: string;
   tipo: string;
   evento: string;
@@ -47,6 +52,7 @@ type OpRow = {
 
 type ConsultaRow = {
   id: string;
+  cliente_id?: string | null;
   code: string;
   evento: string;
   sector: string | null;
@@ -127,6 +133,20 @@ function consultaToView(c: ConsultaRow): PedidoView {
   };
 }
 
+// TKT-10: un pedido de otro vendedor de la organización se ve, con quién lo
+// cargó, pero sin acciones: cancelar, pagar o aceptar es de quien lo pidió.
+function deOtro(v: PedidoView, clienteId: string | null | undefined, yo: string, miembros: Miembro[]): PedidoView {
+  if (!clienteId || clienteId === yo) return v;
+  const m = miembros.find((x) => x.user_id === clienteId);
+  return {
+    ...v,
+    cargadoPor: m?.nombre ?? m?.email ?? "Otro usuario de tu organización",
+    puedeCancelar: false,
+    textoPago: null,
+    cotizacion: null,
+  };
+}
+
 const masNuevoPrimero = (a: PedidoView, b: PedidoView) =>
   b.created_at.localeCompare(a.created_at);
 
@@ -134,37 +154,43 @@ export default async function MisPedidosPage() {
   let pedidos: PedidoView[] = [];
 
   if (isMock()) {
-    const ops = mockListPedidosCliente(
-      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      MOCK_USER.email
-    );
-    const consultas = mockListConsultasCliente(
-      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      MOCK_USER.email
-    );
+    const yo = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    const miembro = mockMiembroDe(yo);
+    const orgVisible = miembro?.rol === "admin" ? miembro.organizacion_id : null;
+    const miembros = mockListMiembros();
+    const ops = mockListPedidosCliente(yo, MOCK_USER.email, orgVisible);
+    const consultas = mockListConsultasCliente(yo, MOCK_USER.email, orgVisible);
     const textos = mockGetTextosPago();
     pedidos = [
       ...ops.map((o) =>
-        toView(o as unknown as OpRow, mockFacturaDeOperacion(o.id)?.id ?? null, textos)
+        deOtro(toView(o as unknown as OpRow, mockFacturaDeOperacion(o.id)?.id ?? null, textos), o.cliente_id, yo, miembros)
       ),
-      ...consultas.map((c) => consultaToView(c as unknown as ConsultaRow)),
+      ...consultas.map((c) => deOtro(consultaToView(c as unknown as ConsultaRow), c.cliente_id, yo, miembros)),
     ].sort(masNuevoPrimero);
   } else {
     const user = await usuarioVerificado();
     if (!user || !puedeVerTienda(getRol(user))) redirect("/ingresar");
 
-    // Las tablas son deny-all para el cliente; leemos lo suyo con service role,
-    // filtrando por su cliente_id (nunca ve los de otros).
+    // Las tablas son deny-all para el cliente; leemos con service role,
+    // filtrando por su cliente_id. TKT-10: si es administrador de su
+    // organización, también los de sus vendedores (nunca los de otra).
     const admin = createAdminSupabase();
+    const miembro = await miembroDe(admin, user.id).catch(() => null);
+    const orgVisible = miembro?.rol === "admin" ? miembro.organizacion_id : null;
+    const deQuien = orgVisible ? `cliente_id.eq.${user.id},organizacion_id.eq.${orgVisible}` : `cliente_id.eq.${user.id}`;
     const { data } = await admin
       .from("operaciones")
       .select(
-        "id, code, tipo, evento, sector, cantidad, fecha_evento, created_at, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, confirmada_at, cancelada_por, monto, moneda"
+        "id, cliente_id, organizacion_id, code, tipo, evento, sector, cantidad, fecha_evento, created_at, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, confirmada_at, cancelada_por, monto, moneda"
       )
-      .eq("cliente_id", user.id)
+      .or(deQuien)
       .order("created_at", { ascending: false })
       .limit(200);
-    const ops = (data ?? []) as OpRow[];
+    // Doble chequeo en código de lo que se filtró en la consulta.
+    const quien = { userId: user.id, miembro };
+    const ops = ((data ?? []) as (OpRow & { organizacion_id?: string | null })[]).filter((o) =>
+      veElPedido(quien, { cliente_id: o.cliente_id ?? null, organizacion_id: o.organizacion_id })
+    );
 
     // Las pendientes y cotizadas, y las cerradas sin pedido del último mes (para que
     // vea qué pasó con ellas). Una consulta ya convertida se ve como la
@@ -172,12 +198,26 @@ export default async function MisPedidosPage() {
     const haceUnMes = new Date(Date.now() - 30 * 86400_000).toISOString();
     const { data: dataC } = await admin
       .from("consultas")
-      .select("id, code, evento, sector, cantidad, fecha_evento, created_at, estado, moneda, cotizacion_monto, cotizacion_version, vence_at")
-      .eq("cliente_id", user.id)
-      .or(`estado.in.(pendiente,cotizada),and(estado.in.(cancelada,descartada,rechazada),updated_at.gte.${haceUnMes})`)
+      .select("id, cliente_id, organizacion_id, code, evento, sector, cantidad, fecha_evento, created_at, estado, moneda, cotizacion_monto, cotizacion_version, vence_at")
+      // Un solo .or: de quién es Y en qué estado está.
+      .or(
+        `and(or(${deQuien}),or(estado.in.(pendiente,cotizada),and(estado.in.(cancelada,descartada,rechazada),updated_at.gte.${haceUnMes})))`
+      )
       .order("created_at", { ascending: false })
       .limit(200);
-    const consultas = (dataC ?? []) as ConsultaRow[];
+    const consultas = ((dataC ?? []) as (ConsultaRow & { organizacion_id?: string | null })[]).filter((c) =>
+      veElPedido(quien, { cliente_id: c.cliente_id ?? null, organizacion_id: c.organizacion_id })
+    );
+
+    // Nombres de los vendedores, para "Lo cargó".
+    let miembros: Miembro[] = [];
+    if (orgVisible) {
+      const { data: ms } = await admin
+        .from("organizacion_miembros")
+        .select("user_id, organizacion_id, rol, nombre, email")
+        .eq("organizacion_id", orgVisible);
+      miembros = (ms ?? []) as Miembro[];
+    }
 
     // Facturas emitidas para estos pedidos (map operacion_id -> factura_id),
     // así el cliente accede al recibo desde su seguimiento.
@@ -203,8 +243,8 @@ export default async function MisPedidosPage() {
     }
 
     pedidos = [
-      ...ops.map((o) => toView(o, facturaPorOp.get(o.id) ?? null, textos)),
-      ...consultas.map(consultaToView),
+      ...ops.map((o) => deOtro(toView(o, facturaPorOp.get(o.id) ?? null, textos), o.cliente_id, user.id, miembros)),
+      ...consultas.map((c) => deOtro(consultaToView(c), c.cliente_id, user.id, miembros)),
     ].sort(masNuevoPrimero);
   }
 

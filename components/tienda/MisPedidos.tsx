@@ -47,6 +47,9 @@ export type PedidoView = {
   // Cotización esperando su respuesta: la versión que está viendo (si el
   // staff la cambia, aceptar la vieja falla) y hasta cuándo vale.
   cotizacion: { version: number; venceAt: string | null } | null;
+  // TKT-10: pedido de otro vendedor de su organización (lo ve porque es el
+  // administrador). Lo opera quien lo cargó.
+  cargadoPor?: string | null;
   // Factura emitida para este pedido (si el staff ya la generó).
   facturaId: string | null;
   // Una consulta sin precio todavía no es una operación: no hay link público
@@ -347,6 +350,12 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
                     <dt>{mp.creado}</dt>
                     <dd>{fmtDate(p.created_at, lang, true)}</dd>
                   </div>
+                  {p.cargadoPor && (
+                    <div>
+                      <dt>{mp.cargadoPor}</dt>
+                      <dd>{p.cargadoPor}</dd>
+                    </div>
+                  )}
                 </dl>
                 <div className="mp-foot">
                   <span className="mp-code">N.º {p.code}</span>

@@ -7,11 +7,34 @@ import BottomNav from "@/components/BottomNav";
 import SolicitudesAcceso from "@/components/admin/SolicitudesAcceso";
 import AccesosTabs from "@/components/admin/AccesosTabs";
 import type { SolicitudAcceso } from "@/lib/acceso";
-import { isMock, MOCK_USER, mockEquipo, mockListSolicitudes } from "@/lib/mock-db";
+import { isMock, MOCK_USER, mockEquipo, mockListMiembros, mockListOrganizaciones, mockListSolicitudes } from "@/lib/mock-db";
+import { coincidenciasPorCuit, type Miembro, type Organizacion } from "@/lib/organizaciones";
+import type { Coincidencia } from "@/components/admin/SolicitudesAcceso";
 import { leerEquipo, type RolEquipo } from "@/lib/equipo";
 import { usuarioVerificado } from "@/lib/usuario-verificado";
 
 export const dynamic = "force-dynamic";
+
+// TKT-10: para cada solicitud pendiente, las organizaciones con su mismo CUIT.
+// Quien aprueba elige sumarla a una de esas o crear una nueva.
+function coincidenciasDe(
+  sols: SolicitudAcceso[],
+  orgs: Organizacion[],
+  miembros: Pick<Miembro, "organizacion_id">[]
+): Record<string, Coincidencia[]> {
+  const out: Record<string, Coincidencia[]> = {};
+  for (const s of sols) {
+    if (s.estado !== "pendiente") continue;
+    const c = coincidenciasPorCuit(s.legajo, orgs);
+    if (c.length)
+      out[s.id] = c.map((o) => ({
+        id: o.id,
+        nombre: o.nombre,
+        usuarios: miembros.filter((m) => m.organizacion_id === o.id).length,
+      }));
+  }
+  return out;
+}
 
 function conEquipo(sols: SolicitudAcceso[], equipo: Map<string, RolEquipo>): SolicitudAcceso[] {
   return sols.map((s) => ({ ...s, equipo: s.user_id ? equipo.get(s.user_id) ?? null : null }));
@@ -22,10 +45,12 @@ function conEquipo(sols: SolicitudAcceso[], equipo: Map<string, RolEquipo>): Sol
 export default async function SolicitudesPage() {
   let email: string | null | undefined;
   let solicitudes: SolicitudAcceso[];
+  let coincidencias: Record<string, Coincidencia[]> = {};
 
   if (isMock()) {
     email = MOCK_USER.email;
     solicitudes = conEquipo(mockListSolicitudes(), mockEquipo());
+    coincidencias = coincidenciasDe(solicitudes, mockListOrganizaciones(), mockListMiembros());
   } else {
     const user = await usuarioVerificado();
     if (!user) redirect("/ingresar");
@@ -51,6 +76,25 @@ export default async function SolicitudesPage() {
     // Las columnas van en un string armado, así que el cliente no infiere el
     // tipo de fila. Sin 0052, tipo_organizacion y organizacion no vienen.
     solicitudes = conEquipo((data ?? []) as unknown as SolicitudAcceso[], equipo);
+
+    // Organizaciones con el CUIT de alguna pendiente. Sin 0058, no hay.
+    const cuits = solicitudes
+      .filter((s) => s.estado === "pendiente")
+      .map((s) => (s.legajo ?? "").replace(/\D/g, ""))
+      .filter((d) => /^\d{11}$/.test(d));
+    if (cuits.length) {
+      const admin = createAdminSupabase();
+      const { data: orgs } = await admin
+        .from("organizaciones")
+        .select("id, nombre, tipo, cuit, fusionada_en, created_at")
+        .in("cuit", cuits)
+        .is("fusionada_en", null);
+      const ids = ((orgs ?? []) as Organizacion[]).map((o) => o.id);
+      const { data: miembros } = ids.length
+        ? await admin.from("organizacion_miembros").select("organizacion_id").in("organizacion_id", ids)
+        : { data: [] };
+      coincidencias = coincidenciasDe(solicitudes, (orgs ?? []) as Organizacion[], (miembros ?? []) as Miembro[]);
+    }
   }
 
   return (
@@ -58,7 +102,7 @@ export default async function SolicitudesPage() {
       <AppHeader subtitle="Solicitudes" email={email} nav />
       <div className="mx-auto w-full max-w-5xl px-4 py-5">
         <AccesosTabs activa="solicitudes" />
-        <SolicitudesAcceso initial={solicitudes} />
+        <SolicitudesAcceso initial={solicitudes} coincidencias={coincidencias} />
       </div>
       <AutoRefresh intervalMs={20000} versionUrl="/api/acceso/version" />
       <BottomNav />
