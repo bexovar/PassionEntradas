@@ -41,6 +41,11 @@ type OpRow = {
   cerrada_at: string | null;
   confirmada_at: string | null;
   cancelada_por: string | null;
+  // TKT-18: pedido de pago, "Ya pagué" y reembolso (lib/etapas.ts).
+  pago_pedido_at?: string | null;
+  pago_informado_at?: string | null;
+  reembolso_at?: string | null;
+  reembolsado_at?: string | null;
   monto: number;
   moneda: Moneda;
 };
@@ -161,7 +166,7 @@ export default async function MisPedidosPage() {
     const { data } = await admin
       .from("operaciones")
       .select(
-        "id, code, tipo, evento, sector, cantidad, fecha_evento, created_at, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, confirmada_at, cancelada_por, monto, moneda"
+        "id, code, tipo, evento, sector, cantidad, fecha_evento, created_at, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, confirmada_at, cancelada_por, pago_pedido_at, pago_informado_at, reembolso_at, reembolsado_at, monto, moneda"
       )
       .eq("cliente_id", user.id)
       .order("created_at", { ascending: false })
