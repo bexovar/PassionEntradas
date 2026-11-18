@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { computeMetrics, metricasDominantes } from "./metrics";
 
 const base = {
@@ -28,6 +30,18 @@ describe("computeMetrics", () => {
     ]);
     expect(m.plataMovida).toBe(0);
     expect(m.entradasVendidas).toBe(0);
+    expect(m.enJuegoOps).toBe(0);
+  });
+
+  it("un reembolso, pendiente o hecho, no cuenta como venta ni como plata en juego", () => {
+    const m = computeMetrics([
+      { ...base, pago_confirmado_at: "2026-07-01T00:00:00Z" },
+      { ...base, monto: 70_000, fee: 7_000, pago_confirmado_at: "2026-07-01T00:00:00Z", reembolso_at: "2026-07-02T00:00:00Z" },
+      { ...base, monto: 30_000, fee: 3_000, pago_confirmado_at: "2026-07-01T00:00:00Z", reembolso_at: "2026-07-02T00:00:00Z" },
+    ]);
+    expect(m.plataMovida).toBe(100_000);
+    expect(m.comisionGanada).toBe(10_000);
+    expect(m.entradasVendidas).toBe(1);
     expect(m.enJuegoOps).toBe(0);
   });
 
@@ -186,5 +200,16 @@ describe("computeMetrics — misma definición que el RPC (0035)", () => {
     const op = { ...b, pago_confirmado_at: "2026-09-21T01:30:00Z" };
     expect(computeMetrics([op], "2026-09-20", "2026-09-20").plataMovida).toBe(300);
     expect(computeMetrics([op], "2026-09-21", "2026-09-21").plataMovida).toBe(0);
+  });
+});
+
+describe("metricas_operaciones (0059) usa el mismo criterio que computeMetrics", () => {
+  it("descarta canceladas y reembolsos", () => {
+    const sql = fs.readFileSync(
+      path.join(__dirname, "..", "supabase", "migrations", "0059_metricas_sin_reembolsos.sql"),
+      "utf8"
+    );
+    expect(sql).toMatch(/where o\.status <> 'cancelada'\s+and o\.reembolso_at is null/);
+    expect(sql).toMatch(/revoke all on function public\.metricas_operaciones\(date, date\) from public, anon, authenticated/);
   });
 });
