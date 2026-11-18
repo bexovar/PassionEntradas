@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { getRol } from "@/lib/auth";
+import { computeMetrics, metricasDominantes, type Metrics } from "@/lib/metrics";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import AppHeader from "@/components/AppHeader";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -43,12 +44,15 @@ export default async function AdminPage({
   // Consultas sin cotizar: van en la MISMA lista que las operaciones. Las ya
   // convertidas no se traen — se ven como la operación que originaron.
   let consultas: Consulta[] = [];
+  // Comisión y ventas acumuladas para los importes del panel (TKT-22).
+  let acumulados: Metrics;
 
   if (isMock()) {
     email = MOCK_USER.email;
     ops = mockListOps();
     items = ops.flatMap((o) => mockListItems(o.id));
     consultas = mockListConsultas().filter((c) => c.estado === "pendiente" || c.estado === "cotizada");
+    acumulados = computeMetrics(mockListOps());
   } else {
     const user = await usuarioVerificado();
 
@@ -98,6 +102,10 @@ export default async function AdminPage({
       .order("created_at", { ascending: false })
       .limit(500);
     consultas = (cons ?? []) as Consulta[];
+
+    // Mismo RPC que Métricas: suma en la base, todo el historial.
+    const { data: agregados } = await createAdminSupabase().rpc("metricas_operaciones");
+    acumulados = metricasDominantes((agregados ?? []) as any[]);
   }
 
   return (
@@ -115,6 +123,7 @@ export default async function AdminPage({
         baseUrl={getBaseUrl()}
         filtroInicial={filtroDeParams(searchParams)}
         busquedaInicial={typeof searchParams?.q === "string" ? searchParams.q.slice(0, 120) : ""}
+        acumulados={acumulados}
       />
       <BottomNav />
     </main>
