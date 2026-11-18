@@ -235,10 +235,11 @@ const en = {
     ],
     comoEyebrow: "Simple",
     comoH2: "How it works",
+    // TKT-13: lo que hace el agente en cada paso, en el registro del hero.
     pasos: [
-      ["Request access", "Fill the form — it takes a minute."],
-      ["Get approved", "We review it and send your private username and password."],
-      ["Explore", "Log in and explore the full catalogue of events."],
+      ["Request access", "Fill in the form with your agency's details. It takes a minute."],
+      ["Get your login", "We review the request and send you a username and password in your name."],
+      ["Build your orders", "Sign in, check availability and price for each event, and order tickets for your travelers."],
     ] as [string, string][],
     formEyebrow: "Request access",
     formTitle: "Create your access request",
@@ -679,9 +680,9 @@ const es: typeof en = {
     comoEyebrow: "Simple",
     comoH2: "Cómo funciona",
     pasos: [
-      ["Solicitás acceso", "Completás el formulario — te lleva un minuto."],
-      ["Te aprobamos", "La revisamos y te enviamos tu usuario y contraseña privados."],
-      ["Explorás", "Ingresás y explorás todo el catálogo de eventos."],
+      ["Pedís el acceso", "Completás el formulario con los datos de tu agencia. Es un minuto."],
+      ["Recibís tu usuario", "Revisamos la solicitud y te mandamos un usuario y contraseña a tu nombre."],
+      ["Armás tus pedidos", "Entrás, mirás disponibilidad y precio de cada evento y pedís las entradas para tus pasajeros."],
     ],
     formEyebrow: "Solicitar acceso",
     formTitle: "Creá tu solicitud de acceso",
