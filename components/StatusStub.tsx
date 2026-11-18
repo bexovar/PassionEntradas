@@ -75,7 +75,8 @@ export default function StatusStub({
     },
     pedido_confirmado: {
       icon: "✅",
-      text: "Tu pedido está confirmado. Te avisamos apenas tengamos las entradas para que puedas pagar.",
+      // Se paga antes de tener las entradas (TKT-21/TKT-6): no prometer lo contrario.
+      text: "Tu pedido está confirmado. En breve te pasamos cómo pagar.",
     },
     listo_para_pagar: {
       icon: "💳",
