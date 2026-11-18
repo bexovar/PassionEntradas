@@ -91,7 +91,7 @@ export default function ConsultaCard({
     est === "a_cotizar"
       ? { txt: "A cotizar", color: "#B07A14" }
       : est === "esperando"
-        ? { txt: "Esperando cliente", color: "#1F33E0" }
+        ? { txt: "Esperando pago", color: "#1F33E0" }
         : { txt: "Vencida", color: "#D14D68" };
   const mostrarForm = !cotizada || editando;
 

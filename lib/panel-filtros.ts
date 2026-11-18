@@ -1,21 +1,28 @@
 import { estadoCotizacion } from "./cotizaciones";
 import { pendienteDeConsulta, pendienteDeOp } from "./recordatorios";
 import { diaAr } from "./metrics";
-import { estadoDe, necesitaConfirmar, type Consulta, type Moneda, type Operacion } from "./operaciones";
+import { estadoDe, type Consulta, type Moneda, type Operacion } from "./operaciones";
+import { etapaDe, type Etapa, type OpEtapa } from "./etapas";
 
-// Filtros de la lista del Panel. Los seis primeros son las pestañas; los
-// demás se activan solo desde las tarjetas (las del Panel y las de plata de
-// Métricas) y se muestran como un chip para sacarlos.
+// Filtros de la lista del Panel. Los de PESTANAS son las pestañas; los demás
+// se activan desde las tarjetas (las ocho etapas del Panel, TKT-21, y las de
+// plata de Métricas) y se muestran como un chip para sacarlos.
 export type Filtro =
   | "todas"
-  | "nuevos"
   | "en_curso"
-  | "para_cerrar"
   | "cerradas"
   | "canceladas"
-  // Consultas sin cotizar / cotizadas sin respuesta (incluye vencidas).
+  | "reembolsos"
+  // Las ocho etapas del tablero (lib/etapas.ts). "a_cotizar" son consultas;
+  // "esperando_pago" y "vencido" juntan operaciones y cotizaciones.
   | "a_cotizar"
-  | "esperando"
+  | "pendiente_confirmar"
+  | "esperando_pago"
+  | "vencido"
+  | "pago_informado"
+  | "pendiente_pago_proveedor"
+  | "esperando_envio_proveedor"
+  | "listo_para_enviar"
   // Mismas reglas que las métricas de plata (ver computeMetrics).
   | "cobradas"
   | "sin_cobrar"
@@ -23,20 +30,26 @@ export type Filtro =
   // recordatorios por WhatsApp abre el Panel acá.
   | "prioridad";
 
+// Las etapas del medio van en las tarjetas de arriba (las ocho); las
+// pestañas quedan para lo que no es una etapa a trabajar.
 export const PESTANAS: { key: Filtro; label: string }[] = [
   { key: "todas", label: "Todas" },
-  // Pedidos de la tienda que esperan "Confirmar pedido".
-  { key: "nuevos", label: "Nuevos" },
   { key: "en_curso", label: "En curso" },
-  { key: "para_cerrar", label: "Para entregar" },
   { key: "cerradas", label: "Entregadas" },
+  { key: "reembolsos", label: "Reembolsos" },
   { key: "canceladas", label: "Canceladas" },
 ];
 
 const ETIQUETA_TARJETA: Partial<Record<Filtro, string>> = {
   prioridad: "Con prioridad",
   a_cotizar: "A cotizar",
-  esperando: "Esperando cliente",
+  pendiente_confirmar: "Pendiente de confirmar",
+  esperando_pago: "Esperando pago",
+  vencido: "Vencidos",
+  pago_informado: "Pago informado",
+  pendiente_pago_proveedor: "Pendiente de pago al proveedor",
+  esperando_envio_proveedor: "Esperando envío del proveedor",
+  listo_para_enviar: "Listo para enviar al cliente",
   cobradas: "Con pago confirmado",
   sin_cobrar: "Capital comprometido",
 };
@@ -56,10 +69,28 @@ export type FiltroPanel = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Etapas de operación que también son filtro (mismo nombre).
+const FILTRO_ETAPA = new Set<Filtro>([
+  "pendiente_confirmar",
+  "pago_informado",
+  "pendiente_pago_proveedor",
+  "esperando_envio_proveedor",
+  "listo_para_enviar",
+]);
+
+// Links viejos (avisos, emails, marcadores): siguen abriendo lo mismo.
+const ALIAS: Record<string, Filtro> = {
+  nuevos: "pendiente_confirmar",
+  esperando: "esperando_pago",
+  para_cerrar: "listo_para_enviar",
+};
+
 const FILTROS = new Set<Filtro>([
   ...PESTANAS.map((p) => p.key),
+  ...Array.from(FILTRO_ETAPA),
   "a_cotizar",
-  "esperando",
+  "esperando_pago",
+  "vencido",
   "cobradas",
   "sin_cobrar",
   "prioridad",
@@ -88,7 +119,8 @@ export function filtroDeParams(p: Record<string, string | string[] | undefined> 
     const v = p?.[k];
     return typeof v === "string" ? v : undefined;
   };
-  const f = uno("filtro");
+  const crudo = uno("filtro");
+  const f = crudo && ALIAS[crudo] ? ALIAS[crudo] : crudo;
   const out: FiltroPanel = { filtro: f && FILTROS.has(f as Filtro) ? (f as Filtro) : "todas" };
   const cid = uno("cliente");
   if (cid && UUID.test(cid)) {
@@ -157,7 +189,8 @@ type OpFiltrable = Pick<
   | "pago_confirmado_at"
   | "pago_proveedor_at"
   | "cerrada_at"
->;
+> &
+  Partial<Pick<OpEtapa, "pago_pedido_at" | "pago_informado_at" | "reembolso_at" | "reembolsado_at">>;
 
 /** ¿Es de ese cliente? Por su cuenta, o por su email exacto si no se vinculó. */
 export function esDelCliente(
@@ -171,22 +204,24 @@ export function esDelCliente(
 export function opCoincide(op: OpFiltrable, f: FiltroPanel, ahora: Date = new Date()): boolean {
   if (f.cliente && !esDelCliente(op, f.cliente)) return false;
   const estado = estadoDe(op);
+  const etapa: Etapa = etapaDe(op, ahora);
   const moneda = op.moneda ?? "USD";
+  if (FILTRO_ETAPA.has(f.filtro)) return etapa === f.filtro;
   switch (f.filtro) {
     case "todas":
       return true;
-    case "nuevos":
-      return necesitaConfirmar(op);
     case "en_curso":
-      return estado !== "cerrada" && estado !== "cancelada" && estado !== "lista_para_cerrar";
-    case "para_cerrar":
-      return estado === "lista_para_cerrar";
+      return etapa !== "entregada" && etapa !== "cancelada" && etapa !== "reembolsado";
     case "cerradas":
       return estado === "cerrada";
     case "canceladas":
       return estado === "cancelada";
+    case "reembolsos":
+      return etapa === "reembolso_pendiente" || etapa === "reembolsado";
+    case "esperando_pago":
+    case "vencido":
+      return etapa === f.filtro;
     case "a_cotizar":
-    case "esperando":
       return false;
     case "prioridad":
       return pendienteDeOp(op, ahora) !== null;
@@ -207,6 +242,8 @@ export function opCoincide(op: OpFiltrable, f: FiltroPanel, ahora: Date = new Da
         !(op.tipo === "pedido" && !op.confirmada_at) &&
         (!f.moneda || moneda === f.moneda)
       );
+    default:
+      return false;
   }
 }
 
@@ -224,10 +261,12 @@ export function consultaCoincide(
       return true;
     case "a_cotizar":
       return estadoCotizacion(c, ahora) === "a_cotizar";
-    case "esperando": {
-      const e = estadoCotizacion(c, ahora);
-      return e === "esperando" || e === "vencida";
-    }
+    // Cotizada sin respuesta: el cliente tiene el precio y falta que acepte y
+    // pague ("esperando cliente" era en realidad esperando el pago).
+    case "esperando_pago":
+      return estadoCotizacion(c, ahora) === "esperando";
+    case "vencido":
+      return estadoCotizacion(c, ahora) === "vencida";
     case "prioridad":
       return pendienteDeConsulta(c, ahora) !== null;
     default:

@@ -32,6 +32,13 @@ export function movimientoDeStock(action: StatusAction, antes: Estado, despues: 
       // sigue confirmado.
       if (action.done) return "tomar";
       return despues.confirmada_at ? null : "devolver";
+    // TKT-21: pedir el pago, el aviso del cliente y el reembolso no mueven
+    // stock (el reembolso es justamente que el proveedor no tenía).
+    case "pedir_pago":
+    case "informar":
+    case "reembolso":
+    case "reembolsado":
+      return null;
     default:
       // Marcar un paso confirma el pedido si no lo estaba: ahí se toma.
       return action.done && !antes.confirmada_at && despues.confirmada_at ? "tomar" : null;

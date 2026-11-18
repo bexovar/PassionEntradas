@@ -53,7 +53,8 @@ describe("stock al confirmar", () => {
   it("marcar un paso de un pedido sin confirmar también lo descuenta", () => {
     const inicial = stock();
     const op = pedido(1);
-    mockApplyAction(op.id, { action: "entrada", done: true });
+    // TKT-21: los pasos van en orden; el primero que se marca es el pago.
+    mockApplyAction(op.id, { action: "pago", done: true });
     expect(stock()).toBe(inicial - 1);
   });
 

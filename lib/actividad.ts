@@ -202,4 +202,7 @@ export const NOMBRE_HITO: Record<string, string> = {
   pago: "Pago recibido",
   proveedor: "Pago a proveedor",
   cerrar: "Entrada entregada",
+  informar: "Pago informado",
+  reembolso: "Reembolso pendiente",
+  reembolsado: "Reembolso hecho",
 };

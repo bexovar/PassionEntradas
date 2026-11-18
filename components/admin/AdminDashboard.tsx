@@ -28,6 +28,7 @@ import {
   type StatusAction,
   type OperacionItem,
 } from "@/lib/operaciones";
+import { ETAPAS_PANEL, etapaDe, type EtapaPanel } from "@/lib/etapas";
 import OperacionCard from "./OperacionCard";
 import ConsultaCard from "./ConsultaCard";
 import { ToastViewport, useToast } from "./Toast";
@@ -145,19 +146,23 @@ export default function AdminDashboard({
     setConsultas(consultasIniciales);
   }, [consultasIniciales]);
 
+  // Las ocho etapas del tablero (TKT-21): cuántas hay en cada una. "A
+  // cotizar" son consultas; en "Esperando pago" y "Vencidos" también cuentan
+  // las cotizaciones que el cliente todavía no aceptó.
   const stats = useMemo(() => {
-    const estados = ops.map(estadoDe);
-    const enCurso = estados.filter(
-      (e) => e !== "cerrada" && e !== "cancelada" && e !== "lista_para_cerrar"
-    ).length;
-    const paraCerrar = estados.filter((e) => e === "lista_para_cerrar").length;
-    const cerradas = estados.filter((e) => e === "cerrada").length;
-    const nuevos = ops.filter(necesitaConfirmar).length;
-    const aCotizar = consultas.filter((c) => estadoCotizacion(c) === "a_cotizar").length;
-    // Cotizadas sin respuesta (incluye las vencidas: hay que re-cotizarlas).
-    const esperando = consultas.length - aCotizar;
-    return { enCurso, paraCerrar, cerradas, aCotizar, esperando, nuevos };
-  }, [ops, consultas]);
+    const porEtapa = Object.fromEntries(ETAPAS_PANEL.map((e) => [e.key, 0])) as Record<EtapaPanel, number>;
+    for (const o of ops) {
+      const e = etapaDe(o, ahora);
+      if (e in porEtapa) porEtapa[e as EtapaPanel]++;
+    }
+    for (const c of consultas) {
+      const e = estadoCotizacion(c, ahora);
+      if (e === "a_cotizar") porEtapa.a_cotizar++;
+      else if (e === "esperando") porEtapa.esperando_pago++;
+      else if (e === "vencida") porEtapa.vencido++;
+    }
+    return porEtapa;
+  }, [ops, consultas, ahora]);
 
   // id -> texto del badge rojo ("Sin confirmar hace 3 h").
   const prioridades = useMemo(() => {
@@ -204,7 +209,7 @@ export default function AdminDashboard({
     // del admin (chequear stock y cerrar precio). Con el paginado, dejarlas
     // ordenadas por fecha las mandaba a la página 3 y no las veía nadie.
     // Solo aparecen en los filtros donde "trabajo pendiente" tiene sentido,
-    // y en los dos de consultas (A cotizar / Esperando cliente).
+    // y en los de consultas (A cotizar / Esperando pago / Vencidos).
     const pendientes: Fila[] = consultas
       .filter(
         (c) =>
@@ -356,6 +361,13 @@ export default function AdminDashboard({
                     confirmada_por: data.confirmada_por ?? null,
                     cancelada_at: data.cancelada_at ?? null,
                     cancelada_por: data.cancelada_por ?? null,
+                    pago_pedido_at: data.pago_pedido_at ?? null,
+                    pago_informado_at: data.pago_informado_at ?? null,
+                    pago_informado_por: data.pago_informado_por ?? null,
+                    reembolso_at: data.reembolso_at ?? null,
+                    reembolso_por: data.reembolso_por ?? null,
+                    reembolsado_at: data.reembolsado_at ?? null,
+                    reembolsado_por: data.reembolsado_por ?? null,
                     updated_at: data.updated_at ?? o.updated_at,
                   }
                 : o
@@ -427,7 +439,7 @@ export default function AdminDashboard({
 
   // Cotizar NO crea la operación: le manda el precio al cliente, que la
   // acepta (o no) desde Mis pedidos. La consulta queda en la lista como
-  // "Esperando cliente" hasta que responda.
+  // "Esperando pago" hasta que responda.
   async function cotizarConsulta(
     c: Consulta,
     valores: { costo: number; comision: number; moneda: Moneda }
@@ -504,23 +516,21 @@ export default function AdminDashboard({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
-      {/* Mini stats: tira única estilo talón, dividida por líneas punteadas */}
+      {/* Las ocho etapas de la operación (TKT-21), en orden: cada una es una
+          acción del admin o una espera a un tercero. Tocar una filtra la
+          lista; tocarla de nuevo la limpia. */}
       <section className="card-shadow mb-5 overflow-hidden rounded-2xl bg-white">
-        {/* 2×2 en celular: cuatro columnas en 390px dejaban las etiquetas
-            partidas en dos renglones y el número sin aire. */}
-        <div className="grid grid-cols-2 divide-x divide-dashed divide-line sm:grid-cols-5">
-          {/* "A cotizar" son las consultas: entradas que el cliente pidió y
-              todavía hay que chequear si están y a cuánto. */}
-          {/* Cada tarjeta filtra la lista (tocarla de nuevo la limpia). */}
-          <Stat label="A cotizar" value={stats.aCotizar} accent="#B07A14" activa={filter === "a_cotizar"} onClick={() => tocarTarjeta("a_cotizar")} />
-          {/* Cotizaciones mandadas que el cliente todavía no respondió. */}
-          <Stat label="Esperando cliente" value={stats.esperando} accent="#D14D68" activa={filter === "esperando"} onClick={() => tocarTarjeta("esperando")} />
-          <Stat label="En curso" value={stats.enCurso} accent="#1F33E0" activa={filter === "en_curso"} onClick={() => tocarTarjeta("en_curso")} />
-          <Stat label="Para entregar" value={stats.paraCerrar} accent="#0D9377" activa={filter === "para_cerrar"} onClick={() => tocarTarjeta("para_cerrar")} />
-          {/* Quinta celda: en celular ocupa la fila entera (2 columnas). */}
-          <div className="col-span-2 border-t border-dashed border-line sm:col-span-1 sm:border-t-0">
-            <Stat label="Entregadas" value={stats.cerradas} accent="#6C5BF2" activa={filter === "cerradas"} onClick={() => tocarTarjeta("cerradas")} />
-          </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-dashed divide-line sm:grid-cols-4">
+          {ETAPAS_PANEL.map((e) => (
+            <Stat
+              key={e.key}
+              label={e.label}
+              value={stats[e.key]}
+              accent={e.color}
+              activa={filter === e.key}
+              onClick={() => tocarTarjeta(e.key)}
+            />
+          ))}
         </div>
       </section>
 
@@ -582,15 +592,6 @@ export default function AdminDashboard({
               title={f.label}
             >
               {f.label}
-              {f.key === "nuevos" && stats.nuevos > 0 && (
-                <span
-                  className={`ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
-                    active ? "bg-white text-ink" : "bg-[#D14D68] text-white"
-                  }`}
-                >
-                  {stats.nuevos}
-                </span>
-              )}
             </button>
           );
         })}
