@@ -36,6 +36,7 @@ import { modoDemo } from "@/lib/entorno";
 import {
   planAlAprobar,
   coincidenciasPorCuit,
+  validarCambioRol,
   validarFusion,
   type EleccionOrganizacion,
   type Miembro,
@@ -1012,8 +1013,9 @@ export function mockSetRolMiembro(
   userId: string,
   rol: RolOrganizacion
 ): { ok: true; miembro: Miembro } | { ok: false; status: number; error: string } {
-  const m = db().miembros.find((x) => x.user_id === userId);
-  if (!m) return { ok: false, status: 404, error: "Usuario sin organización" };
+  const invalido = validarCambioRol(db().miembros, userId, rol);
+  if (invalido) return { ok: false, ...invalido };
+  const m = db().miembros.find((x) => x.user_id === userId)!;
   m.rol = rol;
   return { ok: true, miembro: m };
 }

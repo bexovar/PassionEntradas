@@ -140,7 +140,8 @@ function deOtro(v: PedidoView, clienteId: string | null | undefined, yo: string,
   const m = miembros.find((x) => x.user_id === clienteId);
   return {
     ...v,
-    cargadoPor: m?.nombre ?? m?.email ?? "Otro usuario de tu organización",
+    // Sin texto fijo: la página es la misma en castellano y en inglés.
+    cargadoPor: m?.nombre || m?.email || "—",
     puedeCancelar: false,
     textoPago: null,
     cotizacion: null,

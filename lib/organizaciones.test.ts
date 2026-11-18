@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { claveCuit, coincidenciasPorCuit, planAlAprobar, validarFusion, veElPedido } from "@/lib/organizaciones";
+import { claveCuit, coincidenciasPorCuit, planAlAprobar, validarCambioRol, validarFusion, veElPedido } from "@/lib/organizaciones";
 import {
   mockCreateOp,
   mockCrearSolicitud,
@@ -77,6 +77,24 @@ describe("TKT-10: quién ve qué pedido", () => {
     expect(validarFusion({ id: "a", fusionada_en: null }, { id: "a", fusionada_en: null })).toMatch(/distintas/);
     expect(validarFusion({ id: "a", fusionada_en: "c" }, { id: "b", fusionada_en: null })).toMatch(/fusionada/);
     expect(validarFusion({ id: "a", fusionada_en: null }, { id: "b", fusionada_en: null })).toBeNull();
+  });
+});
+
+describe("TKT-10: una organización nunca se queda sin administrador", () => {
+  const ms = [
+    { user_id: "a", organizacion_id: "o1", rol: "admin" as const },
+    { user_id: "b", organizacion_id: "o1", rol: "vendedor" as const },
+    { user_id: "c", organizacion_id: "o2", rol: "admin" as const },
+  ];
+  it("el único admin no pasa a vendedor (aunque otra organización tenga admin)", () => {
+    expect(validarCambioRol(ms, "a", "vendedor")?.status).toBe(409);
+  });
+  it("con otro admin en la organización, sí", () => {
+    expect(validarCambioRol([...ms, { user_id: "d", organizacion_id: "o1", rol: "admin" }], "a", "vendedor")).toBeNull();
+  });
+  it("subir a admin siempre se puede; sin organización, 404", () => {
+    expect(validarCambioRol(ms, "b", "admin")).toBeNull();
+    expect(validarCambioRol(ms, "zz", "admin")?.status).toBe(404);
   });
 });
 
