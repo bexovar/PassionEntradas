@@ -63,6 +63,11 @@ export function recortarParaPublico(
       updated_at: op.updated_at,
       tipo: op.tipo,
       confirmada_at: op.confirmada_at,
+      // TKT-18: lo que hace falta para el estado (fechas, sin montos).
+      pago_pedido_at: op.pago_pedido_at ?? null,
+      pago_informado_at: op.pago_informado_at ?? null,
+      reembolso_at: op.reembolso_at ?? null,
+      reembolsado_at: op.reembolsado_at ?? null,
       monto: null,
     },
     items: items.map((i) => ({

@@ -24,6 +24,7 @@ import {
   type StatusAction,
   operacionCompleta,
   clientePuedeCancelar,
+  clientePuedeInformarPago,
 } from "@/lib/operaciones";
 import type { SyncRun, TicketFull } from "@/lib/tickets";
 import type { Factura, FacturaDatos } from "@/lib/factura";
@@ -427,7 +428,14 @@ export function mockOpPublica(id: string): OperacionPublica | null {
   if (!op) return null;
   // Igual que el RPC después de 0053: sin monto y con el nombre de pila.
   const { code, evento, comprador_alias, vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at } = op;
-  return { code, evento, comprador_alias: nombreDePila(comprador_alias), vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at: confirmada_at ?? null };
+  return {
+    code, evento, comprador_alias: nombreDePila(comprador_alias), vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at: confirmada_at ?? null,
+    // Espejo de 0057 (TKT-18).
+    pago_pedido_at: op.pago_pedido_at ?? null,
+    pago_informado_at: op.pago_informado_at ?? null,
+    reembolso_at: op.reembolso_at ?? null,
+    reembolsado_at: op.reembolsado_at ?? null,
+  };
 }
 
 export function mockCreateOp(input: {
@@ -1352,4 +1360,19 @@ export function mockSetOrdenDestacados(cambios: { id: string; orden: number }[])
     const x = destacados().find((y) => y.id === c.id);
     if (x) x.orden = c.orden;
   }
+
+// TKT-18: el cliente toca "Ya pagué" en Mis pedidos (espejo de la API).
+export function mockClienteInformarPago(
+  id: string,
+  clienteId: string
+): { ok: true; op: Operacion } | { ok: false; status: number; error: string } {
+  const op = db().ops.find((o) => o.id === id && (o.cliente_id === clienteId || o.cliente_email === MOCK_USER.email));
+  if (!op) return { ok: false, status: 404, error: "Pedido no encontrado" };
+  if (!clientePuedeInformarPago(op)) {
+    return { ok: false, status: 409, error: "Este pedido no está esperando un pago" };
+  }
+  op.pago_informado_at = new Date().toISOString();
+  op.pago_informado_por = "cliente";
+  op.updated_at = op.pago_informado_at;
+  return { ok: true, op };
 }
