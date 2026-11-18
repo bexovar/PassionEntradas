@@ -38,7 +38,7 @@ Fuentes: [texto oficial de la Disposición 954/2025](https://www.argentina.gob.a
 - **Privacidad:** se agregan los datos del pasajero, con quién se comparten (proveedor u organizador y medio de pago) y la leyenda de la AAIP.
 - **Aviso legal:** ley aplicable argentina.
 - **Cookies:** sin cambios.
-- **Fecha de actualización:** octubre de 2026.
+- **Fecha de actualización:** noviembre de 2026 (la política de reembolsos cambió este mes; si se publica más adelante, actualizarla al mes de publicación).
 
 ## Decisiones tomadas (confirmar con el cliente)
 

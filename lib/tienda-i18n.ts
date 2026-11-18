@@ -406,7 +406,7 @@ const en = {
   legal: {
     eyebrow: "Legal",
     volver: "← Back home",
-    updated: "Last updated: October 2026",
+    updated: "Last updated: November 2026",
     footerHeading: "Legal",
     docs: {
       terminos: {
@@ -888,7 +888,7 @@ const es: typeof en = {
   legal: {
     eyebrow: "Legal",
     volver: "← Volver al inicio",
-    updated: "Última actualización: octubre de 2026",
+    updated: "Última actualización: noviembre de 2026",
     footerHeading: "Legal",
     docs: {
       terminos: {
