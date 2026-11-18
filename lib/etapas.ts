@@ -99,6 +99,10 @@ function quieta(op: OpEtapa): boolean {
 /** ¿Se puede marcar este paso ahora? Solo el siguiente (lo anterior hecho). */
 export function puedeMarcar(op: OpEtapa, h: Hito): boolean {
   if (quieta(op) || hecho(op, h)) return false;
+  // Un pedido de la tienda arranca por la confirmación: es la que le pide el
+  // pago al cliente y hace correr el plazo. Sin esto se podía verificar un
+  // pago que nunca se pidió y saltear "Esperando pago".
+  if (necesitaConfirmar(op)) return false;
   // Avisar que pagó no tiene sentido con el pago ya verificado.
   if (h === "informar" && op.pago_confirmado_at) return false;
   return REQUIERE[h].every((r) => hecho(op, r));
@@ -117,6 +121,7 @@ export function motivoBloqueo(op: OpEtapa, h: Hito, done: boolean): string | nul
   if (op.reembolso_at) return "La operación está en reembolso; sacala del reembolso para editar hitos";
   if (done) {
     if (hecho(op, h)) return `«${NOMBRE_PASO[h]}» ya está marcado`;
+    if (necesitaConfirmar(op)) return "Primero confirmá el pedido";
     if (h === "informar" && op.pago_confirmado_at) return "El pago ya está verificado";
     const falta = REQUIERE[h].find((r) => !hecho(op, r));
     return falta ? `Primero marcá «${NOMBRE_PASO[falta]}»` : null;
