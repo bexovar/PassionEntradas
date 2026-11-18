@@ -1,5 +1,7 @@
 -- Eventos destacados de la tienda (/entradas), TKT-14.
 --
+-- Número 0055: 0052 lo usa TKT-11 (0052_solicitud_organizacion) en su rama.
+--
 -- Curado a mano: el admin elige desde /admin/configuracion → "Destacados de
 -- la tienda" qué eventos del catálogo van en el bloque del medio (hoy serían
 -- Boca, River, Boca-Estudiantes). Se guarda la competición y el nombre del
