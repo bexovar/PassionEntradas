@@ -302,6 +302,23 @@ export function Landing({ carrusel = [] }: { carrusel?: TarjetaCarrusel[] }) {
         </div>
       </section>
 
+      {/* Por qué TicketMirror (TKT-14): es para el que está decidiendo si
+          registrarse, así que vive acá y no en la tienda. */}
+      <section className="block">
+        <div className="section-h">
+          <span className="sh-eyebrow">{TX[lang].porqueEyebrow}</span>
+          <h2>{TX[lang].porqueH2}</h2>
+        </div>
+        <div className="cards3">
+          {TX[lang].porque.map(([tt, d]) => (
+            <div className="card3" key={tt}>
+              <h3>{tt}</h3>
+              <p>{d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Eventos con foto y sin precio, curados en el panel: el cierre de la
           home. Tocar una tarjeta abre el mismo modal de solicitud. */}
       <CarruselEventos tarjetas={carrusel} lang={lang} logueado={logueado} onSolicitar={abrirSolicitud} />

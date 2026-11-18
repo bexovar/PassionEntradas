@@ -32,6 +32,7 @@ import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
 import type { DatosTarjeta, TarjetaCarrusel } from "@/lib/carrusel";
+import type { DatosDestacado, Destacado } from "@/lib/destacados";
 import { nombreDePila } from "@/lib/seguimiento-publico";
 import { modoDemo } from "@/lib/entorno";
 
@@ -83,6 +84,8 @@ type MockDB = {
   actividad: Actividad[];
   // Espejo de la tabla carrusel_home.
   carrusel?: TarjetaCarrusel[];
+  // Espejo de la tabla destacados_tienda.
+  destacados?: Destacado[];
 };
 
 export type MockUsuario = {
@@ -1291,5 +1294,46 @@ export function mockSetOrdenCarrusel(cambios: { id: string; orden: number }[]): 
   for (const c of cambios) {
     const t = carrusel().find((x) => x.id === c.id);
     if (t) t.orden = c.orden;
+  }
+}
+
+// ---- destacados de la tienda (espejo de destacados_tienda) -----------------
+// Arranca vacío: la tienda muestra los comprables hasta que se cure.
+function destacados(): Destacado[] {
+  const d = db();
+  d.destacados ??= [];
+  return d.destacados;
+}
+
+export function mockListDestacados(): Destacado[] {
+  return destacados()
+    .map((x) => ({ ...x }))
+    .sort((a, b) => a.orden - b.orden);
+}
+
+// Va al final, como en la API. null si ya estaba.
+export function mockAddDestacado(input: DatosDestacado): Destacado | null {
+  const lista = destacados();
+  if (lista.some((x) => x.competicion === input.competicion && x.evento === input.evento)) return null;
+  const nuevo: Destacado = {
+    ...input,
+    id: `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    orden: lista.reduce((m, x) => Math.max(m, x.orden + 1), 0),
+  };
+  lista.push(nuevo);
+  return { ...nuevo };
+}
+
+export function mockDeleteDestacado(id: string): Destacado | null {
+  const d = db();
+  const borrado = destacados().find((x) => x.id === id) ?? null;
+  d.destacados = destacados().filter((x) => x.id !== id);
+  return borrado;
+}
+
+export function mockSetOrdenDestacados(cambios: { id: string; orden: number }[]): void {
+  for (const c of cambios) {
+    const x = destacados().find((y) => y.id === c.id);
+    if (x) x.orden = c.orden;
   }
 }

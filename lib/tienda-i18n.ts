@@ -21,7 +21,16 @@ const en = {
   statEventos: "events",
   statStock: "tickets available",
 
+  // buscador de la home (TKT-14: arriba de todo)
+  buscarH1: "Find your event",
+  buscarBtn: "Search",
+
   // secciones home
+  destacadosEyebrow: "Featured",
+  destacadosH2: "The most wanted",
+  destacadosP: "In-stock ones first: book them directly.",
+  comprarYaH2: "Ready to book",
+  comprarYaP: "In stock now: book them directly.",
   proximosEyebrow: "Upcoming",
   proximosH2: "Closest events",
   proximosP: "Right around the corner, in stock or on request.",
@@ -480,6 +489,14 @@ const es: typeof en = {
   statEventos: "eventos",
   statStock: "entradas para comprar",
 
+  buscarH1: "Buscá tu evento",
+  buscarBtn: "Buscar",
+
+  destacadosEyebrow: "Destacados",
+  destacadosH2: "Los más buscados",
+  destacadosP: "Primero los que tienen stock: los reservás directo.",
+  comprarYaH2: "Para comprar ya",
+  comprarYaP: "Con stock ahora: los reservás directo.",
   proximosEyebrow: "Próximos",
   proximosH2: "Eventos más cercanos",
   proximosP: "Los que están a la vuelta de la esquina, con stock o a consultar.",

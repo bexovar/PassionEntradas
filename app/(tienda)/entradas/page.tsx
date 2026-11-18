@@ -1,4 +1,4 @@
-import { fetchConfigTienda, fetchTickets } from "@/lib/supabase/public";
+import { fetchConfigTienda, fetchDestacados, fetchTickets } from "@/lib/supabase/public";
 import { normalizarPrecios } from "@/lib/tickets";
 import { StorefrontHome } from "@/components/tienda/Storefront";
 import { requireAccesoTienda } from "@/lib/tienda-guard";
@@ -21,6 +21,8 @@ export default async function EntradasHome() {
     arsPorUsd: null,
     portalActivo: true,
   };
+  // Los destacados nunca tiran: sin ellos la tienda muestra los comprables.
+  const destacadosP = fetchDestacados();
   try {
     [rows, cfg] = await Promise.all([fetchTickets(), fetchConfigTienda()]);
   } catch {
@@ -30,5 +32,5 @@ export default async function EntradasHome() {
   if (!cfg.portalActivo) rows = rows.filter((t) => t.source !== "portal");
   // Todo a USD antes de renderizar: la tienda no vuelve a convertir.
   // La home solo muestra un resumen: se calcula acá y viaja solo eso.
-  return <StorefrontHome resumen={resumenHome(normalizarPrecios(rows, cfg))} />;
+  return <StorefrontHome resumen={resumenHome(normalizarPrecios(rows, cfg), await destacadosP)} />;
 }

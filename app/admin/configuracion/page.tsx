@@ -5,6 +5,8 @@ import BottomNav from "@/components/BottomNav";
 import MargenesPanel from "@/components/admin/MargenesPanel";
 import TextosPagoPanel from "@/components/admin/TextosPagoPanel";
 import CarruselHomePanel from "@/components/admin/CarruselHomePanel";
+import DestacadosTiendaPanel from "@/components/admin/DestacadosTiendaPanel";
+import { eventosDestacables } from "@/lib/destacados";
 import { opcionesDelCatalogo } from "@/lib/carrusel";
 import { hoyArgentina } from "@/lib/tickets";
 import { fetchConfigTienda, fetchTickets } from "@/lib/supabase/public";
@@ -14,7 +16,7 @@ import { isMock, MOCK_USER } from "@/lib/mock-db";
 export const dynamic = "force-dynamic";
 
 // Configuración de la tienda: cotización y margen, textos de cotizaciones y
-// pagos, y el carrusel de la home. Antes vivían al pie de /admin/entradas.
+// pagos, los destacados de la tienda y el carrusel de la home. Antes vivían al pie de /admin/entradas.
 // Cada panel carga y guarda lo suyo; acá solo se arma el catálogo que ofrece
 // el form del carrusel.
 export default async function AdminConfiguracionPage() {
@@ -31,7 +33,9 @@ export default async function AdminConfiguracionPage() {
   // Los eventos que ve la tienda (con Passion apagado, solo los propios).
   // Lecturas cacheadas del catálogo público (lib/supabase/public).
   const [catalogo, config] = await Promise.all([fetchTickets(), fetchConfigTienda()]);
-  const { eventos, competiciones } = opcionesDelCatalogo(catalogo, config.portalActivo, hoyArgentina());
+  const hoy = hoyArgentina();
+  const { eventos, competiciones } = opcionesDelCatalogo(catalogo, config.portalActivo, hoy);
+  const destacables = eventosDestacables(catalogo, config.portalActivo, hoy);
 
   return (
     <main className="min-h-svh pb-16 md:pb-10">
@@ -41,6 +45,7 @@ export default async function AdminConfiguracionPage() {
       <div className="mx-auto w-full max-w-5xl px-4 py-6">
         <MargenesPanel />
         <TextosPagoPanel />
+        <DestacadosTiendaPanel eventos={destacables} />
         <CarruselHomePanel eventos={eventos} competiciones={competiciones} />
       </div>
       <BottomNav />
