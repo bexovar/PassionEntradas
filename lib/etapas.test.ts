@@ -67,6 +67,18 @@ describe("TKT-21: las etapas salen de los hitos, en orden", () => {
 });
 
 describe("TKT-21: se avanza de a un paso, y se vuelve uno", () => {
+  it("un pedido sin confirmar no avanza: primero se confirma (y se pide el pago)", () => {
+    const nuevo = op({ confirmada_at: null, pago_pedido_at: null });
+    for (const h of ["informar", "pago", "proveedor", "entrada", "cerrar"] as const) {
+      expect(puedeMarcar(nuevo, h)).toBe(false);
+      expect(motivoBloqueo(nuevo, h, true)).toBe("Primero confirmá el pedido");
+    }
+    expect(pasoSiguiente(nuevo)).toBeNull();
+    // Una carga del staff (no es pedido de la tienda) no se confirma.
+    expect(puedeMarcar(op({ tipo: "operacion", confirmada_at: null, pago_pedido_at: null }), "pago")).toBe(true);
+  });
+
+
   it("solo se marca el siguiente; el pago se puede verificar sin aviso del cliente", () => {
     const o = op();
     expect(puedeMarcar(o, "informar")).toBe(true);
