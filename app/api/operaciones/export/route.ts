@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase, createAdminSupabase } from "@/lib/supabase/server";
 import { getRol } from "@/lib/auth";
-import { estadoDe, ESTADO_LABEL, type Operacion } from "@/lib/operaciones";
+import { type Operacion } from "@/lib/operaciones";
+import { ETAPA_LABEL, etapaDe } from "@/lib/etapas";
 import { isMock, mockListOps } from "@/lib/mock-db";
 
 // GET /api/operaciones/export — CSV con TODAS las operaciones (sin el tope
@@ -31,6 +32,9 @@ const COLUMNAS = [
   "cerrada",
   "cerrada_por",
   "notas",
+  // TKT-21: al final, para no correr las columnas de planillas existentes.
+  "reembolso",
+  "reembolsado",
 ];
 
 // Escape CSV: comillas dobladas y campo entrecomillado si hace falta.
@@ -44,12 +48,14 @@ function celda(v: unknown): string {
   return s;
 }
 
-function fila(op: Operacion): string {
-  const dia = (ts: string | null) => (ts ? ts.slice(0, 10) : "");
+function fila(op: Operacion, ahora: Date): string {
+  const dia = (ts: string | null | undefined) => (ts ? ts.slice(0, 10) : "");
   return [
     op.code,
     op.evento,
-    ESTADO_LABEL[estadoDe(op)],
+    // La misma etapa que muestra el panel (TKT-21). Antes salía el estado
+    // viejo: un reembolsado figuraba "Pago confirmado" y un vencido "En espera".
+    ETAPA_LABEL[etapaDe(op, ahora)],
     op.moneda,
     op.monto,
     op.fee,
@@ -66,6 +72,8 @@ function fila(op: Operacion): string {
     dia(op.cerrada_at),
     op.cerrada_por ?? "",
     op.notas ?? "",
+    dia(op.reembolso_at),
+    dia(op.reembolsado_at),
   ]
     .map(celda)
     .join(",");
@@ -104,7 +112,8 @@ export async function GET() {
   }
 
   // BOM para que Excel abra el UTF-8 (tildes) sin drama.
-  const csv = "﻿" + [COLUMNAS.join(","), ...ops.map(fila)].join("\r\n");
+  const ahora = new Date();
+  const csv = "﻿" + [COLUMNAS.join(","), ...ops.map((op) => fila(op, ahora))].join("\r\n");
   const hoy = new Date().toISOString().slice(0, 10);
   return new NextResponse(csv, {
     headers: {
