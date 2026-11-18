@@ -46,3 +46,27 @@ describe("copys del hero", () => {
     ]);
   });
 });
+
+// TKT-13: el box "Cómo funciona" de la home, en el mismo registro que el hero.
+describe("copys de 'Cómo funciona'", () => {
+  const pasos = (lang: "es" | "en") => TX[lang].lp.pasos;
+  const texto = (lang: "es" | "en") => pasos(lang).flat().join(" \n ");
+
+  it("mantiene los tres pasos", () => {
+    expect(pasos("es")).toHaveLength(3);
+    expect(pasos("en")).toHaveLength(3);
+  });
+
+  it("cada paso dice lo que hace el agente", () => {
+    expect(pasos("es").map(([t]) => t)).toEqual(["Pedís el acceso", "Recibís tu usuario", "Armás tus pedidos"]);
+    expect(pasos("en").map(([t]) => t)).toEqual(["Request access", "Get your login", "Build your orders"]);
+  });
+
+  it("mismo registro que el hero: sin exclusividad ni promesas, y para agencias", () => {
+    expect(texto("es")).not.toMatch(/exclusiv|miembro|privilegi|reserv|inmediat|garantiz|privad/i);
+    expect(texto("en")).not.toMatch(/exclusive|member|privilege|\bbook|instant|guarantee|private/i);
+    expect(texto("es")).toMatch(/agencia/);
+    expect(texto("es")).toMatch(/pasajeros/);
+    expect(texto("en")).toMatch(/travelers/);
+  });
+});
