@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { TAG_CATALOGO } from "@/lib/refrescar-tienda";
 import { esProduccion, modoDemo } from "@/lib/entorno";
 import { tarjetasVisibles, type TarjetaCarrusel } from "@/lib/carrusel";
+import type { Destacado } from "@/lib/destacados";
 import {
   DEFAULT_EUR_USD,
   hoyArgentina,
@@ -182,5 +183,34 @@ const carruselCacheado = unstable_cache(
     return (data ?? []) as TarjetaCarrusel[];
   },
   ["carrusel-home-v1"],
+  { revalidate: 300, tags: [TAG_CATALOGO] }
+);
+
+// Destacados de la tienda (tabla destacados_tienda, TKT-14). Si no se pueden
+// leer, la tienda cae al respaldo (los comprables): no se rompe por eso.
+export async function fetchDestacados(): Promise<Destacado[]> {
+  if (modoDemo()) {
+    const { mockListDestacados } = await import("@/lib/mock-db");
+    return mockListDestacados();
+  }
+  try {
+    return await destacadosCacheados();
+  } catch (err) {
+    console.warn("[tienda] destacados no disponibles:", err);
+    return [];
+  }
+}
+
+// Misma caché que el catálogo: cada cambio del panel llama a refrescarTienda().
+const destacadosCacheados = unstable_cache(
+  async (): Promise<Destacado[]> => {
+    const { data, error } = await createPublicSupabase()
+      .from("destacados_tienda")
+      .select("id, competicion, evento, orden")
+      .order("orden");
+    if (error) throw new Error(error.message);
+    return (data ?? []) as Destacado[];
+  },
+  ["destacados-tienda-v1"],
   { revalidate: 300, tags: [TAG_CATALOGO] }
 );

@@ -57,6 +57,17 @@
 .stat { font-size: 13px; color: var(--mute); }
 .stat b { font-family: var(--font-body), sans-serif; font-weight: 900; font-size: 20px; color: var(--ink); margin-right: 5px; }
 
+/* buscador de la home (TKT-14): lo primero que ve el agente */
+.hero--buscar { padding-top: 22px; }
+.hero--buscar .buscar-h1 { font-size: clamp(30px, 5.5vw, 52px); }
+.buscar-form { display: flex; gap: 10px; margin: 18px 0 16px; flex-wrap: wrap; }
+.buscar-form .buscar-input {
+  flex: 1 1 260px; width: auto; min-width: 0; font-size: 15px; padding: 13px 16px; align-self: stretch;
+}
+.buscar-form .btn-primary { flex: 0 0 auto; }
+@media (max-width: 480px) { .buscar-form .btn-primary { flex: 1 1 100%; } }
+.hero--buscar .cta-row { margin-top: 16px; }
+
 /* ============ home sections ============ */
 .block { padding: 42px 0 0; }
 .section-h { margin-bottom: 18px; border-bottom: 2px solid var(--ink); padding-bottom: 14px; }

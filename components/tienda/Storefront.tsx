@@ -28,7 +28,7 @@ import { CapaFoco, useFocoMapa } from "@/components/tienda/MapaFoco";
 import Campana from "@/components/tienda/Campana";
 import { LegalLinks } from "@/components/tienda/LegalLinks";
 import { empezarNavegacion } from "@/components/NavProgress";
-import type { ResumenHome } from "@/lib/resumen-home";
+import type { EventoHome, ResumenHome } from "@/lib/resumen-home";
 import { desempacarCatalogo, type CatalogoCompacto } from "@/lib/catalogo-compacto";
 import { useContextoWhatsApp } from "@/components/WhatsAppFlotante";
 import { badgeEvento } from "@/lib/badge-stock";
@@ -632,14 +632,90 @@ function TicketCardBase({
 const TicketCard = memo(TicketCardBase);
 
 // =============================== HOME ==========================================
+// Lista de eventos de la home (destacados y próximos): misma fila para los dos.
+function RankList({ eventos, lang }: { eventos: EventoHome[]; lang: Lang }) {
+  const router = useRouter();
+  const t = TX[lang];
+  return (
+    <ol className="rank">
+      {eventos.map((ev, idx) => {
+        const { title } = parseTitle(ev.evento, ev.comp);
+        const date = fmtDate(ev.fecha, lang);
+        return (
+          <li
+            key={ev.comp + ev.evento}
+            className="rank-item"
+            style={{ "--i": idx } as React.CSSProperties}
+            onClick={() => {
+              empezarNavegacion();
+              router.push(`/buscar?q=${encodeURIComponent(ev.evento)}`);
+            }}
+          >
+            <div className="rank-main">
+              <span className="rank-eyebrow">
+                <span className={`flag flag--${badgeEvento(ev)}`}>{t.badge[badgeEvento(ev)]}</span>
+                <WcLogo comp={ev.comp} />
+                {ev.propias && <span className="own">{t.nuestra}</span>}
+                {ev.comp}
+              </span>
+              <h3 className="rank-title">{title}</h3>
+              <span className="rank-meta">
+                {date.d} {date.m} {date.y} · {ev.lugar}
+              </span>
+            </div>
+            <div className="rank-aside">
+              {/* Sin stock el badge ya dice "a consultar": no se repite acá,
+                  y sin el span vacío no queda un hueco en el celular. */}
+              {ev.bookStock > 0 && (
+                <span className="rank-stock">
+                  {ev.bookStock} <small>{t.entradasRank}</small>
+                </span>
+              )}
+              <span className="rank-price">
+                {ev.minPrice != null
+                  ? t.desdeMayus + " " + fmtPrice(ev.minPrice, lang, ev.minMoneda)
+                  : t.aConsultar}
+              </span>
+            </div>
+            <a
+              className="rank-act"
+              href={waLink(
+                ev.bookStock > 0
+                  ? t.msgReservarRank(ev.evento, eventoLink(ev.evento, ev.comp))
+                  : t.msgConsultarRank(ev.evento, eventoLink(ev.evento, ev.comp))
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {ev.bookStock > 0 ? t.reservar : t.consultar}
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+// Orden (TKT-14): buscador y categorías arriba, destacados en el medio,
+// próximos abajo. "Cómo funciona" y "Por qué TicketMirror" no van acá: son
+// para el que está decidiendo si registrarse, y viven en la home pública.
 export function StorefrontHome({ resumen }: { resumen: ResumenHome }) {
   const router = useRouter();
   const [lang, setLang] = useLang();
+  const [q, setQ] = useState("");
   const t = TX[lang];
   // Calculado en el server (lib/resumen-home.ts): no viaja el catálogo entero.
-  const { totalEv, totalStock, populares, topCats } = resumen;
+  const { totalEv, totalStock, destacados, curados, proximos, topCats } = resumen;
 
   if (!totalEv) return <div className="splash">No events yet.</div>;
+
+  function buscar(e: React.FormEvent) {
+    e.preventDefault();
+    const texto = q.trim();
+    empezarNavegacion();
+    router.push(texto ? `/buscar?q=${encodeURIComponent(texto)}` : "/buscar");
+  }
 
   return (
     <>
@@ -658,25 +734,35 @@ export function StorefrontHome({ resumen }: { resumen: ResumenHome }) {
             </Link>
           </div>
         </div>
-        <div className="hero hero--home">
-          <h1>
-            {t.heroTitle1}
-            <br />
-            <span>{t.heroTitle2}</span>
-          </h1>
-          <p>{t.heroP}</p>
-          <div className="cta-row">
-            <Link className="btn-primary" href="/buscar">
-              {t.ctaSearch}
+        <div className="hero hero--home hero--buscar">
+          <h1 className="buscar-h1">{t.buscarH1}</h1>
+          <form className="buscar-form" role="search" onSubmit={buscar}>
+            <input
+              className="search buscar-input"
+              type="search"
+              name="q"
+              aria-label={t.buscarH1}
+              placeholder={t.buscarPlaceholder}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <button className="btn-primary" type="submit">
+              {t.buscarBtn}
+            </button>
+          </form>
+          <div className="catstrip" aria-label={t.exploraH2}>
+            {topCats.map(([c, count]) => (
+              <Link key={c} className="catlink" href={`/buscar?cat=${encodeURIComponent(c)}`}>
+                {c}
+                <small>{count}</small>
+              </Link>
+            ))}
+            <Link className="catlink catlink--all" href="/buscar">
+              {t.verTodo}
+              <small>{totalEv}</small>
             </Link>
-            <a
-              className="btn-ghost"
-              href={waLink(t.waFloatMsg)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t.ctaWhatsapp}
-            </a>
+          </div>
+          <div className="cta-row">
             <span className="stat">
               <b>{totalEv}</b> {t.statEventos}
             </span>
@@ -687,120 +773,27 @@ export function StorefrontHome({ resumen }: { resumen: ResumenHome }) {
         </div>
       </header>
 
-      <section className="block">
-        <div className="section-h">
-          <span className="sh-eyebrow">{t.proximosEyebrow}</span>
-          <h2>{t.proximosH2}</h2>
-          <p>{t.proximosP}</p>
-        </div>
-        <ol className="rank">
-          {populares.map((ev, idx) => {
-            const { title } = parseTitle(ev.evento, ev.comp);
-            const date = fmtDate(ev.fecha, lang);
-            return (
-              <li
-                key={ev.comp + ev.evento}
-                className="rank-item"
-                style={{ "--i": idx } as React.CSSProperties}
-                onClick={() => {
-                  empezarNavegacion();
-                  router.push(`/buscar?q=${encodeURIComponent(ev.evento)}`);
-                }}
-              >
-                <div className="rank-main">
-                  <span className="rank-eyebrow">
-                    <span className={`flag flag--${badgeEvento(ev)}`}>{t.badge[badgeEvento(ev)]}</span>
-                    <WcLogo comp={ev.comp} />
-                    {ev.propias && <span className="own">{t.nuestra}</span>}
-                    {ev.comp}
-                  </span>
-                  <h3 className="rank-title">{title}</h3>
-                  <span className="rank-meta">
-                    {date.d} {date.m} {date.y} · {ev.lugar}
-                  </span>
-                </div>
-                <div className="rank-aside">
-                  {/* Sin stock el badge ya dice "a consultar": no se repite acá,
-                      y sin el span vacío no queda un hueco en el celular. */}
-                  {ev.bookStock > 0 && (
-                    <span className="rank-stock">
-                      {ev.bookStock} <small>{t.entradasRank}</small>
-                    </span>
-                  )}
-                  <span className="rank-price">
-                    {ev.minPrice != null
-                      ? t.desdeMayus + " " + fmtPrice(ev.minPrice, lang, ev.minMoneda)
-                      : t.aConsultar}
-                  </span>
-                </div>
-                <a
-                  className="rank-act"
-                  href={waLink(
-                    ev.bookStock > 0
-                      ? t.msgReservarRank(ev.evento, eventoLink(ev.evento, ev.comp))
-                      : t.msgConsultarRank(ev.evento, eventoLink(ev.evento, ev.comp))
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {ev.bookStock > 0 ? t.reservar : t.consultar}
-                </a>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
+      {destacados.length > 0 && (
+        <section className="block">
+          <div className="section-h">
+            <span className="sh-eyebrow">{t.destacadosEyebrow}</span>
+            <h2>{curados ? t.destacadosH2 : t.comprarYaH2}</h2>
+            <p>{curados ? t.destacadosP : t.comprarYaP}</p>
+          </div>
+          <RankList eventos={destacados} lang={lang} />
+        </section>
+      )}
 
-      <section className="block">
-        <div className="section-h">
-          <span className="sh-eyebrow">{t.exploraEyebrow}</span>
-          <h2>{t.exploraH2}</h2>
-        </div>
-        <div className="catstrip">
-          {topCats.map(([c, count]) => (
-            <Link key={c} className="catlink" href={`/buscar?cat=${encodeURIComponent(c)}`}>
-              {c}
-              <small>{count}</small>
-            </Link>
-          ))}
-          <Link className="catlink catlink--all" href="/buscar">
-            {t.verTodo}
-            <small>{totalEv}</small>
-          </Link>
-        </div>
-      </section>
-
-      <section className="block">
-        <div className="section-h">
-          <span className="sh-eyebrow">{t.comoEyebrow}</span>
-          <h2>{t.comoH2}</h2>
-        </div>
-        <div className="steps">
-          {t.pasos.map(([tt, d], i) => (
-            <div className="step" key={tt}>
-              <span className="step-n">{i + 1}</span>
-              <h3>{tt}</h3>
-              <p>{d}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="block">
-        <div className="section-h">
-          <span className="sh-eyebrow">{t.porqueEyebrow}</span>
-          <h2>{t.porqueH2}</h2>
-        </div>
-        <div className="cards3">
-          {t.porque.map(([tt, d]) => (
-            <div className="card3" key={tt}>
-              <h3>{tt}</h3>
-              <p>{d}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {proximos.length > 0 && (
+        <section className="block">
+          <div className="section-h">
+            <span className="sh-eyebrow">{t.proximosEyebrow}</span>
+            <h2>{t.proximosH2}</h2>
+            <p>{t.proximosP}</p>
+          </div>
+          <RankList eventos={proximos} lang={lang} />
+        </section>
+      )}
 
       <section className="block">
         <div className="section-h">
