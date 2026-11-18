@@ -6,6 +6,7 @@ import AppHeader from "@/components/AppHeader";
 import BottomNav from "@/components/BottomNav";
 import AccesosTabs from "@/components/admin/AccesosTabs";
 import ClientesPanel from "@/components/admin/ClientesPanel";
+import OrganizacionesPanel from "@/components/admin/OrganizacionesPanel";
 import { fichasDeClientes, type CuentaCliente, type FichaCliente, type OpDeCliente } from "@/lib/clientes";
 import { leerEquipo, type RolEquipo } from "@/lib/equipo";
 import { isMock, MOCK_USER, mockEquipo, mockListOps, mockListSolicitudes } from "@/lib/mock-db";
@@ -95,6 +96,7 @@ export default async function ClientesPage() {
           </Link>
         )}
         <ClientesPanel fichas={fichas} esAdmin={esAdmin} />
+        <OrganizacionesPanel esAdmin={esAdmin} />
       </div>
       {esAdmin && <BottomNav />}
     </main>

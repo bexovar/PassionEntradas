@@ -89,6 +89,8 @@ export type Operacion = {
   // Cliente que originó el pedido/consulta (null en cargas internas del staff).
   cliente_id: string | null;
   cliente_email: string | null;
+  // Organización del cliente (TKT-10): la pone un trigger desde cliente_id.
+  organizacion_id?: string | null;
   // Sector/categoría de la entrada pedida, tal como se ve en la tienda.
   sector: string | null;
   // Confirmación del pedido por un admin. Solo los pedidos de la tienda pasan
@@ -648,6 +650,8 @@ export type Consulta = {
   envio_id: string | null;
   cliente_id: string | null;
   cliente_email: string | null;
+  // Organización del cliente (TKT-10).
+  organizacion_id?: string | null;
   comprador_alias: string | null;
   ticket_id: string | null;
   evento: string;

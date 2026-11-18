@@ -37,6 +37,15 @@ import type { DatosDestacado, Destacado } from "@/lib/destacados";
 import { COLUMNA_HITO, motivoBloqueo, puedePedirPago, puedePedirReembolso } from "@/lib/etapas";
 import { nombreDePila } from "@/lib/seguimiento-publico";
 import { modoDemo } from "@/lib/entorno";
+import {
+  planAlAprobar,
+  coincidenciasPorCuit,
+  validarFusion,
+  type EleccionOrganizacion,
+  type Miembro,
+  type Organizacion,
+  type RolOrganizacion,
+} from "@/lib/organizaciones";
 
 export type MockFactura = Factura & { operacion_id: string };
 
@@ -71,6 +80,9 @@ type MockDB = {
   facturas: MockFactura[];
   facturaNumero: number;
   solicitudes: SolicitudAcceso[];
+  // Espejo de organizaciones y organizacion_miembros (TKT-10).
+  organizaciones: Organizacion[];
+  miembros: Miembro[];
   items: OperacionItem[];
   consultas: Consulta[];
   // Textos de pago por moneda (espejo de textos_config).
@@ -259,9 +271,12 @@ function seed(): MockDB {
       nombre: "Lucía Fernández",
       email: "lucia.fernandez@example.com",
       telefono: "+54 9 11 5555 1234",
-      legajo: "27-35123456-4",
-      direccion: "Av. Corrientes 1234, CABA",
-      mensaje: "Busco entradas para la final del Mundial 2026.",
+      // Solicitud con el formulario de TKT-11: organización y CUIT validado.
+      legajo: "27-35123456-9",
+      tipo_organizacion: "agencia",
+      organizacion: "Viajes del Sur",
+      direccion: null,
+      mensaje: null,
       estado: "pendiente",
       user_id: null,
       decidida_por: null,
@@ -278,6 +293,8 @@ function seed(): MockDB {
       email: "diego.sosa@example.com",
       telefono: "+54 9 351 444 7788",
       legajo: "20-28999111-7",
+      tipo_organizacion: null,
+      organizacion: null,
       direccion: "Bv. San Juan 500, Córdoba",
       mensaje: null,
       estado: "aprobada",
@@ -297,6 +314,8 @@ function seed(): MockDB {
       email: "emilia.demo@example.com",
       telefono: "+54 9 351 555 0000",
       legajo: null,
+      tipo_organizacion: null,
+      organizacion: null,
       direccion: null,
       mensaje: null,
       estado: "aprobada",
@@ -322,6 +341,27 @@ function seed(): MockDB {
     facturas: [],
     facturaNumero: 0,
     solicitudes,
+    // Diego (el cliente demo) es admin de "Viajes del Sur". La solicitud
+    // pendiente de Lucía tiene el mismo CUIT: al aprobarla se ve el match.
+    organizaciones: [
+      {
+        id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a",
+        nombre: "Viajes del Sur",
+        tipo: "agencia",
+        cuit: "27351234569",
+        fusionada_en: null,
+        created_at: iso(60 * 20),
+      },
+    ],
+    miembros: [
+      {
+        user_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        organizacion_id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a",
+        rol: "admin",
+        nombre: "Diego Sosa",
+        email: "diego.sosa@example.com",
+      },
+    ],
     usuarios: [
       {
         id: MOCK_USER.id,
@@ -413,8 +453,20 @@ function seed(): MockDB {
 
 function db(): MockDB {
   const g = globalThis as typeof globalThis & { __passionMockDb?: MockDB };
-  if (!g.__passionMockDb) g.__passionMockDb = seed();
+  if (!g.__passionMockDb) {
+    const d = seed();
+    // Espejo del backfill de 0058.
+    for (const o of d.ops) o.organizacion_id = orgDeCliente(d, o.cliente_id);
+    for (const c of d.consultas) c.organizacion_id = orgDeCliente(d, c.cliente_id);
+    g.__passionMockDb = d;
+  }
   return g.__passionMockDb;
+}
+
+// Espejo del trigger asignar_organizacion (0058).
+function orgDeCliente(d: MockDB, clienteId: string | null | undefined): string | null {
+  if (!clienteId) return null;
+  return d.miembros.find((m) => m.user_id === clienteId)?.organizacion_id ?? null;
 }
 
 // ---- operaciones ---------------------------------------------------------------
@@ -472,6 +524,7 @@ export function mockCreateOp(input: {
     tipo: input.tipo ?? "operacion",
     cliente_id: input.cliente_id ?? null,
     cliente_email: input.cliente_email ?? null,
+    organizacion_id: orgDeCliente(db(), input.cliente_id),
     sector: input.sector ?? null,
     status: "esperando_entrada",
     entrada_recibida_at: null,
@@ -499,12 +552,17 @@ export function mockCreateOp(input: {
 
 // "Mis pedidos" del cliente: pedidos/consultas que originó (por cliente_id, o
 // por email cuando no hay id de usuario en mock). Más nuevos primero.
-export function mockListPedidosCliente(clienteId: string | null, email: string | null): Operacion[] {
+export function mockListPedidosCliente(
+  clienteId: string | null,
+  email: string | null,
+  organizacionId: string | null = null
+): Operacion[] {
   return db()
     .ops.filter(
       (o) =>
         ((clienteId && o.cliente_id === clienteId) ||
-          (email && o.cliente_email?.toLowerCase() === email.toLowerCase()))
+          (email && o.cliente_email?.toLowerCase() === email.toLowerCase()) ||
+          (organizacionId && o.organizacion_id === organizacionId))
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
@@ -792,9 +850,11 @@ export function mockCrearSolicitud(input: SolicitudInput): { ok: true } | { ok: 
     nombre: input.nombre,
     email: input.email,
     telefono: input.telefono,
-    legajo: input.legajo,
+    legajo: input.cuit,
+    tipo_organizacion: input.tipoOrganizacion,
+    organizacion: input.organizacion,
     direccion: null,
-    mensaje: input.mensaje,
+    mensaje: null,
     estado: "pendiente",
     user_id: null,
     decidida_por: null,
@@ -910,15 +970,25 @@ export function mockListSolicitudes(): SolicitudAcceso[] {
 export function mockDecidirSolicitud(
   id: string,
   accion: "aprobar" | "rechazar",
-  decididaPor: string
+  decididaPor: string,
+  eleccion?: EleccionOrganizacion | null
 ):
-  | { ok: true; solicitud: SolicitudAcceso; credenciales?: { email: string; password: string } }
+  | {
+      ok: true;
+      solicitud: SolicitudAcceso;
+      credenciales?: { email: string; password: string };
+      organizacion?: { id: string; nombre: string; rol: RolOrganizacion };
+    }
   | { ok: false; status: number; error: string } {
-  const s = db().solicitudes.find((x) => x.id === id);
+  const d = db();
+  const s = d.solicitudes.find((x) => x.id === id);
   if (!s) return { ok: false, status: 404, error: "Solicitud no encontrada" };
   if (s.estado !== "pendiente") {
     return { ok: false, status: 409, error: "La solicitud ya fue resuelta" };
   }
+  // TKT-10: la organización se decide antes de tocar nada.
+  const plan = accion === "aprobar" ? planAlAprobar(s, coincidenciasPorCuit(s.legajo, d.organizaciones), eleccion) : null;
+  if (plan && !plan.ok) return { ok: false, status: 409, error: plan.error };
   const now = new Date().toISOString();
   s.decidida_por = decididaPor;
   s.decidida_at = now;
@@ -930,7 +1000,74 @@ export function mockDecidirSolicitud(
   const password = generarPassword();
   s.estado = "aprobada";
   s.user_id = crypto.randomUUID();
-  return { ok: true, solicitud: s, credenciales: { email: s.email, password } };
+  const p = plan!.ok ? plan!.plan : null;
+  let org: Organizacion;
+  if (p!.tipo === "unirse") {
+    org = d.organizaciones.find((o) => o.id === (p as { organizacionId: string }).organizacionId)!;
+  } else {
+    org = { id: crypto.randomUUID(), ...p!.datos, fusionada_en: null, created_at: new Date().toISOString() };
+    d.organizaciones.push(org);
+  }
+  d.miembros.push({ user_id: s.user_id, organizacion_id: org.id, rol: p!.rol, nombre: s.nombre, email: s.email });
+  s.organizacion_id = org.id;
+  return {
+    ok: true,
+    solicitud: s,
+    credenciales: { email: s.email, password },
+    organizacion: { id: org.id, nombre: org.nombre, rol: p!.rol },
+  };
+}
+
+// ---- organizaciones (TKT-10) -------------------------------------------------
+export function mockListOrganizaciones(): Organizacion[] {
+  return [...db().organizaciones];
+}
+
+export function mockListMiembros(): Miembro[] {
+  return [...db().miembros];
+}
+
+export function mockMiembroDe(userId: string): Miembro | null {
+  return db().miembros.find((m) => m.user_id === userId) ?? null;
+}
+
+export function mockOpsPorOrganizacion(): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const o of db().ops) if (o.organizacion_id) m.set(o.organizacion_id, (m.get(o.organizacion_id) ?? 0) + 1);
+  return m;
+}
+
+export function mockSetRolMiembro(
+  userId: string,
+  rol: RolOrganizacion
+): { ok: true; miembro: Miembro } | { ok: false; status: number; error: string } {
+  const m = db().miembros.find((x) => x.user_id === userId);
+  if (!m) return { ok: false, status: 404, error: "Usuario sin organización" };
+  m.rol = rol;
+  return { ok: true, miembro: m };
+}
+
+// Espejo de fusionar_organizaciones (0058).
+export function mockFusionarOrganizaciones(
+  origenId: string,
+  destinoId: string
+): { ok: true; movidas: number } | { ok: false; status: number; error: string } {
+  const d = db();
+  const origen = d.organizaciones.find((o) => o.id === origenId);
+  const destino = d.organizaciones.find((o) => o.id === destinoId);
+  const error = validarFusion(origen, destino);
+  if (error) return { ok: false, status: 409, error };
+  for (const m of d.miembros) if (m.organizacion_id === origenId) m.organizacion_id = destinoId;
+  let movidas = 0;
+  for (const o of d.ops)
+    if (o.organizacion_id === origenId) {
+      o.organizacion_id = destinoId;
+      movidas++;
+    }
+  for (const c of d.consultas) if (c.organizacion_id === origenId) c.organizacion_id = destinoId;
+  for (const s of d.solicitudes) if (s.organizacion_id === origenId) s.organizacion_id = destinoId;
+  origen!.fusionada_en = destinoId;
+  return { ok: true, movidas };
 }
 
 // Reenvía el acceso de una solicitud YA aprobada: regenera la contraseña
@@ -993,7 +1130,8 @@ export function mockListConsultas(): Consulta[] {
 // como la operación que originaron; mostrarlas otra vez duplicaría el pedido.
 export function mockListConsultasCliente(
   clienteId: string | null,
-  email: string | null
+  email: string | null,
+  organizacionId: string | null = null
 ): Consulta[] {
   const desde = new Date(Date.now() - 30 * 86400_000).toISOString();
   return db()
@@ -1004,7 +1142,8 @@ export function mockListConsultasCliente(
           ((c.estado === "cancelada" || c.estado === "descartada" || c.estado === "rechazada") &&
             c.updated_at >= desde)) &&
         ((clienteId && c.cliente_id === clienteId) ||
-          (email && c.cliente_email?.toLowerCase() === email.toLowerCase()))
+          (email && c.cliente_email?.toLowerCase() === email.toLowerCase()) ||
+          (organizacionId && c.organizacion_id === organizacionId))
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
@@ -1027,6 +1166,7 @@ export function mockCrearConsulta(input: {
     id: crypto.randomUUID(),
     code: generateCode(),
     ...input,
+    organizacion_id: orgDeCliente(db(), input.cliente_id),
     estado: "pendiente",
     operacion_id: null,
     resuelta_por: null,
@@ -1360,6 +1500,7 @@ export function mockSetOrdenDestacados(cambios: { id: string; orden: number }[])
     const x = destacados().find((y) => y.id === c.id);
     if (x) x.orden = c.orden;
   }
+}
 
 // TKT-18: el cliente toca "Ya pagué" en Mis pedidos (espejo de la API).
 export function mockClienteInformarPago(
