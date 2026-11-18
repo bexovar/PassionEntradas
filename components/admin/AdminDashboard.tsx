@@ -18,6 +18,7 @@ import { etiquetaPrioridad, pendienteDeConsulta, pendienteDeOp } from "@/lib/rec
 import {
   diasHastaEvento,
   estadoDe,
+  formatMonto,
   necesitaConfirmar,
   SEMAFORO_COLOR,
   SEMAFORO_LABEL,
@@ -29,6 +30,8 @@ import {
   type OperacionItem,
 } from "@/lib/operaciones";
 import { ETAPAS_PANEL, etapaDe, type EtapaPanel } from "@/lib/etapas";
+import { avisoSinConfirmar, importesPanel } from "@/lib/importes-panel";
+import type { Metrics } from "@/lib/metrics";
 import OperacionCard from "./OperacionCard";
 import ConsultaCard from "./ConsultaCard";
 import { ToastViewport, useToast } from "./Toast";
@@ -47,6 +50,8 @@ type Props = {
   filtroInicial?: FiltroPanel;
   // Búsqueda con la que abre (?q=… desde "Ver sus pedidos" en Clientes).
   busquedaInicial?: string;
+  // Comisión y ventas acumuladas (TKT-22), de todo el historial.
+  acumulados?: Metrics;
 };
 
 // Fila de la lista: o una operación, o una consulta sin cotizar.
@@ -63,6 +68,7 @@ export default function AdminDashboard({
   baseUrl,
   filtroInicial = { filtro: "todas" },
   busquedaInicial = "",
+  acumulados,
 }: Props) {
   // Índice operación -> líneas, armado una vez por render en vez de filtrar
   // el array completo dentro de cada tarjeta.
@@ -164,6 +170,14 @@ export default function AdminDashboard({
     return porEtapa;
   }, [ops, consultas, ahora]);
 
+  // Importes arriba del panel (TKT-22). Por cobrar y a pagar salen de las
+  // operaciones en pantalla, así cambian en el momento al marcar un paso.
+  const importes = useMemo(
+    () => (acumulados ? importesPanel(ops, acumulados, ahora) : null),
+    [ops, acumulados, ahora]
+  );
+  const aviso = avisoSinConfirmar(stats.pendiente_confirmar);
+
   // id -> texto del badge rojo ("Sin confirmar hace 3 h").
   const prioridades = useMemo(() => {
     const m = new Map<string, string>();
@@ -262,6 +276,13 @@ export default function AdminDashboard({
 
   // Tarjeta del resumen: filtra la lista y la trae a la vista. Tocar la
   // activa la saca.
+  // El aviso de pedidos sin confirmar lleva directo a ellos: la lista queda
+  // filtrada y cada tarjeta tiene su botón Confirmar.
+  function irASinConfirmar() {
+    setFilter("pendiente_confirmar");
+    listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function tocarTarjeta(f: Filtro) {
     setFilter(filter === f ? "todas" : f);
     if (filter !== f) listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -516,6 +537,51 @@ export default function AdminDashboard({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
+      {/* TKT-22: pedidos sin confirmar, a la vista al entrar. */}
+      {aviso && (
+        <div
+          role="status"
+          className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#D14D68]/40 bg-[#D14D68]/[0.06] px-4 py-3"
+        >
+          <p className="text-sm font-semibold text-[#A3304A]">{aviso}</p>
+          {filter !== "pendiente_confirmar" && (
+            <button
+              type="button"
+              onClick={irASinConfirmar}
+              className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-ink/85"
+            >
+              Confirmarlos
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* TKT-22: los importes, en la pantalla donde se opera. */}
+      {importes && (
+        <section aria-label="Importes" className="card-shadow mb-4 overflow-hidden rounded-2xl bg-white">
+          <dl className="grid grid-cols-2 divide-x divide-y divide-dashed divide-line sm:grid-cols-4">
+            <Importe
+              label="Por cobrar"
+              valor={formatMonto(importes.porCobrar, importes.moneda as Moneda, { sinDecimales: true })}
+              nota={`${importes.porCobrarOps} sin pagar`}
+            />
+            <Importe
+              label="A pagar al proveedor"
+              valor={formatMonto(importes.aPagarProveedor, importes.moneda as Moneda, { sinDecimales: true })}
+              nota={`${importes.aPagarProveedorOps} cobradas`}
+            />
+            <Importe
+              label="Comisión acumulada"
+              valor={formatMonto(importes.comision, importes.moneda as Moneda, { sinDecimales: true })}
+            />
+            <Importe
+              label="Ventas acumuladas"
+              valor={formatMonto(importes.ventas, importes.moneda as Moneda, { sinDecimales: true })}
+            />
+          </dl>
+        </section>
+      )}
+
       {/* Las ocho etapas de la operación (TKT-21), en orden: cada una es una
           acción del admin o una espera a un tercero. Tocar una filtra la
           lista; tocarla de nuevo la limpia. */}
@@ -729,6 +795,18 @@ export default function AdminDashboard({
       )}
 
       <ToastViewport toasts={toasts} />
+    </div>
+  );
+}
+
+function Importe({ label, valor, nota }: { label: string; valor: string; nota?: string }) {
+  return (
+    <div className="flex flex-col justify-between gap-1 px-4 py-3">
+      <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-muted">{label}</dt>
+      <dd className="font-body text-lg font-extrabold leading-tight tabular-nums tracking-tight text-ink">
+        {valor}
+        {nota && <span className="block text-[11px] font-medium text-muted">{nota}</span>}
+      </dd>
     </div>
   );
 }
