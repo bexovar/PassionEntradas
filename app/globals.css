@@ -14,17 +14,19 @@ html {
   /* iOS: sin flash gris al tocar; el feedback lo dan los estados propios */
   -webkit-tap-highlight-color: transparent;
   background-color: var(--canvas);
-  /* Reserva siempre el ancho de la barra de scroll: al buscar/filtrar cambia
-     el alto de la página y aparecía/desaparecía la scrollbar, corriendo el
-     contenido centrado (y el header) de lado en cada acción. */
-  scrollbar-gutter: stable;
 }
 
-/* Fallback para navegadores sin scrollbar-gutter: mantené la barra siempre. */
-@supports not (scrollbar-gutter: stable) {
-  html {
-    overflow-y: scroll;
-  }
+/* Sin barras de scroll visibles en todo el sitio (página, modales, tablas).
+   El scroll funciona igual con rueda, trackpad, touch y teclado: solo no se
+   dibuja la barra. Como la barra ya no ocupa ancho, tampoco hace falta
+   reservarle lugar para que el contenido no se corra al cambiar el alto de
+   la página. */
+* {
+  scrollbar-width: none; /* Firefox y Chrome/Edge 121+ */
+  -ms-overflow-style: none; /* Edge viejo */
+}
+*::-webkit-scrollbar {
+  display: none; /* Safari y Chrome viejos */
 }
 
 body {
