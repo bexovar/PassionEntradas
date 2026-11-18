@@ -38,8 +38,9 @@ describe("TKT-22: importes arriba del panel", () => {
       porCobrarOps: 3,
       aPagarProveedor: 900,
       aPagarProveedorOps: 1,
-      ventas: 3000,
-      comision: 300,
+      // El reembolsado no es venta (0059): cuentan los dos cobrados.
+      ventas: 2000,
+      comision: 200,
     });
   });
 
