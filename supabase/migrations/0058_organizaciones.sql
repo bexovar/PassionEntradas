@@ -152,6 +152,9 @@ grant execute on function public.fusionar_organizaciones(uuid, uuid, text) to se
 
 -- Backfill: cada cliente aprobado que ya existe queda en su propia
 -- organización, como admin (freelance hasta que se fusione con su agencia).
+-- También los revocados: revocar le saca el rol en Auth, y si se lo
+-- reactiva tiene que volver a su organización. Quedan afuera solo los que
+-- hoy son del equipo (rol administrador o moderador).
 -- Idempotente: salta a quien ya es miembro.
 do $$
 declare
@@ -166,7 +169,7 @@ begin
       join auth.users u on u.id = sa.user_id
      where sa.estado = 'aprobada'
        and sa.user_id is not null
-       and coalesce(u.raw_app_meta_data->>'role', '') = 'cliente'
+       and coalesce(u.raw_app_meta_data->>'role', '') in ('cliente', '')
        and not exists (select 1 from public.organizacion_miembros m where m.user_id = sa.user_id)
      order by sa.user_id, sa.decidida_at desc nulls last
   loop
