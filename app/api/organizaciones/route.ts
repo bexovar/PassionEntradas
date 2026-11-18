@@ -10,7 +10,7 @@ import {
   mockOpsPorOrganizacion,
   mockSetRolMiembro,
 } from "@/lib/mock-db";
-import { validarFusion, type Miembro, type Organizacion, type RolOrganizacion } from "@/lib/organizaciones";
+import { validarCambioRol, validarFusion, type Miembro, type Organizacion, type RolOrganizacion } from "@/lib/organizaciones";
 import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // /api/organizaciones (TKT-10)
@@ -149,7 +149,21 @@ export async function POST(request: Request) {
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
       miembro = r.miembro;
     } else {
-      const { data, error } = await createAdminSupabase()
+      const admin = createAdminSupabase();
+      const { data: suyo } = await admin
+        .from("organizacion_miembros")
+        .select("organizacion_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!suyo) return NextResponse.json({ error: "Usuario sin organización" }, { status: 404 });
+      const { data: ms, error: msErr } = await admin
+        .from("organizacion_miembros")
+        .select("user_id, organizacion_id, rol")
+        .eq("organizacion_id", suyo.organizacion_id);
+      if (msErr) return NextResponse.json({ error: "No se pudo cambiar el rol" }, { status: 500 });
+      const invalido = validarCambioRol((ms ?? []) as Miembro[], userId, rol);
+      if (invalido) return NextResponse.json({ error: invalido.error }, { status: invalido.status });
+      const { data, error } = await admin
         .from("organizacion_miembros")
         .update({ rol })
         .eq("user_id", userId)

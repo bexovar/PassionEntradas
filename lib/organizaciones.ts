@@ -129,6 +129,26 @@ export function veElPedido(
   );
 }
 
+/**
+ * Cambio de rol: una organización nunca se queda sin administrador (si no,
+ * nadie ve los pedidos de todos). Devuelve el error con su status, o null.
+ */
+export function validarCambioRol(
+  miembros: Pick<Miembro, "user_id" | "organizacion_id" | "rol">[],
+  userId: string,
+  rol: RolOrganizacion
+): { status: 404 | 409; error: string } | null {
+  const m = miembros.find((x) => x.user_id === userId);
+  if (!m) return { status: 404, error: "Usuario sin organización" };
+  if (m.rol !== "admin" || rol !== "vendedor") return null;
+  const otroAdmin = miembros.some(
+    (x) => x.organizacion_id === m.organizacion_id && x.rol === "admin" && x.user_id !== userId
+  );
+  return otroAdmin
+    ? null
+    : { status: 409, error: "La organización se quedaría sin administrador: primero pasá a otro usuario a administrador" };
+}
+
 /** Validación de una fusión antes de llamar al RPC. */
 export function validarFusion(
   origen: Pick<Organizacion, "id" | "fusionada_en"> | undefined,
