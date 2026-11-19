@@ -66,10 +66,13 @@ describe("opCoincide", () => {
   });
   it("los filtros de consultas no muestran operaciones", () => {
     expect(opCoincide(op(), { filtro: "a_cotizar" })).toBe(false);
-    expect(opCoincide(op(), { filtro: "esperando" })).toBe(false);
   });
-  it("las pestañas de siempre", () => {
-    expect(opCoincide(op({ tipo: "pedido" }), { filtro: "nuevos" })).toBe(true);
+  it("las pestañas y las etapas (TKT-21)", () => {
+    expect(opCoincide(op({ tipo: "pedido" }), { filtro: "pendiente_confirmar" })).toBe(true);
+    expect(opCoincide(op(), { filtro: "esperando_pago" })).toBe(true);
+    expect(opCoincide(op({ pago_confirmado_at: "x" }), { filtro: "pendiente_pago_proveedor" })).toBe(true);
+    expect(opCoincide(op({ reembolso_at: "x", pago_confirmado_at: "x" }), { filtro: "reembolsos" })).toBe(true);
+    expect(opCoincide(op({ reembolso_at: "x", pago_confirmado_at: "x" }), { filtro: "pendiente_pago_proveedor" })).toBe(false);
     expect(opCoincide(op({ status: "cancelada" }), { filtro: "canceladas" })).toBe(true);
     expect(opCoincide(op({ status: "cancelada" }), { filtro: "en_curso" })).toBe(false);
   });
@@ -80,12 +83,13 @@ describe("consultaCoincide", () => {
   const pendiente = { ...base, estado: "pendiente" as const, vence_at: null };
   const cotizada = { ...base, estado: "cotizada" as const, vence_at: "2026-10-10T00:00:00Z" };
   const vencida = { ...base, estado: "cotizada" as const, vence_at: "2026-10-01T00:00:00Z" };
-  it("a cotizar / esperando cliente separan las consultas por estado", () => {
+  it("a cotizar / esperando pago / vencidos separan las consultas por estado", () => {
     expect(consultaCoincide(pendiente, { filtro: "a_cotizar" }, AHORA)).toBe(true);
     expect(consultaCoincide(cotizada, { filtro: "a_cotizar" }, AHORA)).toBe(false);
-    expect(consultaCoincide(cotizada, { filtro: "esperando" }, AHORA)).toBe(true);
-    expect(consultaCoincide(vencida, { filtro: "esperando" }, AHORA)).toBe(true);
-    expect(consultaCoincide(pendiente, { filtro: "esperando" }, AHORA)).toBe(false);
+    expect(consultaCoincide(cotizada, { filtro: "esperando_pago" }, AHORA)).toBe(true);
+    expect(consultaCoincide(vencida, { filtro: "esperando_pago" }, AHORA)).toBe(false);
+    expect(consultaCoincide(vencida, { filtro: "vencido" }, AHORA)).toBe(true);
+    expect(consultaCoincide(pendiente, { filtro: "esperando_pago" }, AHORA)).toBe(false);
   });
   it("todas y en curso muestran todas; el resto ninguna", () => {
     expect(consultaCoincide(pendiente, { filtro: "todas" }, AHORA)).toBe(true);
@@ -151,12 +155,39 @@ describe("etiquetaFiltro", () => {
 describe("filtroDeLink (links de la campana estando en el Panel)", () => {
   it("lee el filtro y la búsqueda del link", () => {
     expect(filtroDeLink("/admin?q=BX-AB12CD34")).toEqual({ filtro: { filtro: "todas" }, q: "BX-AB12CD34" });
-    expect(filtroDeLink("/admin?filtro=nuevos")).toEqual({ filtro: { filtro: "nuevos" }, q: "" });
+    // Los links viejos siguen andando (avisos y emails ya mandados).
+    expect(filtroDeLink("/admin?filtro=nuevos")).toEqual({ filtro: { filtro: "pendiente_confirmar" }, q: "" });
+    expect(filtroDeLink("/admin?filtro=esperando")).toEqual({ filtro: { filtro: "esperando_pago" }, q: "" });
     expect(filtroDeLink("/admin")).toEqual({ filtro: { filtro: "todas" }, q: "" });
   });
   it("lo que no es el Panel no es un filtro", () => {
     expect(filtroDeLink("/admin/solicitudes")).toBeNull();
     expect(filtroDeLink("/admin/clientes?x=1")).toBeNull();
     expect(filtroDeLink("/moderador")).toBeNull();
+  });
+});
+
+describe("Panel filtrado por agencia (Ver pedidos en Clientes)", () => {
+  const ORG = "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a";
+
+  it("el link de la agencia ida y vuelta", () => {
+    const url = urlPanel({ filtro: "todas", organizacion: { id: ORG, nombre: "Viajes del Sur" } });
+    expect(url).toBe(`/admin?organizacion=${ORG}&organizacion_nombre=Viajes+del+Sur`);
+    expect(filtroDeLink(url)?.filtro).toEqual({ filtro: "todas", organizacion: { id: ORG, nombre: "Viajes del Sur" } });
+  });
+
+  it("un id que no es uuid se ignora", () => {
+    expect(filtroDeParams({ organizacion: "x' or 1=1" }).organizacion).toBeUndefined();
+  });
+
+  it("solo pasan las operaciones y consultas de esa agencia", () => {
+    const f = { filtro: "todas" as const, organizacion: { id: ORG } };
+    expect(opCoincide(op({ organizacion_id: ORG }), f, AHORA)).toBe(true);
+    expect(opCoincide(op({ organizacion_id: ORG.toUpperCase() }), f, AHORA)).toBe(true);
+    expect(opCoincide(op({ organizacion_id: "otra" }), f, AHORA)).toBe(false);
+    expect(opCoincide(op({ organizacion_id: null }), f, AHORA)).toBe(false);
+    const c = { id: "c", code: "BX-C", evento: "E", created_at: "2026-10-09T11:00:00Z", estado: "pendiente" as const, vence_at: null };
+    expect(consultaCoincide({ ...c, organizacion_id: ORG }, { filtro: "a_cotizar", organizacion: { id: ORG } }, AHORA)).toBe(true);
+    expect(consultaCoincide({ ...c, organizacion_id: null }, { filtro: "a_cotizar", organizacion: { id: ORG } }, AHORA)).toBe(false);
   });
 });

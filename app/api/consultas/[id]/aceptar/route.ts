@@ -49,6 +49,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       quien,
     });
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    // Espejo de la API: arrancan las 24 h para pagar.
+    r.op.pago_pedido_at = new Date().toISOString();
     refrescarTienda();
     // Por WhatsApp lo registra el admin demo; en la web acepta el cliente demo.
     const actor: Actor = porWhatsapp
@@ -101,6 +103,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
   const op = data as { op_id: string; op_code: string } | null;
   if (!op) return NextResponse.json({ error: "No se pudo crear el pedido" }, { status: 500 });
+
+  // TKT-21: aceptar la cotización es quedar debiendo el pago: arrancan las
+  // 24 h. Aparte y sin trabar, como el stock: si falla, el pedido queda en
+  // "Esperando pago" sin plazo y el admin lo pide desde el panel.
+  {
+    const { error: errPago } = await admin
+      .from("operaciones")
+      .update({ pago_pedido_at: new Date().toISOString() })
+      .eq("id", op.op_id);
+    if (errPago) console.error(`[etapas] no se pudo marcar el pedido de pago de ${op.op_id}: ${errPago.message}`);
+  }
 
   // El pedido nace confirmado: toma ya el stock de sus entradas propias (ver
   // lib/stock.ts). Aparte y sin trabar: el pedido ya está creado; si falla,

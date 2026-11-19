@@ -1,6 +1,7 @@
 import {
   ESTADO_PUBLICO_COLOR,
   ESTADO_PUBLICO_LABEL,
+  AVISO_CLIENTE,
   estadoPublicoDe,
   formatMonto,
   formatFecha,
@@ -74,16 +75,18 @@ export default function StatusStub({
     },
     pedido_confirmado: {
       icon: "✅",
-      text: "Tu pedido está confirmado. Te avisamos apenas tengamos las entradas para que puedas pagar.",
+      // Se paga antes de tener las entradas (TKT-21/TKT-6): no prometer lo contrario.
+      text: "Tu pedido está confirmado. En breve te pasamos cómo pagar.",
     },
     listo_para_pagar: {
       icon: "💳",
-      text: "Ya tenemos tus entradas. Para pagar:",
+      text: "Tu pedido está confirmado. Para pagar:",
     },
-    pago_recibido: {
-      icon: "💸",
-      text: "Tu pago está confirmado. Estamos coordinando la entrega de las entradas.",
-    },
+    // TKT-18: después de avisar que pagó, la pantalla no se queda muda.
+    pago_informado: { icon: "💸", text: AVISO_CLIENTE.es.pagoRecibido },
+    pago_recibido: { icon: "💸", text: AVISO_CLIENTE.es.pagoRecibido },
+    reembolso: { icon: "↩️", text: AVISO_CLIENTE.es.reembolso },
+    reembolsado: { icon: "↩️", text: AVISO_CLIENTE.es.reembolsado },
   };
   const aviso = AVISOS[estado] ?? null;
   // Hora de Argentina explícita: esto se renderiza en el server (UTC en

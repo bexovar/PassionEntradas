@@ -132,6 +132,8 @@ export type TipoAvisoEquipo =
   | "nueva_consulta"
   | "cotizacion_aceptada"
   | "cancelado_cliente"
+  // TKT-18: el cliente tocó "Ya pagué": hay que chequear el banco.
+  | "pago_informado"
   | "nuevo_acceso"
   | `recordatorio_${TipoPendiente}`;
 
@@ -170,6 +172,8 @@ export function textoAvisoEquipo(tipo: string, d: DatosAvisoEquipo): { titulo: s
       };
     case "cancelado_cliente":
       return { titulo: `Cancelado por el cliente · ${d.code ?? ""}`.trim(), cuerpo: `${d.evento ?? ""}${d.quien ? ` — ${d.quien}` : ""}` };
+    case "pago_informado":
+      return { titulo: `Pago informado · ${d.code ?? ""}`.trim(), cuerpo: `${d.evento ?? ""} — chequeá que entró al banco` };
     case "nuevo_acceso":
       return { titulo: `Solicitud de acceso de ${d.nombre ?? "alguien"}`, cuerpo: d.email ?? "" };
     case "recordatorio_confirmar":

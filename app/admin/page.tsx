@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { getRol } from "@/lib/auth";
+import { computeMetrics, metricasDominantes, type Metrics } from "@/lib/metrics";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import AppHeader from "@/components/AppHeader";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -43,12 +44,15 @@ export default async function AdminPage({
   // Consultas sin cotizar: van en la MISMA lista que las operaciones. Las ya
   // convertidas no se traen — se ven como la operación que originaron.
   let consultas: Consulta[] = [];
+  // Comisión y ventas acumuladas para los importes del panel (TKT-22).
+  let acumulados: Metrics;
 
   if (isMock()) {
     email = MOCK_USER.email;
     ops = mockListOps();
     items = ops.flatMap((o) => mockListItems(o.id));
     consultas = mockListConsultas().filter((c) => c.estado === "pendiente" || c.estado === "cotizada");
+    acumulados = computeMetrics(mockListOps());
   } else {
     const user = await usuarioVerificado();
 
@@ -73,7 +77,7 @@ export default async function AdminPage({
     const { data } = await createAdminSupabase()
       .from("operaciones")
       .select(
-        "id, code, evento, comprador_alias, vendedor_alias, monto, moneda, cantidad, fee, cuenta_debitar, status, entrada_recibida_at, pago_confirmado_at, pago_proveedor_at, cerrada_at, entrada_recibida_por, pago_confirmado_por, pago_proveedor_por, cerrada_por, confirmada_at, confirmada_por, cancelada_at, cancelada_por, fecha_evento, notas, ticket_id, tipo, cliente_id, cliente_email, sector, envio_id, created_at, updated_at"
+        "id, code, evento, comprador_alias, vendedor_alias, monto, moneda, cantidad, fee, cuenta_debitar, status, entrada_recibida_at, pago_confirmado_at, pago_proveedor_at, cerrada_at, entrada_recibida_por, pago_confirmado_por, pago_proveedor_por, cerrada_por, confirmada_at, confirmada_por, cancelada_at, cancelada_por, pago_pedido_at, pago_informado_at, pago_informado_por, reembolso_at, reembolso_por, reembolsado_at, reembolsado_por, fecha_evento, notas, ticket_id, tipo, cliente_id, cliente_email, organizacion_id, sector, envio_id, created_at, updated_at"
       )
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -92,12 +96,16 @@ export default async function AdminPage({
     const { data: cons } = await createAdminSupabase()
       .from("consultas")
       .select(
-        "id, code, envio_id, cliente_id, cliente_email, comprador_alias, ticket_id, evento, sector, fecha_evento, cantidad, moneda, notas, estado, operacion_id, resuelta_por, resuelta_at, created_at, updated_at, cotizacion_monto, cotizacion_fee, cotizacion_version, cotizada_at, cotizada_por, cotizada_por_admin, vence_at"
+        "id, code, envio_id, cliente_id, cliente_email, organizacion_id, comprador_alias, ticket_id, evento, sector, fecha_evento, cantidad, moneda, notas, estado, operacion_id, resuelta_por, resuelta_at, created_at, updated_at, cotizacion_monto, cotizacion_fee, cotizacion_version, cotizada_at, cotizada_por, cotizada_por_admin, vence_at"
       )
       .in("estado", ["pendiente", "cotizada"])
       .order("created_at", { ascending: false })
       .limit(500);
     consultas = (cons ?? []) as Consulta[];
+
+    // Mismo RPC que Métricas: suma en la base, todo el historial.
+    const { data: agregados } = await createAdminSupabase().rpc("metricas_operaciones");
+    acumulados = metricasDominantes((agregados ?? []) as any[]);
   }
 
   return (
@@ -115,6 +123,7 @@ export default async function AdminPage({
         baseUrl={getBaseUrl()}
         filtroInicial={filtroDeParams(searchParams)}
         busquedaInicial={typeof searchParams?.q === "string" ? searchParams.q.slice(0, 120) : ""}
+        acumulados={acumulados}
       />
       <BottomNav />
     </main>

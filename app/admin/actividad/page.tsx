@@ -24,9 +24,11 @@ const ENTIDADES: { value: string; label: string }[] = [
   { value: "consulta", label: "Consultas" },
   { value: "ticket", label: "Entradas" },
   { value: "solicitud", label: "Solicitudes de acceso" },
+  { value: "organizacion", label: "Organizaciones" },
   { value: "usuario", label: "Equipo, cuentas e ingresos" },
   { value: "config", label: "Configuración" },
   { value: "carrusel", label: "Carrusel de la home" },
+  { value: "destacados", label: "Destacados de la tienda" },
 ];
 
 const PERIODOS: { value: string; label: string; dias: number | null }[] = [

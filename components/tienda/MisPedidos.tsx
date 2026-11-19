@@ -12,7 +12,7 @@ import AutoRefresh from "@/components/AutoRefresh";
 import ConfirmarBoton from "@/components/ConfirmarBoton";
 import Campana from "@/components/tienda/Campana";
 import { LANGS, LOCALE, TX, type Lang } from "@/lib/tienda-i18n";
-import { formatMonto, pasosCliente, type EstadoPublico, type Moneda } from "@/lib/operaciones";
+import { AVISO_CLIENTE, formatMonto, pasosCliente, type EstadoPublico, type Moneda } from "@/lib/operaciones";
 import { waLink } from "@/lib/tickets";
 import { tiempoRestante } from "@/lib/cotizaciones";
 import { fechaDia, fechaHora } from "@/lib/fechas";
@@ -52,6 +52,9 @@ export type PedidoView = {
   // Cotización esperando su respuesta: la versión que está viendo (si el
   // staff la cambia, aceptar la vieja falla) y hasta cuándo vale.
   cotizacion: { version: number; venceAt: string | null } | null;
+  // TKT-10: pedido de otro vendedor de su organización (lo ve porque es el
+  // administrador). Lo opera quien lo cargó.
+  cargadoPor?: string | null;
   // Factura emitida para este pedido (si el staff ya la generó).
   facturaId: string | null;
   // Una consulta sin precio todavía no es una operación: no hay link público
@@ -69,8 +72,11 @@ const ESTADO_CLASS: Record<PedidoView["estado"], string> = {
   pedido_recibido: "mp-e-abierta",
   pedido_confirmado: "mp-e-curso",
   listo_para_pagar: "mp-e-pagar",
+  pago_informado: "mp-e-curso",
   pago_recibido: "mp-e-curso",
   entregada: "mp-e-cerrada",
+  reembolso: "mp-e-cancelada",
+  reembolsado: "mp-e-cancelada",
   cancelada: "mp-e-cancelada",
 };
 
@@ -157,6 +163,25 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
       router.refresh();
     } catch {
       setError(mp.errorCancelar);
+    } finally {
+      setCancelando(null);
+    }
+  }
+
+  // "Ya pagué" (TKT-18): avisa que mandó la plata y el pedido cambia de
+  // estado en el momento, sin esperar a que lo veamos en el banco.
+  async function yaPague(p: PedidoView) {
+    setCancelando(p.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/mis-pedidos/${p.id}/pague`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || mp.errorYaPague);
+      }
+      router.refresh();
+    } catch {
+      setError(mp.errorYaPague);
     } finally {
       setCancelando(null);
     }
@@ -256,7 +281,11 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
                 {p.monto != null && p.moneda && (
                   <p className="mp-monto">{formatMonto(p.monto, p.moneda, { sinDecimales: true })}</p>
                 )}
-                {p.seguible && p.estado !== "cancelada" && p.estado !== "consulta_descartada" && (
+                {p.seguible &&
+                  p.estado !== "cancelada" &&
+                  p.estado !== "consulta_descartada" &&
+                  p.estado !== "reembolso" &&
+                  p.estado !== "reembolsado" && (
                   <Pasos estado={p.estado as EstadoPublico} lang={lang} />
                 )}
                 {p.estado === "listo_para_pagar" && (
@@ -267,14 +296,41 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
                     ) : (
                       <p className="mp-pago-texto">{mp.pagoSinTexto}</p>
                     )}
-                    <a
-                      className="mp-link"
-                      href={waLink(`${mp.waPagar} ${p.code}`)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {mp.escribinos}
-                    </a>
+                    <span className="mp-cot-acciones">
+                      <ConfirmarBoton
+                        className="mp-link mp-link--aceptar"
+                        onConfirm={() => yaPague(p)}
+                        disabled={cancelando === p.id}
+                        pregunta={mp.confirmarYaPague}
+                        si={mp.siYaPague}
+                        no={mp.no}
+                        armadoClassName="mp-confirma"
+                        preguntaClassName="mp-confirma-pregunta"
+                        siClassName="mp-link mp-link--aceptar"
+                        noClassName="mp-link mp-link--no"
+                      >
+                        {cancelando === p.id ? mp.avisandoPago : mp.yaPague}
+                      </ConfirmarBoton>
+                      <a
+                        className="mp-link"
+                        href={waLink(`${mp.waPagar} ${p.code}`)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {mp.escribinos}
+                      </a>
+                    </span>
+                  </div>
+                )}
+                {/* TKT-18: lo que antes quedaba mudo. */}
+                {(p.estado === "pago_informado" || p.estado === "pago_recibido") && (
+                  <div className="mp-pago">
+                    <p className="mp-pago-texto">{AVISO_CLIENTE[lang].pagoRecibido}</p>
+                  </div>
+                )}
+                {(p.estado === "reembolso" || p.estado === "reembolsado") && (
+                  <div className="mp-cotizacion mp-cotizacion--vencida">
+                    <p className="mp-pago-texto">{AVISO_CLIENTE[lang][p.estado]}</p>
                   </div>
                 )}
                 {p.estado === "consulta_cotizada" && p.cotizacion && (
@@ -352,6 +408,12 @@ export function MisPedidos({ pedidos }: { pedidos: PedidoView[] }) {
                     <dt>{mp.creado}</dt>
                     <dd>{fmtDate(p.created_at, lang, true)}</dd>
                   </div>
+                  {p.cargadoPor && (
+                    <div>
+                      <dt>{mp.cargadoPor}</dt>
+                      <dd>{p.cargadoPor}</dd>
+                    </div>
+                  )}
                 </dl>
                 <div className="mp-foot">
                   <span className="mp-code">N.º {p.code}</span>

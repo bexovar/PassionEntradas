@@ -3,12 +3,14 @@ import { createAdminSupabase } from "@/lib/supabase/server";
 import { getRol, puedeVerTienda } from "@/lib/auth";
 import { sesionVerificada } from "@/lib/usuario-verificado";
 import { versionMisPedidos } from "@/lib/mis-pedidos-version";
+import { miembroDe } from "@/lib/organizaciones-db";
 import {
   isMock,
   mockFacturaDeOperacion,
   mockGetTextosPago,
   mockListConsultasCliente,
   mockListPedidosCliente,
+  mockMiembroDe,
   MOCK_USER,
 } from "@/lib/mock-db";
 
@@ -20,12 +22,14 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   if (isMock()) {
     const id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-    const ops = mockListPedidosCliente(id, MOCK_USER.email);
+    const miembro = mockMiembroDe(id);
+    const orgVisible = miembro?.rol === "admin" ? miembro.organizacion_id : null;
+    const ops = mockListPedidosCliente(id, MOCK_USER.email, orgVisible);
     const textos = mockGetTextosPago();
     return NextResponse.json({
       v: versionMisPedidos({
         ops,
-        consultas: mockListConsultasCliente(id, MOCK_USER.email).map((c) => ({
+        consultas: mockListConsultasCliente(id, MOCK_USER.email, orgVisible).map((c) => ({
           updated_at: c.updated_at,
           estado: c.estado,
           vence_at: (c as { vence_at?: string | null }).vence_at ?? null,
@@ -46,14 +50,21 @@ export async function GET() {
   }
 
   // Lo suyo, con service role y filtrado por su cliente_id (las tablas son
-  // deny-all para el cliente). Mismos topes que la página.
+  // deny-all para el cliente). Mismos topes y mismo alcance que la página:
+  // el administrador de una organización también sigue los de sus
+  // vendedores (TKT-10); si no, su pantalla no se enteraba de esos cambios.
   const admin = createAdminSupabase();
+  const miembro = await miembroDe(admin, user.id).catch(() => null);
+  const orgVisible = miembro?.rol === "admin" ? miembro.organizacion_id : null;
+  const deQuien = orgVisible
+    ? `cliente_id.eq.${user.id},organizacion_id.eq.${orgVisible}`
+    : `cliente_id.eq.${user.id}`;
   const [ops, consultas, textos] = await Promise.all([
-    admin.from("operaciones").select("id, updated_at").eq("cliente_id", user.id).limit(200),
+    admin.from("operaciones").select("id, updated_at").or(deQuien).limit(200),
     admin
       .from("consultas")
       .select("updated_at, estado, vence_at")
-      .eq("cliente_id", user.id)
+      .or(deQuien)
       .limit(200),
     admin.from("textos_config").select("updated_at").like("key", "pago_%"),
   ]);

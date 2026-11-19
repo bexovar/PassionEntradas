@@ -24,6 +24,7 @@ import {
   type StatusAction,
   operacionCompleta,
   clientePuedeCancelar,
+  clientePuedeInformarPago,
 } from "@/lib/operaciones";
 import type { SyncRun, TicketFull } from "@/lib/tickets";
 import type { Factura, FacturaDatos } from "@/lib/factura";
@@ -32,8 +33,20 @@ import { MOCK_TICKETS } from "@/lib/mock-tickets";
 import type { AvisoGuardado, NuevoAviso } from "@/lib/avisos";
 import type { Actividad } from "@/lib/actividad";
 import type { DatosTarjeta, TarjetaCarrusel } from "@/lib/carrusel";
+import type { DatosDestacado, Destacado } from "@/lib/destacados";
+import { COLUMNA_HITO, motivoBloqueo, puedePedirPago, puedePedirReembolso } from "@/lib/etapas";
 import { nombreDePila } from "@/lib/seguimiento-publico";
 import { modoDemo } from "@/lib/entorno";
+import {
+  planAlAprobar,
+  coincidenciasPorCuit,
+  validarCambioRol,
+  validarFusion,
+  type EleccionOrganizacion,
+  type Miembro,
+  type Organizacion,
+  type RolOrganizacion,
+} from "@/lib/organizaciones";
 
 export type MockFactura = Factura & { operacion_id: string };
 
@@ -68,6 +81,9 @@ type MockDB = {
   facturas: MockFactura[];
   facturaNumero: number;
   solicitudes: SolicitudAcceso[];
+  // Espejo de organizaciones y organizacion_miembros (TKT-10).
+  organizaciones: Organizacion[];
+  miembros: Miembro[];
   items: OperacionItem[];
   consultas: Consulta[];
   // Textos de pago por moneda (espejo de textos_config).
@@ -83,6 +99,8 @@ type MockDB = {
   actividad: Actividad[];
   // Espejo de la tabla carrusel_home.
   carrusel?: TarjetaCarrusel[];
+  // Espejo de la tabla destacados_tienda.
+  destacados?: Destacado[];
 };
 
 export type MockUsuario = {
@@ -254,9 +272,12 @@ function seed(): MockDB {
       nombre: "Lucía Fernández",
       email: "lucia.fernandez@example.com",
       telefono: "+54 9 11 5555 1234",
-      legajo: "27-35123456-4",
-      direccion: "Av. Corrientes 1234, CABA",
-      mensaje: "Busco entradas para la final del Mundial 2026.",
+      // Solicitud con el formulario de TKT-11: organización y CUIT validado.
+      legajo: "27-35123456-9",
+      tipo_organizacion: "agencia",
+      organizacion: "Viajes del Sur",
+      direccion: null,
+      mensaje: null,
       estado: "pendiente",
       user_id: null,
       decidida_por: null,
@@ -273,6 +294,8 @@ function seed(): MockDB {
       email: "diego.sosa@example.com",
       telefono: "+54 9 351 444 7788",
       legajo: "20-28999111-7",
+      tipo_organizacion: null,
+      organizacion: null,
       direccion: "Bv. San Juan 500, Córdoba",
       mensaje: null,
       estado: "aprobada",
@@ -292,6 +315,8 @@ function seed(): MockDB {
       email: "emilia.demo@example.com",
       telefono: "+54 9 351 555 0000",
       legajo: null,
+      tipo_organizacion: null,
+      organizacion: null,
       direccion: null,
       mensaje: null,
       estado: "aprobada",
@@ -317,6 +342,27 @@ function seed(): MockDB {
     facturas: [],
     facturaNumero: 0,
     solicitudes,
+    // Diego (el cliente demo) es admin de "Viajes del Sur". La solicitud
+    // pendiente de Lucía tiene el mismo CUIT: al aprobarla se ve el match.
+    organizaciones: [
+      {
+        id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a",
+        nombre: "Viajes del Sur",
+        tipo: "agencia",
+        cuit: "27351234569",
+        fusionada_en: null,
+        created_at: iso(60 * 20),
+      },
+    ],
+    miembros: [
+      {
+        user_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        organizacion_id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a",
+        rol: "admin",
+        nombre: "Diego Sosa",
+        email: "diego.sosa@example.com",
+      },
+    ],
     usuarios: [
       {
         id: MOCK_USER.id,
@@ -408,8 +454,20 @@ function seed(): MockDB {
 
 function db(): MockDB {
   const g = globalThis as typeof globalThis & { __passionMockDb?: MockDB };
-  if (!g.__passionMockDb) g.__passionMockDb = seed();
+  if (!g.__passionMockDb) {
+    const d = seed();
+    // Espejo del backfill de 0058.
+    for (const o of d.ops) o.organizacion_id = orgDeCliente(d, o.cliente_id);
+    for (const c of d.consultas) c.organizacion_id = orgDeCliente(d, c.cliente_id);
+    g.__passionMockDb = d;
+  }
   return g.__passionMockDb;
+}
+
+// Espejo del trigger asignar_organizacion (0058).
+function orgDeCliente(d: MockDB, clienteId: string | null | undefined): string | null {
+  if (!clienteId) return null;
+  return d.miembros.find((m) => m.user_id === clienteId)?.organizacion_id ?? null;
 }
 
 // ---- operaciones ---------------------------------------------------------------
@@ -423,7 +481,14 @@ export function mockOpPublica(id: string): OperacionPublica | null {
   if (!op) return null;
   // Igual que el RPC después de 0053: sin monto y con el nombre de pila.
   const { code, evento, comprador_alias, vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at } = op;
-  return { code, evento, comprador_alias: nombreDePila(comprador_alias), vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at: confirmada_at ?? null };
+  return {
+    code, evento, comprador_alias: nombreDePila(comprador_alias), vendedor_alias, moneda, status, entrada_recibida_at, pago_confirmado_at, cerrada_at, fecha_evento, updated_at, tipo, confirmada_at: confirmada_at ?? null,
+    // Espejo de 0057 (TKT-18).
+    pago_pedido_at: op.pago_pedido_at ?? null,
+    pago_informado_at: op.pago_informado_at ?? null,
+    reembolso_at: op.reembolso_at ?? null,
+    reembolsado_at: op.reembolsado_at ?? null,
+  };
 }
 
 export function mockCreateOp(input: {
@@ -460,6 +525,7 @@ export function mockCreateOp(input: {
     tipo: input.tipo ?? "operacion",
     cliente_id: input.cliente_id ?? null,
     cliente_email: input.cliente_email ?? null,
+    organizacion_id: orgDeCliente(db(), input.cliente_id),
     sector: input.sector ?? null,
     status: "esperando_entrada",
     entrada_recibida_at: null,
@@ -487,12 +553,17 @@ export function mockCreateOp(input: {
 
 // "Mis pedidos" del cliente: pedidos/consultas que originó (por cliente_id, o
 // por email cuando no hay id de usuario en mock). Más nuevos primero.
-export function mockListPedidosCliente(clienteId: string | null, email: string | null): Operacion[] {
+export function mockListPedidosCliente(
+  clienteId: string | null,
+  email: string | null,
+  organizacionId: string | null = null
+): Operacion[] {
   return db()
     .ops.filter(
       (o) =>
         ((clienteId && o.cliente_id === clienteId) ||
-          (email && o.cliente_email?.toLowerCase() === email.toLowerCase()))
+          (email && o.cliente_email?.toLowerCase() === email.toLowerCase()) ||
+          (organizacionId && o.organizacion_id === organizacionId))
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
@@ -507,51 +578,66 @@ export function mockApplyAction(
   const antes = { status: op.status, pago_confirmado_at: op.pago_confirmado_at, confirmada_at: op.confirmada_at ?? null };
 
   switch (action.action) {
+    case "informar":
     case "entrada":
     case "pago":
-    case "proveedor": {
-      if (cancelada) {
-        return { ok: false, status: 409, error: "La operación está cancelada; reabrila para editar hitos" };
-      }
-      // Espejo de la API: congela recién con los cuatro hechos.
-      if (operacionCompleta(op)) {
-        return {
-          ok: false,
-          status: 409,
-          error: "La operación está completa; desmarcá un hito para volver a editarla",
-        };
-      }
-      // Sin orden: espejo de la API y del trigger, que ya no lo imponen.
-      const COLS = {
-        entrada: ["entrada_recibida_at", "entrada_recibida_por"],
-        pago: ["pago_confirmado_at", "pago_confirmado_por"],
-        proveedor: ["pago_proveedor_at", "pago_proveedor_por"],
-      } as const;
-      const [col, colPor] = COLS[action.action];
-      op[col] = action.done ? new Date().toISOString() : null;
-      op[colPor] = action.done ? MOCK_USER.email : null;
+    case "proveedor":
+    case "cerrar": {
+      // Espejo de la API (TKT-21): en orden, solo el siguiente / el último.
+      const bloqueo = motivoBloqueo(op, action.action, action.done);
+      if (bloqueo) return { ok: false, status: 409, error: bloqueo };
+      const { at, por } = COLUMNA_HITO[action.action];
+      const fila = op as unknown as Record<string, string | null>;
+      fila[at] = action.done ? new Date().toISOString() : null;
+      fila[por] = action.done ? MOCK_USER.email : null;
       // Espejo de la API: trabajar un pedido nuevo es confirmarlo.
-      if (action.done && !op.confirmada_at) {
-        op.confirmada_at = new Date().toISOString();
-        op.confirmada_por = MOCK_USER.email;
-      }
-      break;
-    }
-    case "confirmar":
-      if (cancelada) return { ok: false, status: 409, error: "La operación está cancelada; reabrila para confirmarla" };
-      if (op.confirmada_at) return { ok: false, status: 409, error: "El pedido ya está confirmado" };
-      op.confirmada_at = new Date().toISOString();
-      op.confirmada_por = MOCK_USER.email;
-      break;
-    case "cerrar":
-      if (cancelada) return { ok: false, status: 409, error: "La operación está cancelada; no se puede cerrar" };
-      op.cerrada_at = action.done ? new Date().toISOString() : null;
-      op.cerrada_por = action.done ? MOCK_USER.email : null;
-      if (action.done && !op.confirmada_at) {
+      if (action.done && action.action !== "informar" && !op.confirmada_at) {
         op.confirmada_at = new Date().toISOString();
         op.confirmada_por = MOCK_USER.email;
       }
       // Entregar ya no mueve stock: se descuenta al pagar (ver lib/stock.ts).
+      break;
+    }
+    case "confirmar": {
+      if (cancelada) return { ok: false, status: 409, error: "La operación está cancelada; reabrila para confirmarla" };
+      if (op.confirmada_at) return { ok: false, status: 409, error: "El pedido ya está confirmado" };
+      const ahora = new Date().toISOString();
+      op.confirmada_at = ahora;
+      op.confirmada_por = MOCK_USER.email;
+      op.pago_pedido_at = ahora;
+      break;
+    }
+    case "pedir_pago":
+      if (!puedePedirPago(op)) {
+        return { ok: false, status: 409, error: "No hay un pago que pedir: confirmá el pedido o ya está pagado" };
+      }
+      op.pago_pedido_at = new Date().toISOString();
+      break;
+    case "reembolso":
+      if (action.done) {
+        if (!puedePedirReembolso(op)) {
+          return { ok: false, status: 409, error: "Solo se reembolsa algo que el cliente pagó y no se entregó" };
+        }
+        op.reembolso_at = new Date().toISOString();
+        op.reembolso_por = MOCK_USER.email;
+      } else {
+        if (!op.reembolso_at) return { ok: false, status: 409, error: "La operación no está en reembolso" };
+        if (op.reembolsado_at) return { ok: false, status: 409, error: "El reembolso ya está hecho; desmarcalo primero" };
+        op.reembolso_at = null;
+        op.reembolso_por = null;
+      }
+      break;
+    case "reembolsado":
+      if (action.done) {
+        if (!op.reembolso_at) return { ok: false, status: 409, error: "Primero marcá el reembolso como pendiente" };
+        if (op.reembolsado_at) return { ok: false, status: 409, error: "El reembolso ya está hecho" };
+        op.reembolsado_at = new Date().toISOString();
+        op.reembolsado_por = MOCK_USER.email;
+      } else {
+        if (!op.reembolsado_at) return { ok: false, status: 409, error: "El reembolso no está marcado como hecho" };
+        op.reembolsado_at = null;
+        op.reembolsado_por = null;
+      }
       break;
     case "cancelar":
       if (cancelada) return { ok: false, status: 409, error: "La operación ya está cancelada" };
@@ -765,9 +851,11 @@ export function mockCrearSolicitud(input: SolicitudInput): { ok: true } | { ok: 
     nombre: input.nombre,
     email: input.email,
     telefono: input.telefono,
-    legajo: input.legajo,
+    legajo: input.cuit,
+    tipo_organizacion: input.tipoOrganizacion,
+    organizacion: input.organizacion,
     direccion: null,
-    mensaje: input.mensaje,
+    mensaje: null,
     estado: "pendiente",
     user_id: null,
     decidida_por: null,
@@ -883,15 +971,25 @@ export function mockListSolicitudes(): SolicitudAcceso[] {
 export function mockDecidirSolicitud(
   id: string,
   accion: "aprobar" | "rechazar",
-  decididaPor: string
+  decididaPor: string,
+  eleccion?: EleccionOrganizacion | null
 ):
-  | { ok: true; solicitud: SolicitudAcceso; credenciales?: { email: string; password: string } }
+  | {
+      ok: true;
+      solicitud: SolicitudAcceso;
+      credenciales?: { email: string; password: string };
+      organizacion?: { id: string; nombre: string; rol: RolOrganizacion };
+    }
   | { ok: false; status: number; error: string } {
-  const s = db().solicitudes.find((x) => x.id === id);
+  const d = db();
+  const s = d.solicitudes.find((x) => x.id === id);
   if (!s) return { ok: false, status: 404, error: "Solicitud no encontrada" };
   if (s.estado !== "pendiente") {
     return { ok: false, status: 409, error: "La solicitud ya fue resuelta" };
   }
+  // TKT-10: la organización se decide antes de tocar nada.
+  const plan = accion === "aprobar" ? planAlAprobar(s, coincidenciasPorCuit(s.legajo, d.organizaciones), eleccion) : null;
+  if (plan && !plan.ok) return { ok: false, status: 409, error: plan.error };
   const now = new Date().toISOString();
   s.decidida_por = decididaPor;
   s.decidida_at = now;
@@ -903,7 +1001,86 @@ export function mockDecidirSolicitud(
   const password = generarPassword();
   s.estado = "aprobada";
   s.user_id = crypto.randomUUID();
-  return { ok: true, solicitud: s, credenciales: { email: s.email, password } };
+  const p = plan!.ok ? plan!.plan : null;
+  let org: Organizacion;
+  if (p!.tipo === "unirse") {
+    org = d.organizaciones.find((o) => o.id === (p as { organizacionId: string }).organizacionId)!;
+  } else {
+    org = { id: crypto.randomUUID(), ...p!.datos, fusionada_en: null, created_at: new Date().toISOString() };
+    d.organizaciones.push(org);
+  }
+  d.miembros.push({ user_id: s.user_id, organizacion_id: org.id, rol: p!.rol, nombre: s.nombre, email: s.email });
+  s.organizacion_id = org.id;
+  return {
+    ok: true,
+    solicitud: s,
+    credenciales: { email: s.email, password },
+    organizacion: { id: org.id, nombre: org.nombre, rol: p!.rol },
+  };
+}
+
+// ---- organizaciones (TKT-10) -------------------------------------------------
+export function mockListOrganizaciones(): Organizacion[] {
+  return [...db().organizaciones];
+}
+
+export function mockListMiembros(): Miembro[] {
+  return [...db().miembros];
+}
+
+export function mockMiembroDe(userId: string): Miembro | null {
+  return db().miembros.find((m) => m.user_id === userId) ?? null;
+}
+
+export function mockOpsPorOrganizacion(): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const o of db().ops) if (o.organizacion_id) m.set(o.organizacion_id, (m.get(o.organizacion_id) ?? 0) + 1);
+  return m;
+}
+
+export function mockSetRolMiembro(
+  userId: string,
+  rol: RolOrganizacion
+): { ok: true; miembro: Miembro } | { ok: false; status: number; error: string } {
+  const invalido = validarCambioRol(db().miembros, userId, rol);
+  if (invalido) return { ok: false, ...invalido };
+  const m = db().miembros.find((x) => x.user_id === userId)!;
+  m.rol = rol;
+  return { ok: true, miembro: m };
+}
+
+export function mockRenombrarOrganizacion(
+  id: string,
+  nombre: string
+): { ok: true; antes: string; organizacion: Organizacion } | { ok: false; status: number; error: string } {
+  const o = db().organizaciones.find((x) => x.id === id && !x.fusionada_en);
+  if (!o) return { ok: false, status: 404, error: "Organización no encontrada" };
+  const antes = o.nombre;
+  o.nombre = nombre;
+  return { ok: true, antes, organizacion: { ...o } };
+}
+
+// Espejo de fusionar_organizaciones (0058).
+export function mockFusionarOrganizaciones(
+  origenId: string,
+  destinoId: string
+): { ok: true; movidas: number } | { ok: false; status: number; error: string } {
+  const d = db();
+  const origen = d.organizaciones.find((o) => o.id === origenId);
+  const destino = d.organizaciones.find((o) => o.id === destinoId);
+  const error = validarFusion(origen, destino);
+  if (error) return { ok: false, status: 409, error };
+  for (const m of d.miembros) if (m.organizacion_id === origenId) m.organizacion_id = destinoId;
+  let movidas = 0;
+  for (const o of d.ops)
+    if (o.organizacion_id === origenId) {
+      o.organizacion_id = destinoId;
+      movidas++;
+    }
+  for (const c of d.consultas) if (c.organizacion_id === origenId) c.organizacion_id = destinoId;
+  for (const s of d.solicitudes) if (s.organizacion_id === origenId) s.organizacion_id = destinoId;
+  origen!.fusionada_en = destinoId;
+  return { ok: true, movidas };
 }
 
 // Reenvía el acceso de una solicitud YA aprobada: regenera la contraseña
@@ -966,7 +1143,8 @@ export function mockListConsultas(): Consulta[] {
 // como la operación que originaron; mostrarlas otra vez duplicaría el pedido.
 export function mockListConsultasCliente(
   clienteId: string | null,
-  email: string | null
+  email: string | null,
+  organizacionId: string | null = null
 ): Consulta[] {
   const desde = new Date(Date.now() - 30 * 86400_000).toISOString();
   return db()
@@ -977,7 +1155,8 @@ export function mockListConsultasCliente(
           ((c.estado === "cancelada" || c.estado === "descartada" || c.estado === "rechazada") &&
             c.updated_at >= desde)) &&
         ((clienteId && c.cliente_id === clienteId) ||
-          (email && c.cliente_email?.toLowerCase() === email.toLowerCase()))
+          (email && c.cliente_email?.toLowerCase() === email.toLowerCase()) ||
+          (organizacionId && c.organizacion_id === organizacionId))
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
@@ -1000,6 +1179,7 @@ export function mockCrearConsulta(input: {
     id: crypto.randomUUID(),
     code: generateCode(),
     ...input,
+    organizacion_id: orgDeCliente(db(), input.cliente_id),
     estado: "pendiente",
     operacion_id: null,
     resuelta_por: null,
@@ -1292,4 +1472,61 @@ export function mockSetOrdenCarrusel(cambios: { id: string; orden: number }[]): 
     const t = carrusel().find((x) => x.id === c.id);
     if (t) t.orden = c.orden;
   }
+}
+
+// ---- destacados de la tienda (espejo de destacados_tienda) -----------------
+// Arranca vacío: la tienda muestra los comprables hasta que se cure.
+function destacados(): Destacado[] {
+  const d = db();
+  d.destacados ??= [];
+  return d.destacados;
+}
+
+export function mockListDestacados(): Destacado[] {
+  return destacados()
+    .map((x) => ({ ...x }))
+    .sort((a, b) => a.orden - b.orden);
+}
+
+// Va al final, como en la API. null si ya estaba.
+export function mockAddDestacado(input: DatosDestacado): Destacado | null {
+  const lista = destacados();
+  if (lista.some((x) => x.competicion === input.competicion && x.evento === input.evento)) return null;
+  const nuevo: Destacado = {
+    ...input,
+    id: `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    orden: lista.reduce((m, x) => Math.max(m, x.orden + 1), 0),
+  };
+  lista.push(nuevo);
+  return { ...nuevo };
+}
+
+export function mockDeleteDestacado(id: string): Destacado | null {
+  const d = db();
+  const borrado = destacados().find((x) => x.id === id) ?? null;
+  d.destacados = destacados().filter((x) => x.id !== id);
+  return borrado;
+}
+
+export function mockSetOrdenDestacados(cambios: { id: string; orden: number }[]): void {
+  for (const c of cambios) {
+    const x = destacados().find((y) => y.id === c.id);
+    if (x) x.orden = c.orden;
+  }
+}
+
+// TKT-18: el cliente toca "Ya pagué" en Mis pedidos (espejo de la API).
+export function mockClienteInformarPago(
+  id: string,
+  clienteId: string
+): { ok: true; op: Operacion } | { ok: false; status: number; error: string } {
+  const op = db().ops.find((o) => o.id === id && (o.cliente_id === clienteId || o.cliente_email === MOCK_USER.email));
+  if (!op) return { ok: false, status: 404, error: "Pedido no encontrado" };
+  if (!clientePuedeInformarPago(op)) {
+    return { ok: false, status: 409, error: "Este pedido no está esperando un pago" };
+  }
+  op.pago_informado_at = new Date().toISOString();
+  op.pago_informado_por = "cliente";
+  op.updated_at = op.pago_informado_at;
+  return { ok: true, op };
 }

@@ -25,6 +25,7 @@ const PASO: Partial<Record<EstadoPublico, number>> = {
   pedido_recibido: 0,
   pedido_confirmado: 1,
   listo_para_pagar: 2,
+  pago_informado: 3,
   pago_recibido: 3,
   entregada: 4,
 };
@@ -79,7 +80,7 @@ const TXT = {
     para_pagar: {
       titulo: (d: DatosAviso) => `Pedido ${d.code} listo para pagar`,
       cuerpo: (d: DatosAviso) =>
-        `Ya tenemos tus entradas de ${d.evento}${d.monto != null && d.moneda ? ` (${formatMonto(d.monto, d.moneda)})` : ""}. Fijate cómo pagar en Mis pedidos.`,
+        `Confirmamos tu pedido de ${d.evento}${d.monto != null && d.moneda ? ` (${formatMonto(d.monto, d.moneda)})` : ""}. Fijate cómo pagar en Mis pedidos.`,
     },
     entregada: {
       titulo: (d: DatosAviso) => `Pedido ${d.code} entregado`,
@@ -103,7 +104,7 @@ const TXT = {
     para_pagar: {
       titulo: (d: DatosAviso) => `Order ${d.code} ready to pay`,
       cuerpo: (d: DatosAviso) =>
-        `We have your tickets for ${d.evento}${d.monto != null && d.moneda ? ` (${formatMonto(d.monto, d.moneda)})` : ""}. See how to pay in My orders.`,
+        `We confirmed your order for ${d.evento}${d.monto != null && d.moneda ? ` (${formatMonto(d.monto, d.moneda)})` : ""}. See how to pay in My orders.`,
     },
     entregada: {
       titulo: (d: DatosAviso) => `Order ${d.code} delivered`,

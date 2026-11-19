@@ -18,6 +18,7 @@ import { etiquetaPrioridad, pendienteDeConsulta, pendienteDeOp } from "@/lib/rec
 import {
   diasHastaEvento,
   estadoDe,
+  formatMonto,
   necesitaConfirmar,
   SEMAFORO_COLOR,
   SEMAFORO_LABEL,
@@ -28,6 +29,9 @@ import {
   type StatusAction,
   type OperacionItem,
 } from "@/lib/operaciones";
+import { ETAPAS_PANEL, etapaDe, type EtapaPanel } from "@/lib/etapas";
+import { avisoSinConfirmar, importesPanel } from "@/lib/importes-panel";
+import type { Metrics } from "@/lib/metrics";
 import OperacionCard from "./OperacionCard";
 import ConsultaCard from "./ConsultaCard";
 import { ToastViewport, useToast } from "./Toast";
@@ -46,6 +50,8 @@ type Props = {
   filtroInicial?: FiltroPanel;
   // Búsqueda con la que abre (?q=… desde "Ver sus pedidos" en Clientes).
   busquedaInicial?: string;
+  // Comisión y ventas acumuladas (TKT-22), de todo el historial.
+  acumulados?: Metrics;
 };
 
 // Fila de la lista: o una operación, o una consulta sin cotizar.
@@ -62,6 +68,7 @@ export default function AdminDashboard({
   baseUrl,
   filtroInicial = { filtro: "todas" },
   busquedaInicial = "",
+  acumulados,
 }: Props) {
   // Índice operación -> líneas, armado una vez por render en vez de filtrar
   // el array completo dentro de cada tarjeta.
@@ -80,8 +87,13 @@ export default function AdminDashboard({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<FiltroPanel>(filtroInicial);
   const filter = filtro.filtro;
-  // Cambiar de pestaña o de tarjeta conserva el cliente elegido (si hay).
-  const setFilter = (f: Filtro) => setFiltro((prev) => ({ filtro: f, ...(prev.cliente ? { cliente: prev.cliente } : {}) }));
+  // Cambiar de pestaña o de tarjeta conserva el cliente o la agencia elegidos (si hay).
+  const setFilter = (f: Filtro) =>
+    setFiltro((prev) => ({
+      filtro: f,
+      ...(prev.cliente ? { cliente: prev.cliente } : {}),
+      ...(prev.organizacion ? { organizacion: prev.organizacion } : {}),
+    }));
   const listaRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(busquedaInicial);
   const [sort, setSort] = useState<"recientes" | "urgentes">("recientes");
@@ -145,19 +157,31 @@ export default function AdminDashboard({
     setConsultas(consultasIniciales);
   }, [consultasIniciales]);
 
+  // Las ocho etapas del tablero (TKT-21): cuántas hay en cada una. "A
+  // cotizar" son consultas; en "Esperando pago" y "Vencidos" también cuentan
+  // las cotizaciones que el cliente todavía no aceptó.
   const stats = useMemo(() => {
-    const estados = ops.map(estadoDe);
-    const enCurso = estados.filter(
-      (e) => e !== "cerrada" && e !== "cancelada" && e !== "lista_para_cerrar"
-    ).length;
-    const paraCerrar = estados.filter((e) => e === "lista_para_cerrar").length;
-    const cerradas = estados.filter((e) => e === "cerrada").length;
-    const nuevos = ops.filter(necesitaConfirmar).length;
-    const aCotizar = consultas.filter((c) => estadoCotizacion(c) === "a_cotizar").length;
-    // Cotizadas sin respuesta (incluye las vencidas: hay que re-cotizarlas).
-    const esperando = consultas.length - aCotizar;
-    return { enCurso, paraCerrar, cerradas, aCotizar, esperando, nuevos };
-  }, [ops, consultas]);
+    const porEtapa = Object.fromEntries(ETAPAS_PANEL.map((e) => [e.key, 0])) as Record<EtapaPanel, number>;
+    for (const o of ops) {
+      const e = etapaDe(o, ahora);
+      if (e in porEtapa) porEtapa[e as EtapaPanel]++;
+    }
+    for (const c of consultas) {
+      const e = estadoCotizacion(c, ahora);
+      if (e === "a_cotizar") porEtapa.a_cotizar++;
+      else if (e === "esperando") porEtapa.esperando_pago++;
+      else if (e === "vencida") porEtapa.vencido++;
+    }
+    return porEtapa;
+  }, [ops, consultas, ahora]);
+
+  // Importes arriba del panel (TKT-22). Por cobrar y a pagar salen de las
+  // operaciones en pantalla, así cambian en el momento al marcar un paso.
+  const importes = useMemo(
+    () => (acumulados ? importesPanel(ops, acumulados, ahora) : null),
+    [ops, acumulados, ahora]
+  );
+  const aviso = avisoSinConfirmar(stats.pendiente_confirmar);
 
   // id -> texto del badge rojo ("Sin confirmar hace 3 h").
   const prioridades = useMemo(() => {
@@ -204,7 +228,7 @@ export default function AdminDashboard({
     // del admin (chequear stock y cerrar precio). Con el paginado, dejarlas
     // ordenadas por fecha las mandaba a la página 3 y no las veía nadie.
     // Solo aparecen en los filtros donde "trabajo pendiente" tiene sentido,
-    // y en los dos de consultas (A cotizar / Esperando cliente).
+    // y en los de consultas (A cotizar / Esperando pago / Vencidos).
     const pendientes: Fila[] = consultas
       .filter(
         (c) =>
@@ -231,7 +255,11 @@ export default function AdminDashboard({
     const q = query.trim().toLowerCase();
     const coincide = (...campos: (string | null | undefined)[]) =>
       !q || campos.some((c) => (c ?? "").toLowerCase().includes(q));
-    const f: FiltroPanel = { filtro: "prioridad", ...(filtro.cliente ? { cliente: filtro.cliente } : {}) };
+    const f: FiltroPanel = {
+      filtro: "prioridad",
+      ...(filtro.cliente ? { cliente: filtro.cliente } : {}),
+      ...(filtro.organizacion ? { organizacion: filtro.organizacion } : {}),
+    };
     return (
       ops.filter(
         (o) =>
@@ -246,7 +274,7 @@ export default function AdminDashboard({
           coincide(c.evento, c.code, c.comprador_alias, c.cliente_email)
       ).length
     );
-  }, [ops, consultas, filtro.cliente, query, ahora, prioridades]);
+  }, [ops, consultas, filtro.cliente, filtro.organizacion, query, ahora, prioridades]);
 
   // Paginado en el cliente: con historial grande, renderizar cientos de
   // cards de una sola vez es lo que pesa (el fetch ya viene topado en 1000).
@@ -257,6 +285,13 @@ export default function AdminDashboard({
 
   // Tarjeta del resumen: filtra la lista y la trae a la vista. Tocar la
   // activa la saca.
+  // El aviso de pedidos sin confirmar lleva directo a ellos: la lista queda
+  // filtrada y cada tarjeta tiene su botón Confirmar.
+  function irASinConfirmar() {
+    setFilter("pendiente_confirmar");
+    listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function tocarTarjeta(f: Filtro) {
     setFilter(filter === f ? "todas" : f);
     if (filter !== f) listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -264,7 +299,7 @@ export default function AdminDashboard({
 
   // Al abrir con un filtro de la URL, la lista ya arranca a la vista.
   useEffect(() => {
-    if (filtroInicial.filtro !== "todas" || filtroInicial.cliente || busquedaInicial)
+    if (filtroInicial.filtro !== "todas" || filtroInicial.cliente || filtroInicial.organizacion || busquedaInicial)
       listaRef.current?.scrollIntoView({ block: "start" });
     // Solo al montar: después manda el estado local.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -356,6 +391,13 @@ export default function AdminDashboard({
                     confirmada_por: data.confirmada_por ?? null,
                     cancelada_at: data.cancelada_at ?? null,
                     cancelada_por: data.cancelada_por ?? null,
+                    pago_pedido_at: data.pago_pedido_at ?? null,
+                    pago_informado_at: data.pago_informado_at ?? null,
+                    pago_informado_por: data.pago_informado_por ?? null,
+                    reembolso_at: data.reembolso_at ?? null,
+                    reembolso_por: data.reembolso_por ?? null,
+                    reembolsado_at: data.reembolsado_at ?? null,
+                    reembolsado_por: data.reembolsado_por ?? null,
                     updated_at: data.updated_at ?? o.updated_at,
                   }
                 : o
@@ -427,7 +469,7 @@ export default function AdminDashboard({
 
   // Cotizar NO crea la operación: le manda el precio al cliente, que la
   // acepta (o no) desde Mis pedidos. La consulta queda en la lista como
-  // "Esperando cliente" hasta que responda.
+  // "Esperando pago" hasta que responda.
   async function cotizarConsulta(
     c: Consulta,
     valores: { costo: number; comision: number; moneda: Moneda }
@@ -504,23 +546,66 @@ export default function AdminDashboard({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
-      {/* Mini stats: tira única estilo talón, dividida por líneas punteadas */}
+      {/* TKT-22: pedidos sin confirmar, a la vista al entrar. */}
+      {aviso && (
+        <div
+          role="status"
+          className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#D14D68]/40 bg-[#D14D68]/[0.06] px-4 py-3"
+        >
+          <p className="text-sm font-semibold text-[#A3304A]">{aviso}</p>
+          {filter !== "pendiente_confirmar" && (
+            <button
+              type="button"
+              onClick={irASinConfirmar}
+              className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-ink/85"
+            >
+              Confirmarlos
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* TKT-22: los importes, en la pantalla donde se opera. */}
+      {importes && (
+        <section aria-label="Importes" className="card-shadow mb-4 overflow-hidden rounded-2xl bg-white">
+          <dl className="grid grid-cols-2 divide-x divide-y divide-dashed divide-line sm:grid-cols-4">
+            <Importe
+              label="Por cobrar"
+              valor={formatMonto(importes.porCobrar, importes.moneda as Moneda, { sinDecimales: true })}
+              nota={`${importes.porCobrarOps} sin pagar`}
+            />
+            <Importe
+              label="A pagar al proveedor"
+              valor={formatMonto(importes.aPagarProveedor, importes.moneda as Moneda, { sinDecimales: true })}
+              nota={`${importes.aPagarProveedorOps} cobradas`}
+            />
+            <Importe
+              label="Comisión acumulada"
+              valor={formatMonto(importes.comision, importes.moneda as Moneda, { sinDecimales: true })}
+            />
+            <Importe
+              label="Ventas acumuladas"
+              valor={formatMonto(importes.ventas, importes.moneda as Moneda, { sinDecimales: true })}
+            />
+          </dl>
+        </section>
+      )}
+
+      {/* Las ocho etapas de la operación (TKT-21), en orden: cada una es una
+          acción del admin o una espera a un tercero. Tocar una filtra la
+          lista; tocarla de nuevo la limpia. */}
       <section className="card-shadow mb-5 overflow-hidden rounded-2xl bg-white">
-        {/* 2×2 en celular: cuatro columnas en 390px dejaban las etiquetas
-            partidas en dos renglones y el número sin aire. */}
-        <div className="grid grid-cols-2 divide-x divide-dashed divide-line sm:grid-cols-5">
-          {/* "A cotizar" son las consultas: entradas que el cliente pidió y
-              todavía hay que chequear si están y a cuánto. */}
-          {/* Cada tarjeta filtra la lista (tocarla de nuevo la limpia). */}
-          <Stat label="A cotizar" value={stats.aCotizar} accent="#B07A14" activa={filter === "a_cotizar"} onClick={() => tocarTarjeta("a_cotizar")} />
-          {/* Cotizaciones mandadas que el cliente todavía no respondió. */}
-          <Stat label="Esperando cliente" value={stats.esperando} accent="#D14D68" activa={filter === "esperando"} onClick={() => tocarTarjeta("esperando")} />
-          <Stat label="En curso" value={stats.enCurso} accent="#1F33E0" activa={filter === "en_curso"} onClick={() => tocarTarjeta("en_curso")} />
-          <Stat label="Para entregar" value={stats.paraCerrar} accent="#0D9377" activa={filter === "para_cerrar"} onClick={() => tocarTarjeta("para_cerrar")} />
-          {/* Quinta celda: en celular ocupa la fila entera (2 columnas). */}
-          <div className="col-span-2 border-t border-dashed border-line sm:col-span-1 sm:border-t-0">
-            <Stat label="Entregadas" value={stats.cerradas} accent="#6C5BF2" activa={filter === "cerradas"} onClick={() => tocarTarjeta("cerradas")} />
-          </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-dashed divide-line sm:grid-cols-4">
+          {ETAPAS_PANEL.map((e) => (
+            <Stat
+              key={e.key}
+              label={e.label}
+              value={stats[e.key]}
+              accent={e.color}
+              activa={filter === e.key}
+              onClick={() => tocarTarjeta(e.key)}
+            />
+          ))}
         </div>
       </section>
 
@@ -582,15 +667,6 @@ export default function AdminDashboard({
               title={f.label}
             >
               {f.label}
-              {f.key === "nuevos" && stats.nuevos > 0 && (
-                <span
-                  className={`ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
-                    active ? "bg-white text-ink" : "bg-[#D14D68] text-white"
-                  }`}
-                >
-                  {stats.nuevos}
-                </span>
-              )}
             </button>
           );
         })}
@@ -610,8 +686,19 @@ export default function AdminDashboard({
       )}
 
       {/* Filtro que vino de una tarjeta y no es pestaña: se ve y se saca. */}
-      {(chip || filtro.cliente) && (
+      {(chip || filtro.cliente || filtro.organizacion) && (
         <div className="-mt-3 mb-4 flex flex-wrap gap-2">
+          {filtro.organizacion && (
+            <button
+              type="button"
+              onClick={() => setFiltro((prev) => ({ ...prev, organizacion: undefined }))}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-cobalt px-3 py-1 text-left text-xs font-semibold text-white"
+              aria-label={`Quitar filtro de agencia: ${filtro.organizacion.nombre ?? "agencia"}`}
+            >
+              <span className="[overflow-wrap:anywhere]">Agencia: {filtro.organizacion.nombre ?? "elegida"}</span>
+              <span aria-hidden>✕</span>
+            </button>
+          )}
           {filtro.cliente && (
             <button
               type="button"
@@ -728,6 +815,18 @@ export default function AdminDashboard({
       )}
 
       <ToastViewport toasts={toasts} />
+    </div>
+  );
+}
+
+function Importe({ label, valor, nota }: { label: string; valor: string; nota?: string }) {
+  return (
+    <div className="flex flex-col justify-between gap-1 px-4 py-3">
+      <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-muted">{label}</dt>
+      <dd className="font-body text-lg font-extrabold leading-tight tabular-nums tracking-tight text-ink">
+        {valor}
+        {nota && <span className="block text-[11px] font-medium text-muted">{nota}</span>}
+      </dd>
     </div>
   );
 }

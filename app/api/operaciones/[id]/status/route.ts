@@ -13,24 +13,42 @@ import { isMock, mockApplyAction, mockListOps } from "@/lib/mock-db";
 import { avisarCambioAlCliente, COLUMNAS_AVISO, type OpParaAviso } from "@/lib/avisos-cliente";
 import { baseUrlDe } from "@/lib/base-url";
 import { actorDe, actorDemo, NOMBRE_HITO, registrarActividad, type Actor } from "@/lib/actividad";
+import {
+  COLUMNA_HITO,
+  motivoBloqueo,
+  puedePedirPago,
+  puedePedirReembolso,
+  type Hito,
+  type OpEtapa,
+} from "@/lib/etapas";
 
 
 // PATCH /api/operaciones/[id]/status — aplica una acción sobre la operación.
-// "entrada" y "pago" son hitos independientes que se marcan/desmarcan por
-// separado; cancelar/reabrir manejan el enum. Solo admin; service role.
+// Los pasos van EN ORDEN (TKT-21, lib/etapas.ts): solo se marca el siguiente
+// y solo se desmarca el último. Cancelar/reabrir manejan el enum. Solo admin;
+// service role.
 //
-// Body: { action: "entrada"|"pago"|"proveedor"|"cerrar", done: boolean }
-//     | { action: "confirmar"|"cancelar"|"reabrir" }
+// Body: { action: "informar"|"pago"|"proveedor"|"entrada"|"cerrar", done: boolean }
+//     | { action: "reembolso"|"reembolsado", done: boolean }
+//     | { action: "confirmar"|"pedir_pago"|"cancelar"|"reabrir" }
 
 function parseAction(body: any): StatusAction | null {
-  if (body?.action === "cancelar" || body?.action === "reabrir" || body?.action === "confirmar") {
+  if (
+    body?.action === "cancelar" ||
+    body?.action === "reabrir" ||
+    body?.action === "confirmar" ||
+    body?.action === "pedir_pago"
+  ) {
     return { action: body.action };
   }
   if (
     (body?.action === "entrada" ||
       body?.action === "pago" ||
       body?.action === "proveedor" ||
-      body?.action === "cerrar") &&
+      body?.action === "cerrar" ||
+      body?.action === "informar" ||
+      body?.action === "reembolso" ||
+      body?.action === "reembolsado") &&
     typeof body.done === "boolean"
   ) {
     return { action: body.action, done: body.done };
@@ -98,7 +116,7 @@ export async function PATCH(
   const { data: current, error: readErr } = await admin
     .from("operaciones")
     // Además de los hitos, lo necesario para avisarle al cliente.
-    .select(`${COLUMNAS_AVISO}, pago_proveedor_at, ticket_id`)
+    .select(`${COLUMNAS_AVISO}, pago_proveedor_at, ticket_id, ${COLUMNAS_ETAPA}`)
     .eq("id", params.id)
     .maybeSingle();
 
@@ -131,36 +149,27 @@ export async function PATCH(
   };
 
   switch (action.action) {
+    case "informar":
     case "entrada":
     case "pago":
-    case "proveedor": {
-      if (cancelada) {
-        return rechazo("La operación está cancelada; reabrila para editar hitos");
-      }
-      // Congela recién con los CUATRO hechos: haber entregado no es haber
-      // terminado, y mientras falte alguno hay que poder seguir marcando
-      // (se entrega antes de pagarle al proveedor todo el tiempo).
-      if (operacionCompleta(current as any)) {
-        return rechazo("La operación está completa; desmarcá un hito para volver a editarla");
-      }
-      // Los hitos NO tienen orden: en la práctica la secuencia varía (a veces
-      // se le paga al proveedor antes de tener la entrada en mano). Antes acá
-      // había dos 409 que forzaban entrada -> pago; se fueron junto con la
-      // regla equivalente del trigger de la base.
-      const COLS = {
-        entrada: ["entrada_recibida_at", "entrada_recibida_por"],
-        pago: ["pago_confirmado_at", "pago_confirmado_por"],
-        proveedor: ["pago_proveedor_at", "pago_proveedor_por"],
-      } as const;
-      const [col, colPor] = COLS[action.action as keyof typeof COLS];
+    case "proveedor":
+    case "cerrar": {
+      // En orden (TKT-21): solo el paso siguiente se marca y solo el último
+      // se desmarca. Con los cuatro hechos, lo único que se puede tocar es la
+      // entrega (reabrir), como antes.
+      const hito: Hito = action.action;
+      const bloqueo = motivoBloqueo(current as OpEtapa, hito, action.done);
+      if (bloqueo) return rechazo(bloqueo);
+      const { at, por } = COLUMNA_HITO[hito];
       patch = {
-        [col]: action.done ? new Date().toISOString() : null,
+        [at]: action.done ? new Date().toISOString() : null,
         // Quién lo marcó; al desmarcar se limpia junto con el hito.
-        [colPor]: action.done ? quien : null,
+        [por]: action.done ? quien : null,
       };
-      // Trabajar un pedido nuevo es confirmarlo: si se marca un hito sin
-      // haber tocado "Confirmar pedido", queda confirmado igual.
-      if (action.done && !current.confirmada_at) {
+      // Trabajar un pedido nuevo es confirmarlo: si se marca un paso sin
+      // haber tocado "Confirmar pedido", queda confirmado igual. Avisar que
+      // pagó no cuenta: eso lo dice el cliente.
+      if (action.done && hito !== "informar" && !current.confirmada_at) {
         patch.confirmada_at = new Date().toISOString();
         patch.confirmada_por = quien;
       }
@@ -173,24 +182,39 @@ export async function PATCH(
       if (current.confirmada_at) {
         return rechazo("El pedido ya está confirmado");
       }
-      patch = { confirmada_at: new Date().toISOString(), confirmada_por: quien };
+      const ahora = new Date().toISOString();
+      // Confirmar es pedirle el pago al cliente: arrancan las 24 h.
+      patch = { confirmada_at: ahora, confirmada_por: quien, pago_pedido_at: ahora };
       break;
     }
-    case "cerrar": {
-      if (cancelada) {
-        return rechazo("La operación está cancelada; no se puede cerrar");
+    case "pedir_pago": {
+      if (!puedePedirPago(current as OpEtapa)) {
+        return rechazo("No hay un pago que pedir: confirmá el pedido o ya está pagado");
       }
-      // Cerrar ya no exige hitos previos: la entrega puede estar hecha con
-      // el resto pendiente de registrar, y forzarlo llevaba a marcar hitos
-      // falsos solo para poder cerrar.
-      patch = {
-        cerrada_at: action.done ? new Date().toISOString() : null,
-        cerrada_por: action.done ? quien : null,
-      };
-      // Igual que los otros hitos: entregar un pedido nuevo lo confirma.
-      if (action.done && !current.confirmada_at) {
-        patch.confirmada_at = new Date().toISOString();
-        patch.confirmada_por = quien;
+      patch = { pago_pedido_at: new Date().toISOString() };
+      break;
+    }
+    case "reembolso": {
+      if (action.done) {
+        if (!puedePedirReembolso(current as OpEtapa)) {
+          return rechazo("Solo se reembolsa algo que el cliente pagó y no se entregó");
+        }
+        patch = { reembolso_at: new Date().toISOString(), reembolso_por: quien };
+      } else {
+        if (!current.reembolso_at) return rechazo("La operación no está en reembolso");
+        if (current.reembolsado_at) return rechazo("El reembolso ya está hecho; desmarcalo primero");
+        patch = { reembolso_at: null, reembolso_por: null };
+      }
+      break;
+    }
+    case "reembolsado": {
+      if (action.done) {
+        if (!current.reembolso_at) return rechazo("Primero marcá el reembolso como pendiente");
+        if (current.reembolsado_at) return rechazo("El reembolso ya está hecho");
+        patch = { reembolsado_at: new Date().toISOString(), reembolsado_por: quien };
+      } else {
+        if (!current.reembolsado_at) return rechazo("El reembolso no está marcado como hecho");
+        patch = { reembolsado_at: null, reembolsado_por: null };
       }
       break;
     }
@@ -224,7 +248,7 @@ export async function PATCH(
     .update(patch)
     .eq("id", params.id)
     .select(
-      "id, status, entrada_recibida_at, pago_confirmado_at, pago_proveedor_at, cerrada_at, entrada_recibida_por, pago_confirmado_por, pago_proveedor_por, cerrada_por, confirmada_at, confirmada_por, cancelada_at, cancelada_por, updated_at"
+      `id, status, tipo, entrada_recibida_at, pago_confirmado_at, pago_proveedor_at, cerrada_at, entrada_recibida_por, pago_confirmado_por, pago_proveedor_por, cerrada_por, confirmada_at, confirmada_por, cancelada_at, cancelada_por, updated_at, ${COLUMNAS_ETAPA}, pago_informado_por, reembolso_por, reembolsado_por`
     )
     .single();
 
@@ -276,11 +300,27 @@ export async function PATCH(
   return NextResponse.json({ ...pickResult(data as Operacion), ...(aviso ? { aviso } : {}) });
 }
 
-type Pasos = { confirmado: boolean; entrada: boolean; pago: boolean; proveedor: boolean; entregada: boolean; cancelada: boolean };
+// Lo que la API necesita para calcular la etapa (lib/etapas.ts).
+const COLUMNAS_ETAPA = "pago_pedido_at, pago_informado_at, reembolso_at, reembolsado_at";
+
+type Pasos = {
+  confirmado: boolean;
+  informado: boolean;
+  entrada: boolean;
+  pago: boolean;
+  proveedor: boolean;
+  entregada: boolean;
+  reembolso: boolean;
+  reembolsado: boolean;
+  cancelada: boolean;
+};
 
 function pasosDe(op: Partial<Operacion>): Pasos {
   return {
     confirmado: !!op.confirmada_at,
+    informado: !!op.pago_informado_at,
+    reembolso: !!op.reembolso_at,
+    reembolsado: !!op.reembolsado_at,
     entrada: !!op.entrada_recibida_at,
     pago: !!op.pago_confirmado_at,
     proveedor: !!op.pago_proveedor_at,
@@ -294,6 +334,8 @@ function describir(action: StatusAction, antes: Partial<Operacion>): string {
   switch (action.action) {
     case "confirmar":
       return "confirmar el pedido";
+    case "pedir_pago":
+      return "pedir el pago";
     case "cancelar":
       return "cancelar la operación";
     case "reabrir":
@@ -318,7 +360,10 @@ function actividadDe(
   let resumen: string;
   switch (action.action) {
     case "confirmar":
-      resumen = "Confirmó el pedido";
+      resumen = "Confirmó el pedido y le pidió el pago al cliente";
+      break;
+    case "pedir_pago":
+      resumen = antes.pago_pedido_at ? "Volvió a pedir el pago" : "Le pidió el pago al cliente";
       break;
     case "cancelar":
       resumen = "Canceló la operación";
@@ -338,9 +383,15 @@ function actividadDe(
   }
   return {
     actor,
-    accion: action.action === "confirmar" || action.action === "cancelar" || action.action === "reabrir"
-      ? `operacion.${action.action}`
-      : "operacion.hito",
+    accion:
+      action.action === "confirmar" ||
+      action.action === "cancelar" ||
+      action.action === "reabrir" ||
+      action.action === "pedir_pago" ||
+      action.action === "reembolso" ||
+      action.action === "reembolsado"
+        ? `operacion.${action.action}`
+        : "operacion.hito",
     entidad: "operacion",
     entidad_id: (despues.id ?? antes.id) as string,
     codigo: (despues.code ?? antes.code ?? null) as string | null,
@@ -373,7 +424,16 @@ function pickResult(
     confirmada_por?: string | null;
     cancelada_at?: string | null;
     cancelada_por?: string | null;
-  }
+  } & Pick<
+      Operacion,
+      | "pago_pedido_at"
+      | "pago_informado_at"
+      | "pago_informado_por"
+      | "reembolso_at"
+      | "reembolso_por"
+      | "reembolsado_at"
+      | "reembolsado_por"
+    >
 ) {
   return {
     id: op.id,
@@ -393,6 +453,13 @@ function pickResult(
     confirmada_por: op.confirmada_por ?? null,
     cancelada_at: op.cancelada_at ?? null,
     cancelada_por: op.cancelada_por ?? null,
+    pago_pedido_at: op.pago_pedido_at ?? null,
+    pago_informado_at: op.pago_informado_at ?? null,
+    pago_informado_por: op.pago_informado_por ?? null,
+    reembolso_at: op.reembolso_at ?? null,
+    reembolso_por: op.reembolso_por ?? null,
+    reembolsado_at: op.reembolsado_at ?? null,
+    reembolsado_por: op.reembolsado_por ?? null,
     // El panel lo usa para no dejar que un refresco más viejo pise esto.
     updated_at: op.updated_at ?? null,
     estado: estadoDe(op),

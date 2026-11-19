@@ -50,11 +50,13 @@ describe("stock al confirmar", () => {
     expect(stock()).toBe(inicial - 2);
   });
 
-  it("marcar un paso de un pedido sin confirmar también lo descuenta", () => {
+  it("un pedido sin confirmar no deja marcar pasos, y el stock no se mueve", () => {
     const inicial = stock();
     const op = pedido(1);
-    mockApplyAction(op.id, { action: "entrada", done: true });
-    expect(stock()).toBe(inicial - 1);
+    // TKT-21: primero se confirma (pide el pago); antes, marcar el pago lo
+    // confirmaba por atrás y salteaba "Esperando pago".
+    expect(mockApplyAction(op.id, { action: "pago", done: true }).ok).toBe(false);
+    expect(stock()).toBe(inicial);
   });
 
   it("el admin cancela: vuelve; reabrir lo toma de nuevo", () => {

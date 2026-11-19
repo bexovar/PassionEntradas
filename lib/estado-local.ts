@@ -28,6 +28,9 @@ type Campos = Partial<
     | "cerrada_at"
     | "cerrada_por"
     | "confirmada_at"
+    | "pago_pedido_at"
+    | "pago_informado_at"
+    | "pago_informado_por"
   >
 >;
 
@@ -36,6 +39,7 @@ const COLS = {
   pago: ["pago_confirmado_at", "pago_confirmado_por"],
   proveedor: ["pago_proveedor_at", "pago_proveedor_por"],
   cerrar: ["cerrada_at", "cerrada_por"],
+  informar: ["pago_informado_at", "pago_informado_por"],
 } as const;
 
 /**
@@ -43,12 +47,22 @@ const COLS = {
  * server (cancelar y reabrir: tienen confirmación y efectos que no se adivinan).
  */
 export function parcheOptimista(op: Operacion, action: StatusAction, ahora: string): Campos | null {
-  if (action.action === "confirmar") return { confirmada_at: ahora };
-  if (action.action === "cancelar" || action.action === "reabrir") return null;
+  // Confirmar también pide el pago (TKT-21: arrancan las 24 h).
+  if (action.action === "confirmar") return { confirmada_at: ahora, pago_pedido_at: ahora };
+  if (action.action === "pedir_pago") return { pago_pedido_at: ahora };
+  // Cancelar, reabrir y el reembolso esperan al server: tienen confirmación.
+  if (
+    action.action === "cancelar" ||
+    action.action === "reabrir" ||
+    action.action === "reembolso" ||
+    action.action === "reembolsado"
+  )
+    return null;
   const [col, colPor] = COLS[action.action];
   const parche: Campos = { [col]: action.done ? ahora : null, [colPor]: null };
-  // Espejo del server: marcar cualquier hito confirma un pedido nuevo.
-  if (action.done && !op.confirmada_at) parche.confirmada_at = ahora;
+  // Espejo del server: marcar un hito confirma un pedido nuevo (avisar que
+  // pagó no: eso lo dice el cliente, no es trabajo del admin).
+  if (action.done && !op.confirmada_at && action.action !== "informar") parche.confirmada_at = ahora;
   return parche;
 }
 

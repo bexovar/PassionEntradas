@@ -604,7 +604,7 @@ export async function POST(request: Request) {
   };
   // Link directo a lo que entró (un solo pedido o una sola consulta: su
   // código en el buscador del Panel; si son varios, el filtro).
-  const urlPedidos = operaciones.length === 1 ? `/admin?q=${encodeURIComponent(operaciones[0].code)}` : "/admin?filtro=nuevos";
+  const urlPedidos = operaciones.length === 1 ? `/admin?q=${encodeURIComponent(operaciones[0].code)}` : "/admin?filtro=pendiente_confirmar";
   const urlConsultas =
     consultasCreadas.length === 1 ? `/admin?q=${encodeURIComponent(consultasCreadas[0].code)}` : "/admin?filtro=a_cotizar";
   const base = baseUrlDe(request);

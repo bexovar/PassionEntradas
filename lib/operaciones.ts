@@ -89,6 +89,8 @@ export type Operacion = {
   // Cliente que originó el pedido/consulta (null en cargas internas del staff).
   cliente_id: string | null;
   cliente_email: string | null;
+  // Organización del cliente (TKT-10): la pone un trigger desde cliente_id.
+  organizacion_id?: string | null;
   // Sector/categoría de la entrada pedida, tal como se ve en la tienda.
   sector: string | null;
   // Confirmación del pedido por un admin. Solo los pedidos de la tienda pasan
@@ -98,6 +100,16 @@ export type Operacion = {
   // Quién y cuándo canceló: 'cliente' o el nombre del admin. Reabrir limpia.
   cancelada_at?: string | null;
   cancelada_por?: string | null;
+  // Máquina de estados (TKT-21, ver lib/etapas.ts). Cuándo se le pidió el
+  // pago (corren las 24 h del vencido), el aviso del cliente de que pagó, y
+  // el reembolso cuando no se consiguió la entrada.
+  pago_pedido_at?: string | null;
+  pago_informado_at?: string | null;
+  pago_informado_por?: string | null;
+  reembolso_at?: string | null;
+  reembolso_por?: string | null;
+  reembolsado_at?: string | null;
+  reembolsado_por?: string | null;
   created_at: string;
   updated_at: string;
   // Idioma en que el cliente hizo el pedido (sus emails van en ese idioma).
@@ -132,6 +144,12 @@ export type OperacionPublica = Pick<
   // Para mostrar el paso "Pedido confirmado" (solo los pedidos lo esperan).
   tipo?: TipoOperacion | null;
   confirmada_at?: string | null;
+  // TKT-18: lo que ve el cliente de la máquina de estados (lib/etapas.ts):
+  // si se le pidió el pago, si avisó que pagó, y el reembolso. Sin montos.
+  pago_pedido_at?: string | null;
+  pago_informado_at?: string | null;
+  reembolso_at?: string | null;
+  reembolsado_at?: string | null;
 };
 
 // Estado visible, derivado de cancelada + los hitos + el cierre.
@@ -207,8 +225,13 @@ export type EstadoPublico =
   | "pedido_recibido"
   | "pedido_confirmado"
   | "listo_para_pagar"
+  // TKT-18: avisó que pagó (tocó "Ya pagué"); falta que lo veamos en el banco.
+  | "pago_informado"
   | "pago_recibido"
   | "entregada"
+  // TKT-18: no se consiguió la entrada; la plata vuelve.
+  | "reembolso"
+  | "reembolsado"
   | "cancelada";
 
 type HitosPublicos = {
@@ -218,6 +241,10 @@ type HitosPublicos = {
   cerrada_at: string | null;
   tipo?: TipoOperacion | null;
   confirmada_at?: string | null;
+  pago_pedido_at?: string | null;
+  pago_informado_at?: string | null;
+  reembolso_at?: string | null;
+  reembolsado_at?: string | null;
 };
 
 type ParaConfirmar = {
@@ -245,16 +272,27 @@ export function necesitaConfirmar(op: ParaConfirmar): boolean {
   );
 }
 
-// Pasos que ve el cliente, en orden: recibido → confirmado → listo para pagar
-// (ya tenemos la entrada del proveedor) → pago recibido → entregada. El pago
-// gana sobre "listo para pagar": a veces se cobra antes de tener la entrada.
+// Pasos que ve el cliente, en orden: recibido → listo para pagar (TKT-21:
+// confirmar es pedirle el pago) → pago informado (tocó "Ya pagué") → pago
+// recibido → entregada; y el reembolso si no se consiguió la entrada.
+// Los pasos con el proveedor no se ven (TKT-18: solo los que le hablan a él).
+// "Pedido confirmado" queda para las viejas: confirmadas antes de que
+// confirmar pidiera el pago, y sin la entrada todavía.
 export function estadoPublicoDe(op: HitosPublicos): EstadoPublico {
   if (op.status === "cancelada") return "cancelada";
+  if (op.reembolsado_at) return "reembolsado";
+  if (op.reembolso_at) return "reembolso";
   if (op.cerrada_at) return "entregada";
   if (op.pago_confirmado_at) return "pago_recibido";
-  if (op.entrada_recibida_at) return "listo_para_pagar";
+  if (op.pago_informado_at) return "pago_informado";
   if (necesitaConfirmar(op)) return "pedido_recibido";
+  if (op.pago_pedido_at || op.entrada_recibida_at) return "listo_para_pagar";
   return "pedido_confirmado";
+}
+
+/** "Ya pagué" (TKT-18): se le pidió el pago y todavía no avisó ni lo vimos. */
+export function clientePuedeInformarPago(op: HitosPublicos): boolean {
+  return estadoPublicoDe(op) === "listo_para_pagar";
 }
 
 /**
@@ -275,7 +313,8 @@ export function clientePuedeCancelar(op: HitosPublicos): boolean {
  */
 export function clientePuedePedirCancelacion(op: HitosPublicos): boolean {
   const e = estadoPublicoDe(op);
-  return e === "pago_recibido" || e === "entregada";
+  // Con "Ya pagué" la plata está en camino: cancelar ya lo resuelve el equipo.
+  return e === "pago_informado" || e === "pago_recibido" || e === "entregada";
 }
 
 // Lo que ve el CLIENTE (link de seguimiento y Mis pedidos): 3 pasos, y cada
@@ -295,12 +334,13 @@ const PASO_TXT = {
   en: { recibido: "Received", confirmado: "Confirmed", paraPagar: "To pay", pagado: "Paid", entregada: "Delivered" },
 } as const;
 
-/** Los 3 pasos del cliente; null si no aplica (cancelada o consulta sin precio). */
+/** Los 3 pasos del cliente; null si no aplica (cancelada, reembolso o consulta sin precio). */
 export function pasosCliente(e: EstadoPublico, lang: "es" | "en" = "es"): PasoCliente[] | null {
-  if (e === "cancelada" || e === "consulta_recibida") return null;
+  if (e === "cancelada" || e === "consulta_recibida" || e === "reembolso" || e === "reembolsado") return null;
   const t = PASO_TXT[lang];
   const confirmado = e !== "pedido_recibido";
-  const pagado = e === "pago_recibido" || e === "entregada";
+  // Avisó que pagó: para él ya pagó (TKT-18), el paso cambia en el momento.
+  const pagado = e === "pago_informado" || e === "pago_recibido" || e === "entregada";
   const entregada = e === "entregada";
   return [
     { key: "pedido", label: confirmado ? t.confirmado : t.recibido, estado: confirmado ? "hecho" : "actual" },
@@ -312,7 +352,7 @@ export function pasosCliente(e: EstadoPublico, lang: "es" | "en" = "es"): PasoCl
     {
       key: "entrega",
       label: t.entregada,
-      estado: entregada ? "hecho" : e === "pago_recibido" ? "actual" : "pendiente",
+      estado: entregada ? "hecho" : pagado ? "actual" : "pendiente",
     },
   ];
 }
@@ -322,8 +362,11 @@ export const ESTADO_PUBLICO_LABEL: Record<EstadoPublico, string> = {
   pedido_recibido: "Recibido",
   pedido_confirmado: "Confirmado",
   listo_para_pagar: "Para pagar",
+  pago_informado: "Pago recibido",
   pago_recibido: "Pagado",
   entregada: "Entregada",
+  reembolso: "Reembolso en proceso",
+  reembolsado: "Reembolsado",
   cancelada: "Cancelada",
 };
 
@@ -332,10 +375,30 @@ export const ESTADO_PUBLICO_COLOR: Record<EstadoPublico, string> = {
   pedido_recibido: "#5F6577",
   pedido_confirmado: "#1F33E0",
   listo_para_pagar: "#B07A14",
+  pago_informado: "#6C5BF2",
   pago_recibido: "#6C5BF2",
   entregada: "#171B2B",
+  reembolso: "#C2410C",
+  reembolsado: "#5F6577",
   cancelada: "#D14D68",
 };
+
+// TKT-18: lo que le decimos al cliente en los momentos que antes quedaban
+// mudos. Los dos primeros son los copys definidos en el ticket.
+export const AVISO_CLIENTE = {
+  es: {
+    pagoRecibido:
+      "Recibimos tu pago correctamente, estamos procesando tu entrada. Escribinos por WhatsApp o te avisamos apenas te la enviemos.",
+    reembolso: "Se agotó la disponibilidad, estamos procesando tu reembolso.",
+    reembolsado: "Se agotó la disponibilidad y ya te devolvimos el pago.",
+  },
+  en: {
+    pagoRecibido:
+      "We received your payment and are processing your ticket. Message us on WhatsApp or we'll let you know as soon as we send it.",
+    reembolso: "It sold out, so we are processing your refund.",
+    reembolsado: "It sold out and we have already refunded your payment.",
+  },
+} as const;
 
 // --- semáforo -----------------------------------------------------------
 // Verde: entregada. Rojo: sin entregar y el evento ya pasó o está encima.
@@ -455,6 +518,13 @@ export type StatusAction =
   | { action: "pago"; done: boolean }
   | { action: "proveedor"; done: boolean }
   | { action: "cerrar"; done: boolean }
+  // TKT-21: el cliente avisó que pagó (lo marca el admin si avisa por WhatsApp).
+  | { action: "informar"; done: boolean }
+  // Pedir (o volver a pedir, en un vencido) el pago: arranca las 24 h.
+  | { action: "pedir_pago" }
+  // No se consiguió la entrada: reembolso pendiente / hecho.
+  | { action: "reembolso"; done: boolean }
+  | { action: "reembolsado"; done: boolean }
   | { action: "confirmar" }
   | { action: "cancelar" }
   | { action: "reabrir" };
@@ -580,6 +650,8 @@ export type Consulta = {
   envio_id: string | null;
   cliente_id: string | null;
   cliente_email: string | null;
+  // Organización del cliente (TKT-10).
+  organizacion_id?: string | null;
   comprador_alias: string | null;
   ticket_id: string | null;
   evento: string;

@@ -30,6 +30,7 @@ type OpMetrica = Pick<
   cantidad?: number | null;
   tipo?: Operacion["tipo"] | null;
   confirmada_at?: string | null;
+  reembolso_at?: string | null;
 };
 
 // Día (YYYY-MM-DD) en hora argentina: un pago confirmado a las 22 h de
@@ -48,7 +49,7 @@ export function diaAr(iso: string): string {
 // con dólares en un solo pozo y etiquetarlo con la moneda de la primera
 // operación daba un número que no significaba nada (y mentía sobre la unidad).
 //
-// Es el mismo criterio que el RPC `metricas_operaciones` (migraciones 0035 y 0040):
+// Es el mismo criterio que el RPC `metricas_operaciones` (migraciones 0035, 0040 y 0059):
 // producción calcula en la base y el modo demo acá, y tienen que coincidir.
 export function computeMetrics(
   ops: OpMetrica[],
@@ -81,7 +82,9 @@ export function computeMetrics(
   };
 
   for (const op of ops) {
-    if (op.status === "cancelada") continue;
+    // Un reembolso (pendiente o hecho) no es venta ni plata en juego, igual
+    // que una cancelada: el cliente pagó, pero la plata vuelve (0059).
+    if (op.status === "cancelada" || op.reembolso_at) continue;
     const a = acum(op.moneda ?? "USD");
 
     if (op.pago_confirmado_at) {
