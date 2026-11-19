@@ -1049,6 +1049,17 @@ export function mockSetRolMiembro(
   return { ok: true, miembro: m };
 }
 
+export function mockRenombrarOrganizacion(
+  id: string,
+  nombre: string
+): { ok: true; antes: string; organizacion: Organizacion } | { ok: false; status: number; error: string } {
+  const o = db().organizaciones.find((x) => x.id === id && !x.fusionada_en);
+  if (!o) return { ok: false, status: 404, error: "Organización no encontrada" };
+  const antes = o.nombre;
+  o.nombre = nombre;
+  return { ok: true, antes, organizacion: { ...o } };
+}
+
 // Espejo de fusionar_organizaciones (0058).
 export function mockFusionarOrganizaciones(
   origenId: string,

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { claveCuit, coincidenciasPorCuit, planAlAprobar, validarCambioRol, validarFusion, veElPedido } from "@/lib/organizaciones";
+import {
+  claveCuit,
+  coincidenciasPorCuit,
+  dominioPropio,
+  nombresParecidos,
+  normalizarNombreOrg,
+  planAlAprobar,
+  posiblesDuplicadas,
+  validarCambioRol,
+  validarFusion,
+  validarNombreOrg,
+  veElPedido,
+} from "@/lib/organizaciones";
 import {
   mockCreateOp,
   mockCrearSolicitud,
@@ -11,6 +23,7 @@ import {
   mockListOrganizaciones,
   mockListPedidosCliente,
   mockMiembroDe,
+  mockRenombrarOrganizacion,
   mockRevocarSolicitud,
 } from "@/lib/mock-db";
 
@@ -185,3 +198,89 @@ function mockNuevaSolicitudDemo(): string {
   expect(r.ok).toBe(true);
   return mockListSolicitudes().find((s) => s.email === email)!.id;
 }
+
+describe("Clientes: cambiar el nombre de una agencia", () => {
+  it("limpia espacios y exige entre 1 y 120 caracteres", () => {
+    expect(validarNombreOrg("  Viajes   del Sur  ")).toEqual({ ok: true, nombre: "Viajes del Sur" });
+    expect(validarNombreOrg("   ").ok).toBe(false);
+    expect(validarNombreOrg(undefined).ok).toBe(false);
+    expect(validarNombreOrg("x".repeat(121)).ok).toBe(false);
+    expect(validarNombreOrg("x".repeat(120)).ok).toBe(true);
+  });
+
+  it("demo: renombra una viva y no una fusionada", () => {
+    const r = mockRenombrarOrganizacion(VIAJES_DEL_SUR, "Viajes del Sur SRL");
+    expect(r).toMatchObject({ ok: true, antes: "Viajes del Sur", organizacion: { nombre: "Viajes del Sur SRL" } });
+    expect(mockListOrganizaciones().find((o) => o.id === VIAJES_DEL_SUR)?.nombre).toBe("Viajes del Sur SRL");
+    expect(mockRenombrarOrganizacion("no-existe", "X")).toMatchObject({ ok: false, status: 404 });
+    mockRenombrarOrganizacion(VIAJES_DEL_SUR, "Viajes del Sur");
+  });
+});
+
+describe("Clientes: posibles duplicadas", () => {
+  const org = (id: string, nombre: string, cuit: string | null = null, fusionada_en: string | null = null) => ({
+    id,
+    nombre,
+    cuit,
+    fusionada_en,
+  });
+
+  it("el nombre se compara sin acentos, puntuación ni forma jurídica", () => {
+    expect(normalizarNombreOrg("Viajes del Sur S.R.L.")).toBe("viajes del sur");
+    expect(normalizarNombreOrg("Turismo Ñandú SA")).toBe("turismo nandu");
+    // Una sola palabra no se recorta aunque se llame "SA".
+    expect(normalizarNombreOrg("SA")).toBe("sa");
+  });
+
+  it("nombre parecido: igual normalizado o un error de tipeo", () => {
+    expect(nombresParecidos("Viajes del Sur", "VIAJES DEL SUR SRL")).toBe(true);
+    expect(nombresParecidos("Tendencias Viajes", "Tendencia Viajes")).toBe(true);
+    expect(nombresParecidos("Rafael Sainz", "Diego Janco")).toBe(false);
+    // Nombres cortos: no alcanza con parecerse.
+    expect(nombresParecidos("Sur", "Sud")).toBe(false);
+  });
+
+  it("dominio propio: el de la empresa sí, gmail y compañía no", () => {
+    expect(dominioPropio("laura@viajesdelsur.com")).toBe("viajesdelsur.com");
+    expect(dominioPropio("Laura@UTRIP.com.ar")).toBe("utrip.com.ar");
+    expect(dominioPropio("x@gmail.com")).toBeNull();
+    expect(dominioPropio("x@hotmail.com.ar")).toBeNull();
+    expect(dominioPropio("x@yahoo.es")).toBeNull();
+    expect(dominioPropio(null)).toBeNull();
+    expect(dominioPropio("sin-arroba")).toBeNull();
+  });
+
+  it("encuentra los pares por CUIT, nombre o dominio, con los motivos", () => {
+    const orgs = [
+      org("o1", "Viajes del Sur", "30712345678"),
+      org("o2", "Viajes del Sur SRL"),
+      org("o3", "Laura Pérez", "30712345678"),
+      org("o4", "Martín Gómez"),
+      org("o5", "Otra Agencia"),
+    ];
+    const miembros = [
+      { organizacion_id: "o3", email: "laura@viajesdelsur.com" },
+      { organizacion_id: "o4", email: "martin@viajesdelsur.com" },
+      { organizacion_id: "o5", email: "x@gmail.com" },
+      { organizacion_id: "o1", email: "y@gmail.com" },
+    ];
+    const pares = posiblesDuplicadas(orgs, miembros);
+    const por = (a: string, b: string) => pares.find((p) => p.clave === `${a}|${b}`);
+    expect(por("o1", "o3")?.motivos).toEqual(["cuit"]);
+    expect(por("o1", "o2")?.motivos).toEqual(["nombre"]);
+    expect(por("o3", "o4")).toMatchObject({ motivos: ["dominio"], dominio: "viajesdelsur.com" });
+    // Mismo gmail no es motivo.
+    expect(por("o1", "o5")).toBeUndefined();
+    expect(pares).toHaveLength(3);
+    // Mismo CUIT primero.
+    expect(pares[0].motivos).toContain("cuit");
+  });
+
+  it("ignora las fusionadas y la clave del par no depende del orden", () => {
+    const pares = posiblesDuplicadas(
+      [org("b", "Viajes del Sur"), org("a", "Viajes del Sur"), org("c", "Viajes del Sur", null, "a")],
+      []
+    );
+    expect(pares).toEqual([{ clave: "a|b", a: "a", b: "b", motivos: ["nombre"] }]);
+  });
+});

@@ -87,8 +87,13 @@ export default function AdminDashboard({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<FiltroPanel>(filtroInicial);
   const filter = filtro.filtro;
-  // Cambiar de pestaña o de tarjeta conserva el cliente elegido (si hay).
-  const setFilter = (f: Filtro) => setFiltro((prev) => ({ filtro: f, ...(prev.cliente ? { cliente: prev.cliente } : {}) }));
+  // Cambiar de pestaña o de tarjeta conserva el cliente o la agencia elegidos (si hay).
+  const setFilter = (f: Filtro) =>
+    setFiltro((prev) => ({
+      filtro: f,
+      ...(prev.cliente ? { cliente: prev.cliente } : {}),
+      ...(prev.organizacion ? { organizacion: prev.organizacion } : {}),
+    }));
   const listaRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(busquedaInicial);
   const [sort, setSort] = useState<"recientes" | "urgentes">("recientes");
@@ -250,7 +255,11 @@ export default function AdminDashboard({
     const q = query.trim().toLowerCase();
     const coincide = (...campos: (string | null | undefined)[]) =>
       !q || campos.some((c) => (c ?? "").toLowerCase().includes(q));
-    const f: FiltroPanel = { filtro: "prioridad", ...(filtro.cliente ? { cliente: filtro.cliente } : {}) };
+    const f: FiltroPanel = {
+      filtro: "prioridad",
+      ...(filtro.cliente ? { cliente: filtro.cliente } : {}),
+      ...(filtro.organizacion ? { organizacion: filtro.organizacion } : {}),
+    };
     return (
       ops.filter(
         (o) =>
@@ -265,7 +274,7 @@ export default function AdminDashboard({
           coincide(c.evento, c.code, c.comprador_alias, c.cliente_email)
       ).length
     );
-  }, [ops, consultas, filtro.cliente, query, ahora, prioridades]);
+  }, [ops, consultas, filtro.cliente, filtro.organizacion, query, ahora, prioridades]);
 
   // Paginado en el cliente: con historial grande, renderizar cientos de
   // cards de una sola vez es lo que pesa (el fetch ya viene topado en 1000).
@@ -290,7 +299,7 @@ export default function AdminDashboard({
 
   // Al abrir con un filtro de la URL, la lista ya arranca a la vista.
   useEffect(() => {
-    if (filtroInicial.filtro !== "todas" || filtroInicial.cliente || busquedaInicial)
+    if (filtroInicial.filtro !== "todas" || filtroInicial.cliente || filtroInicial.organizacion || busquedaInicial)
       listaRef.current?.scrollIntoView({ block: "start" });
     // Solo al montar: después manda el estado local.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -677,8 +686,19 @@ export default function AdminDashboard({
       )}
 
       {/* Filtro que vino de una tarjeta y no es pestaña: se ve y se saca. */}
-      {(chip || filtro.cliente) && (
+      {(chip || filtro.cliente || filtro.organizacion) && (
         <div className="-mt-3 mb-4 flex flex-wrap gap-2">
+          {filtro.organizacion && (
+            <button
+              type="button"
+              onClick={() => setFiltro((prev) => ({ ...prev, organizacion: undefined }))}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-cobalt px-3 py-1 text-left text-xs font-semibold text-white"
+              aria-label={`Quitar filtro de agencia: ${filtro.organizacion.nombre ?? "agencia"}`}
+            >
+              <span className="[overflow-wrap:anywhere]">Agencia: {filtro.organizacion.nombre ?? "elegida"}</span>
+              <span aria-hidden>✕</span>
+            </button>
+          )}
           {filtro.cliente && (
             <button
               type="button"
