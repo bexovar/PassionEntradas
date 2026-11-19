@@ -1,3 +1,6 @@
+import type { TipoOrganizacion } from "@/lib/acceso";
+import { normalizarNombreOrg, type RolOrganizacion } from "@/lib/organizaciones";
+
 // Ranking de compradores para el desplegable de "nueva operación".
 //
 // El admin cargaba el comprador escribiéndolo a mano, así que el mismo cliente
@@ -155,4 +158,187 @@ export function fichasDeClientes(cuentas: CuentaCliente[], ops: OpDeCliente[]): 
       if (b.ultimoPedido) return 1;
       return a.nombre.localeCompare(b.nombre, "es");
     });
+}
+
+// ---- Clientes por agencia --------------------------------------------------
+// La pantalla Clientes arranca por las agencias (organizaciones, TKT-10) y
+// adentro de cada una muestra a su gente. Los números de la agencia salen de
+// operaciones.organizacion_id (lo pone el trigger de 0058), que es lo mismo
+// que filtra "Ver pedidos" de la agencia en el Panel. Los de cada persona,
+// como antes: por su cuenta o por su email.
+
+export type OrgDeCliente = {
+  id: string;
+  nombre: string;
+  tipo: TipoOrganizacion | null;
+  cuit: string | null;
+  fusionada_en: string | null;
+};
+
+export type MiembroDeCliente = {
+  user_id: string;
+  organizacion_id: string;
+  rol: RolOrganizacion;
+  nombre: string | null;
+  email: string | null;
+};
+
+export type OpDeAgencia = OpDeCliente & { organizacion_id?: string | null };
+
+export type FichaPersona = {
+  id: string;
+  nombre: string;
+  email: string;
+  rol: RolOrganizacion | null;
+  // Sin solicitud aprobada (no debería pasar) no se puede revocar.
+  solicitudId: string | null;
+  revocada: boolean;
+  operaciones: number;
+  abiertas: number;
+  totales: { moneda: string; total: number }[];
+  ultimoPedido: string | null;
+};
+
+export type FichaAgencia = {
+  id: string;
+  nombre: string;
+  tipo: TipoOrganizacion | null;
+  cuit: string | null;
+  personas: FichaPersona[];
+  operaciones: number;
+  abiertas: number;
+  totales: { moneda: string; total: number }[];
+  ultimoPedido: string | null;
+};
+
+function porRecientes<T extends { ultimoPedido: string | null; nombre: string }>(a: T, b: T): number {
+  if (a.ultimoPedido && b.ultimoPedido) return b.ultimoPedido.localeCompare(a.ultimoPedido);
+  if (a.ultimoPedido) return -1;
+  if (b.ultimoPedido) return 1;
+  return a.nombre.localeCompare(b.nombre, "es");
+}
+
+export function agenciasDeClientes(input: {
+  orgs: OrgDeCliente[];
+  miembros: MiembroDeCliente[];
+  cuentas: CuentaCliente[];
+  ops: OpDeAgencia[];
+  /** Usuarios que hoy son del equipo: no son clientes aunque sigan en una organización. */
+  equipo?: Set<string>;
+}): { agencias: FichaAgencia[]; sinAgencia: FichaPersona[] } {
+  const equipo = input.equipo ?? new Set<string>();
+  const miembros = input.miembros.filter((m) => !equipo.has(m.user_id));
+  const cuentas = input.cuentas.filter((c) => !equipo.has(c.id));
+
+  // Un miembro sin solicitud aprobada igual se muestra, con lo que se sabe.
+  const conCuenta = new Set(cuentas.map((c) => c.id));
+  const todas: CuentaCliente[] = [
+    ...cuentas,
+    ...miembros
+      .filter((m) => !conCuenta.has(m.user_id))
+      .map((m) => ({
+        id: m.user_id,
+        nombre: m.nombre || m.email || "Cliente",
+        email: m.email ?? "",
+        solicitudId: "",
+        revocada: false,
+      })),
+  ];
+  const fichas = new Map(fichasDeClientes(todas, input.ops).map((f) => [f.id, f]));
+  const persona = (id: string, rol: RolOrganizacion | null): FichaPersona | null => {
+    const f = fichas.get(id);
+    if (!f) return null;
+    return {
+      id: f.id,
+      nombre: f.nombre,
+      email: f.email,
+      rol,
+      solicitudId: f.solicitudId || null,
+      revocada: f.revocada,
+      operaciones: f.operaciones,
+      abiertas: f.abiertas,
+      totales: f.totales,
+      ultimoPedido: f.ultimoPedido,
+    };
+  };
+
+  type Acc = { n: number; abiertas: number; totales: Map<string, number>; ultimo: string | null };
+  const porOrg = new Map<string, Acc>();
+  for (const op of input.ops) {
+    if (!op.organizacion_id) continue;
+    let a = porOrg.get(op.organizacion_id);
+    if (!a) {
+      a = { n: 0, abiertas: 0, totales: new Map(), ultimo: null };
+      porOrg.set(op.organizacion_id, a);
+    }
+    if (!a.ultimo || op.created_at > a.ultimo) a.ultimo = op.created_at;
+    if (op.status === "cancelada") continue;
+    a.n += 1;
+    if (!op.cerrada_at) a.abiertas += 1;
+    const moneda = op.moneda || "USD";
+    a.totales.set(moneda, (a.totales.get(moneda) ?? 0) + Number(op.monto || 0));
+  }
+
+  const enAlguna = new Set<string>();
+  const agencias: FichaAgencia[] = input.orgs
+    .filter((o) => !o.fusionada_en)
+    .map((o) => {
+      const personas = miembros
+        .filter((m) => m.organizacion_id === o.id)
+        .map((m) => {
+          enAlguna.add(m.user_id);
+          return persona(m.user_id, m.rol);
+        })
+        .filter((p): p is FichaPersona => p !== null)
+        // Los administradores primero; después quien pidió más reciente.
+        .sort((a, b) => (a.rol === b.rol ? porRecientes(a, b) : a.rol === "admin" ? -1 : 1));
+      const a = porOrg.get(o.id);
+      return {
+        id: o.id,
+        nombre: o.nombre,
+        tipo: o.tipo,
+        cuit: o.cuit,
+        personas,
+        operaciones: a?.n ?? 0,
+        abiertas: a?.abiertas ?? 0,
+        totales: a
+          ? Array.from(a.totales.entries())
+              .map(([moneda, total]) => ({ moneda, total }))
+              .sort((x, y) => y.total - x.total)
+          : [],
+        ultimoPedido: a?.ultimo ?? null,
+      };
+    })
+    .sort(porRecientes);
+
+  const sinAgencia = cuentas
+    .filter((c) => !enAlguna.has(c.id))
+    .map((c) => persona(c.id, null))
+    .filter((p): p is FichaPersona => p !== null)
+    .sort(porRecientes);
+
+  return { agencias, sinAgencia };
+}
+
+/**
+ * Qué coincide con la búsqueda: la agencia entera (nombre o CUIT) o algunas
+ * de sus personas (nombre o email). null si nada.
+ */
+export function coincidenciaBusqueda(
+  ag: Pick<FichaAgencia, "nombre" | "cuit"> & { personas: Pick<FichaPersona, "id" | "nombre" | "email">[] },
+  q: string
+): { agencia: boolean; personas: Set<string> } | null {
+  const t = q.trim().toLowerCase();
+  if (!t) return { agencia: true, personas: new Set() };
+  const digitos = t.replace(/\D/g, "");
+  const agencia =
+    ag.nombre.toLowerCase().includes(t) ||
+    normalizarNombreOrg(ag.nombre).includes(normalizarNombreOrg(t) || t) ||
+    (digitos.length >= 3 && /^[\d\s.-]+$/.test(t) && (ag.cuit ?? "").includes(digitos));
+  const personas = new Set(
+    ag.personas
+      .filter((p) => p.nombre.toLowerCase().includes(t) || p.email.toLowerCase().includes(t))
+      .map((p) => p.id)
+  );
+  return agencia || personas.size > 0 ? { agencia, personas } : null;
 }

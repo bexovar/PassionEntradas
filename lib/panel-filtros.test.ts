@@ -166,3 +166,28 @@ describe("filtroDeLink (links de la campana estando en el Panel)", () => {
     expect(filtroDeLink("/moderador")).toBeNull();
   });
 });
+
+describe("Panel filtrado por agencia (Ver pedidos en Clientes)", () => {
+  const ORG = "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a";
+
+  it("el link de la agencia ida y vuelta", () => {
+    const url = urlPanel({ filtro: "todas", organizacion: { id: ORG, nombre: "Viajes del Sur" } });
+    expect(url).toBe(`/admin?organizacion=${ORG}&organizacion_nombre=Viajes+del+Sur`);
+    expect(filtroDeLink(url)?.filtro).toEqual({ filtro: "todas", organizacion: { id: ORG, nombre: "Viajes del Sur" } });
+  });
+
+  it("un id que no es uuid se ignora", () => {
+    expect(filtroDeParams({ organizacion: "x' or 1=1" }).organizacion).toBeUndefined();
+  });
+
+  it("solo pasan las operaciones y consultas de esa agencia", () => {
+    const f = { filtro: "todas" as const, organizacion: { id: ORG } };
+    expect(opCoincide(op({ organizacion_id: ORG }), f, AHORA)).toBe(true);
+    expect(opCoincide(op({ organizacion_id: ORG.toUpperCase() }), f, AHORA)).toBe(true);
+    expect(opCoincide(op({ organizacion_id: "otra" }), f, AHORA)).toBe(false);
+    expect(opCoincide(op({ organizacion_id: null }), f, AHORA)).toBe(false);
+    const c = { id: "c", code: "BX-C", evento: "E", created_at: "2026-10-09T11:00:00Z", estado: "pendiente" as const, vence_at: null };
+    expect(consultaCoincide({ ...c, organizacion_id: ORG }, { filtro: "a_cotizar", organizacion: { id: ORG } }, AHORA)).toBe(true);
+    expect(consultaCoincide({ ...c, organizacion_id: null }, { filtro: "a_cotizar", organizacion: { id: ORG } }, AHORA)).toBe(false);
+  });
+});

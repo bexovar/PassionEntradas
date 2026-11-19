@@ -65,6 +65,9 @@ export type FiltroPanel = {
   // cuenta, o por su email EXACTO para lo cargado a mano sin vincular. Antes
   // era la búsqueda de texto y ana@gmail.com traía también a mariana@gmail.com.
   cliente?: { id: string; email: string; nombre?: string };
+  // Solo los pedidos de UNA agencia ("Ver pedidos" de la agencia en
+  // Clientes): por operaciones.organizacion_id (TKT-10).
+  organizacion?: { id: string; nombre?: string };
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -130,6 +133,13 @@ export function filtroDeParams(p: Record<string, string | string[] | undefined> 
       ...(uno("nombre") ? { nombre: (uno("nombre") as string).slice(0, 80) } : {}),
     };
   }
+  const oid = uno("organizacion");
+  if (oid && UUID.test(oid)) {
+    out.organizacion = {
+      id: oid.toLowerCase(),
+      ...(uno("organizacion_nombre") ? { nombre: (uno("organizacion_nombre") as string).slice(0, 120) } : {}),
+    };
+  }
   if (f === "cobradas" || f === "sin_cobrar") {
     const m = uno("moneda");
     if (m === "USD" || m === "ARS") out.moneda = m;
@@ -147,7 +157,11 @@ export function filtroDeParams(p: Record<string, string | string[] | undefined> 
 
 /** URL del Panel con ese filtro (para las tarjetas de Métricas). */
 export function urlPanel(f: FiltroPanel): string {
-  const qs = new URLSearchParams(f.filtro !== "todas" || !f.cliente ? { filtro: f.filtro } : {});
+  const qs = new URLSearchParams(f.filtro !== "todas" || !(f.cliente || f.organizacion) ? { filtro: f.filtro } : {});
+  if (f.organizacion) {
+    qs.set("organizacion", f.organizacion.id);
+    if (f.organizacion.nombre) qs.set("organizacion_nombre", f.organizacion.nombre);
+  }
   if (f.cliente) {
     qs.set("cliente", f.cliente.id);
     if (f.cliente.email) qs.set("email", f.cliente.email);
@@ -190,7 +204,16 @@ type OpFiltrable = Pick<
   | "pago_proveedor_at"
   | "cerrada_at"
 > &
-  Partial<Pick<OpEtapa, "pago_pedido_at" | "pago_informado_at" | "reembolso_at" | "reembolsado_at">>;
+  Partial<Pick<OpEtapa, "pago_pedido_at" | "pago_informado_at" | "reembolso_at" | "reembolsado_at">> &
+  Partial<Pick<Operacion, "organizacion_id">>;
+
+/** ¿Es de esa agencia? */
+export function esDeLaOrganizacion(
+  x: { organizacion_id?: string | null },
+  o: NonNullable<FiltroPanel["organizacion"]>
+): boolean {
+  return (x.organizacion_id ?? "").toLowerCase() === o.id;
+}
 
 /** ¿Es de ese cliente? Por su cuenta, o por su email exacto si no se vinculó. */
 export function esDelCliente(
@@ -203,6 +226,7 @@ export function esDelCliente(
 
 export function opCoincide(op: OpFiltrable, f: FiltroPanel, ahora: Date = new Date()): boolean {
   if (f.cliente && !esDelCliente(op, f.cliente)) return false;
+  if (f.organizacion && !esDeLaOrganizacion(op, f.organizacion)) return false;
   const estado = estadoDe(op);
   const etapa: Etapa = etapaDe(op, ahora);
   const moneda = op.moneda ?? "USD";
@@ -249,11 +273,12 @@ export function opCoincide(op: OpFiltrable, f: FiltroPanel, ahora: Date = new Da
 
 export function consultaCoincide(
   c: Pick<Consulta, "id" | "code" | "evento" | "estado" | "vence_at" | "created_at"> &
-    Partial<Pick<Consulta, "cliente_id" | "cliente_email">>,
+    Partial<Pick<Consulta, "cliente_id" | "cliente_email" | "organizacion_id">>,
   f: FiltroPanel,
   ahora: Date = new Date()
 ): boolean {
   if (f.cliente && !esDelCliente(c, f.cliente)) return false;
+  if (f.organizacion && !esDeLaOrganizacion(c, f.organizacion)) return false;
   switch (f.filtro) {
     // Trabajo pendiente: va donde se mira lo que falta hacer.
     case "todas":

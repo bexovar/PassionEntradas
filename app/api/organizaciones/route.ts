@@ -8,9 +8,17 @@ import {
   mockListMiembros,
   mockListOrganizaciones,
   mockOpsPorOrganizacion,
+  mockRenombrarOrganizacion,
   mockSetRolMiembro,
 } from "@/lib/mock-db";
-import { validarCambioRol, validarFusion, type Miembro, type Organizacion, type RolOrganizacion } from "@/lib/organizaciones";
+import {
+  validarCambioRol,
+  validarFusion,
+  validarNombreOrg,
+  type Miembro,
+  type Organizacion,
+  type RolOrganizacion,
+} from "@/lib/organizaciones";
 import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/actividad";
 
 // /api/organizaciones (TKT-10)
@@ -19,6 +27,7 @@ import { actorDe, actorDemo, registrarActividad, type Actor } from "@/lib/activi
 //  POST — solo administrador:
 //         { accion: "fusionar", origen, destino }  junta dos duplicadas.
 //         { accion: "rol", user_id, rol }           admin ↔ vendedor.
+//         { accion: "renombrar", id, nombre }      cambia el nombre.
 export const dynamic = "force-dynamic";
 
 export type OrganizacionFicha = Organizacion & { miembros: Miembro[]; operaciones: number };
@@ -135,6 +144,43 @@ export async function POST(request: Request) {
       origen: "panel",
     });
     return NextResponse.json({ ok: true, movidas });
+  }
+
+  if (body?.accion === "renombrar") {
+    const id = String(body.id ?? "");
+    const v = validarNombreOrg(body.nombre);
+    if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
+    let antes: string;
+    if (isMock()) {
+      const r = mockRenombrarOrganizacion(id, v.nombre);
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+      antes = r.antes;
+    } else {
+      const admin = createAdminSupabase();
+      const { data: actual } = await admin
+        .from("organizaciones")
+        .select("id, nombre")
+        .eq("id", id)
+        .is("fusionada_en", null)
+        .maybeSingle();
+      if (!actual) return NextResponse.json({ error: "Organización no encontrada" }, { status: 404 });
+      antes = String(actual.nombre);
+      const { error } = await admin.from("organizaciones").update({ nombre: v.nombre }).eq("id", id).is("fusionada_en", null);
+      if (error) return NextResponse.json({ error: "No se pudo cambiar el nombre" }, { status: 500 });
+    }
+    if (antes !== v.nombre) {
+      await registrarActividad(isMock() ? null : createAdminSupabase(), {
+        actor: q.actor,
+        accion: "organizacion.renombrar",
+        entidad: "organizacion",
+        entidad_id: id,
+        codigo: null,
+        resumen: `Cambió el nombre de "${antes}" a "${v.nombre}"`,
+        detalle: { antes, despues: v.nombre },
+        origen: "panel",
+      });
+    }
+    return NextResponse.json({ ok: true, nombre: v.nombre });
   }
 
   if (body?.accion === "rol") {
